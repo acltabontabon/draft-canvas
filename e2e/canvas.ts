@@ -202,6 +202,15 @@ export async function afterDropGuard(page: Page) {
   await page.evaluate(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
 }
 
+/**
+ * The toolbar's Present button. Its name says what it will play ("Present Checkout" while a flow is
+ * chosen, "Present selection"), as the button does, so it is found by its place in the toolbar
+ * rather than by one exact name — the Flows panel has "Present <flow>" buttons of its own.
+ */
+export function presentButton(page: Page): Locator {
+  return page.getByRole('group', { name: 'Flows and presenting' }).getByRole('button', { name: /^Present\b/ });
+}
+
 /** Opens (or, when it is open, closes) the Flows panel from the toolbar: the last row of Present's menu. */
 export async function toggleFlows(page: Page) {
   await page.getByRole('button', { name: 'What to present', exact: true }).click();

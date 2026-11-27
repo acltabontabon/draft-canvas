@@ -94,6 +94,11 @@ impl ProcessTree {
 pub(crate) fn spawn(command: &mut Command) -> io::Result<(Child, ProcessTree)> {
     let tree = ProcessTree::new()?;
     command.creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED);
+    // An agent CLI installed by npm is a `.cmd` shim, and cmd.exe looks for the `node` it names in the
+    // working directory before PATH — a diagram's folder or the person's code folder, where a planted
+    // `node.exe` would run. This variable is the documented way to leave the working directory out of
+    // that search, for cmd.exe and for whatever it starts in turn.
+    command.env("NoDefaultCurrentDirectoryInExePath", "1");
     let mut child = command.spawn()?;
     if let Err(error) = tree.assign_and_resume(&child) {
         // No taskkill fallback: a setup failure must not run an agent without containment.
@@ -196,5 +201,36 @@ mod tests {
             !rx.recv_timeout(Duration::from_secs(5)).unwrap(),
             "the child still held its output pipe"
         );
+    }
+
+    /// An npm-installed agent CLI is a `.cmd` that runs `node`; cmd.exe looked for it in the working
+    /// directory first, so a `node.cmd` planted beside a double-clicked diagram ran on the first probe.
+    #[test]
+    fn a_cmd_shim_never_runs_a_program_planted_in_its_working_directory() {
+        let shim_dir = tempfile::tempdir().unwrap();
+        let planted = tempfile::tempdir().unwrap();
+        let shim = shim_dir.path().join("agent.cmd");
+        std::fs::write(&shim, "@plantedprobe\r\n").unwrap();
+        std::fs::write(planted.path().join("plantedprobe.cmd"), "@echo PLANTED\r\n").unwrap();
+        let output = |contained: bool| {
+            let mut command = Command::new(&shim);
+            command
+                .current_dir(planted.path())
+                .env_remove("NoDefaultCurrentDirectoryInExePath")
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+            // The job is kept until the output is read: closing it ends the process.
+            let (child, _tree) = if contained {
+                let (child, tree) = spawn(&mut command).unwrap();
+                (child, Some(tree))
+            } else {
+                (command.spawn().unwrap(), None)
+            };
+            String::from_utf8_lossy(&child.wait_with_output().unwrap().stdout).into_owned()
+        };
+        // Started plainly, the planted program runs: the test can see what it guards against.
+        assert!(output(false).contains("PLANTED"));
+        assert!(!output(true).contains("PLANTED"));
     }
 }

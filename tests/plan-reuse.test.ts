@@ -2,13 +2,21 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildScaleDocument, SCALE_SPECS } from '../benchmark/workloads/scale';
+import { visibleEdges } from '../src/document/compensation';
 import { createEdge, createNode } from '../src/document/factory';
+import { BAND_WORD_FIELDS, bandWords } from '../src/document/queueGeometry';
 import type { DraftDocument, DraftEdge, DraftNode } from '../src/document/types';
 import { routingPlan, TRUNK_OBSTACLE_MARGIN } from '../src/edges/bundles';
+import { connectorRoutes } from '../src/edges/connectorRoutes';
+import { crossingPlan } from '../src/edges/crossings';
 import { obstaclesForEdge } from '../src/edges/obstacles';
 import { searchAllowed } from '../src/edges/edgeRoutes';
 import { endpointPlan, type EndpointPlan } from '../src/edges/endpoints';
-import { PLAN_REACH, sameNodeGeometryAround, sameRouteGeometryAround } from '../src/edges/sameGeometry';
+import { labelGroupPlan } from '../src/edges/labelGroups';
+import { replyLabelPlan } from '../src/edges/replyLabels';
+import { rectOf } from '../src/edges/routing';
+import { PLAN_REACH, sameNodeGeometry, sameNodeGeometryAround, sameRouteGeometryAround } from '../src/edges/sameGeometry';
+import { separationPlan } from '../src/edges/separation';
 import { deserializeDocument } from '../src/export/project';
 
 /**
@@ -173,7 +181,9 @@ describe('a reused plan equals a plan built from nothing', () => {
     // Both paths ran — an edit that moves only a far-off stray shape reuses, any other builds.
     expect(reused).toBeGreaterThan(20);
     expect(built).toBeGreaterThan(20);
-  });
+    // About a thousand endpoint plans: 3 s alone, past vitest's 5 s default under a full local run
+    // (CI's coverage run allows 30 s, so it never saw this).
+  }, 20_000);
 
   it('holds on a larger diagram, connectors budgeted too', () => {
     const { document } = buildScaleDocument(SCALE_SPECS.small);
@@ -292,5 +302,172 @@ describe('the region a stray shape can matter in', () => {
 
   it('leaves most of the canvas to strays that no plan reads', () => {
     expect(positions.filter(([x, y]) => holds(x, y)).length).toBeGreaterThan(positions.length / 4);
+  });
+});
+
+/**
+ * Everything the canvas hands a connector out of the whole-document plans, asked in the order its
+ * selectors ask (`DraftEdgeView`): its trunk, whether it may search, its spread ends, its tracks, its
+ * line jumps, its shared label, its reply label's shift, and the routes drawn from all of them.
+ */
+function everyPlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope: 'canvas' | 'transient') {
+  const shown = visibleEdges(edges);
+  const doc = { nodes, edges: shown };
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const spines = routingPlan(nodes, shown, scope);
+  const allowed = shown.map((edge) => searchAllowed(edge.id, doc, scope));
+  const endpoints = endpointPlan(nodes, shown, scope);
+  const separation = separationPlan(nodes, shown, scope);
+  const crossings = crossingPlan(nodes, shown, nodes, scope);
+  const groups = labelGroupPlan(nodes, shown, scope);
+  const replies = replyLabelPlan(nodes, shown, scope);
+  return {
+    crowded: endpoints.crowded,
+    skipped: separation.skipped,
+    connectors: shown.map((edge, index) => ({
+      id: edge.id,
+      spine: spines.spineFor(edge.id) ?? null,
+      searchable: allowed[index],
+      spread: endpoints.spreadFor(edge.id) ?? null,
+      tracks: separation.tracksFor(edge.id) ?? null,
+      crossings: crossings.crossingsFor(edge.id),
+      label: groups.groupFor(edge.id) ?? null,
+      reply: replies.shiftFor(edge.id) ?? null,
+      routes: connectorRoutes(edge, doc, scope, byId),
+    })),
+  };
+}
+
+const GLYPH_TYPES = new Set<DraftNode['type']>(['service', 'component', 'database', 'artifact']);
+
+/** Shapes that can be drawn as a glyph, in boxes with room to spare: the glyph grows into the room its
+ *  words leave, so what is written under it decides where its connectors meet it. */
+function grownGlyphs(nodes: readonly DraftNode[], random: () => number): DraftNode[] {
+  return nodes.map((node) =>
+    GLYPH_TYPES.has(node.type) && random() < 0.6
+      ? { ...node, width: Math.max(node.width, 260 + Math.round(random() * 80)), height: Math.max(node.height, 220 + Math.round(random() * 80)) }
+      : node,
+  );
+}
+
+/** One edit that keeps every box where it is: a shape's kind, or the words under it — its name, its
+ *  technology, its description. A new array and a new object for the shape, as the store makes them. */
+function reword(nodes: readonly DraftNode[], random: () => number): DraftNode[] {
+  const pool = nodes.map((node, index) => [node, index] as const).filter(([node]) => GLYPH_TYPES.has(node.type));
+  if (pool.length === 0) return [...nodes];
+  const [node, at] = pool[Math.floor(random() * pool.length)]!;
+  const pick = <T,>(values: readonly T[]): T => values[Math.floor(random() * values.length)]!;
+  const what = random();
+  let next: DraftNode;
+  if (what < 0.35 && node.type === 'service') next = { ...node, serviceKind: pick(['generic', 'worker', 'gateway', 'scheduler', 'external'] as const) };
+  else if (what < 0.35 && node.type === 'component') next = { ...node, componentKind: pick(['generic', 'module', 'adapter', 'port'] as const) };
+  else if (what < 0.35 && node.type === 'database') next = { ...node, databaseKind: pick(['generic', 'cache', 'search-index'] as const) };
+  else if (what < 0.6) next = { ...node, description: node.description ? undefined : 'Keeps every order, its lines and its payments, for as long as the law asks.' };
+  else if (what < 0.8) next = { ...node, technology: node.technology ? undefined : 'PostgreSQL' };
+  else next = { ...node, text: node.text && node.text.length > 30 ? 'Orders' : 'Order history and every refund made against it' };
+  return nodes.map((each, index) => (index === at ? next : each));
+}
+
+describe('every plan the canvas hands a connector equals one built from nothing', () => {
+  const files = startersUnder(STARTERS);
+
+  /** `edits` edits down a chain, each made by `change`, every plan checked against a fresh one after each. */
+  function chain(
+    nodes: DraftNode[],
+    edges: readonly DraftEdge[],
+    seed: number,
+    edits: number,
+    change: (nodes: readonly DraftNode[], random: () => number) => DraftNode[],
+  ): void {
+    const random = rng(seed);
+    everyPlan(nodes, edges, 'canvas');
+    for (let i = 0; i < edits; i += 1) {
+      nodes = change(nodes, random);
+      const got = everyPlan(nodes, edges, 'canvas');
+      const reference = fresh(nodes, edges);
+      expect(got, `edit ${i} of seed ${seed}`).toEqual(everyPlan(reference.nodes, reference.edges, 'transient'));
+    }
+  }
+
+  // A kind or a word changed moves no box, so it was taken for an edit that moved nothing, and every
+  // plan was kept for glyphs that now stood somewhere else.
+  it.each(files.map((file) => [file.split('/').pop()!, file] as const))('over kind and word edits of %s', (_name, file) => {
+    const document = load(file);
+    chain(grownGlyphs(document.nodes, rng(31)), document.edges, 31, 10, reword);
+  });
+
+  // Line jumps were worked out on the lines a connector had before a move elsewhere spread its ends or
+  // moved its runs onto tracks: the crossing plan's own memo of each connector's lines left those out.
+  it('over moves and word edits of the larger diagram', () => {
+    const { document } = buildScaleDocument(SCALE_SPECS.medium);
+    const random = rng(5);
+    const nodes = grownGlyphs(withStrays(document, random).nodes, random);
+    chain(nodes, document.edges, 5, 6, (current, next) => (next() < 0.65 ? edit(current, document.edges, next) : reword(current, next)));
+  }, 30_000);
+});
+
+describe('a shape that keeps its box but not where its connectors meet it', () => {
+  const service = (id: string, x: number, y: number, size: { width: number; height: number } = { width: 160, height: 110 }) =>
+    createNode({ id, type: 'service', x, y, ...size, text: id });
+  /** A level connector between `a` and `b`, crossed by an upright one between two small Services. */
+  const crossed = (a: DraftNode, b: DraftNode) => ({
+    nodes: [a, b, service('up', 340, -60, { width: 120, height: 80 }), service('down', 340, 520, { width: 120, height: 80 })],
+    edges: [createEdge({ id: 'level', source: a.id, target: b.id }), createEdge({ id: 'upright', source: 'up', target: 'down' })],
+  });
+  const jumps = (plan: ReturnType<typeof crossingPlan>) => [...plan.crossingsFor('level'), ...plan.crossingsFor('upright')];
+
+  it('plans again when a Service is turned into a kind drawn as a glyph', () => {
+    const { nodes, edges } = crossed(service('a', 0, 200), service('b', 640, 200));
+    const before = crossingPlan(nodes, edges);
+    expect(jumps(before)).toHaveLength(1);
+    // A Worker is met on its glyph, which stands higher in the box than a card's middle.
+    const turned = nodes.map((node) => (node.id === 'a' || node.id === 'b' ? { ...node, serviceKind: 'worker' as const } : node));
+    expect(rectOf(turned[0]!).anchorBand).toBeDefined();
+    expect(sameNodeGeometry(nodes, turned)).toBe(false);
+    const after = crossingPlan(turned, edges);
+    const reference = fresh(turned, edges);
+    const wanted = jumps(crossingPlan(reference.nodes, reference.edges, reference.nodes, 'transient'));
+    expect(jumps(after)).toEqual(wanted);
+    // The jump moved up with the line, off where the card's line crossed.
+    expect(wanted[0]!.y).toBeLessThan(jumps(before)[0]!.y);
+    expect(everyPlan(turned, edges, 'canvas')).toEqual(everyPlan(reference.nodes, reference.edges, 'transient'));
+  });
+
+  it('plans again when the words under a grown glyph move it', () => {
+    const store = createNode({ id: 'db', type: 'database', x: 0, y: 0, width: 200, height: 170, text: 'Ledger', description: 'Double-entry book of every payment and refund' });
+    const { nodes, edges } = crossed(store, service('b', 640, 40));
+    everyPlan(nodes, edges, 'canvas');
+    const bare = nodes.map((node) => (node.id === 'db' ? { ...node, description: undefined } : node));
+    // Without its description the glyph grows into the room the words left.
+    expect(rectOf(bare[0]!).anchorBand).not.toEqual(rectOf(store).anchorBand);
+    expect(sameNodeGeometry(nodes, bare)).toBe(false);
+    const reference = fresh(bare, edges);
+    expect(everyPlan(bare, edges, 'canvas')).toEqual(everyPlan(reference.nodes, reference.edges, 'transient'));
+  });
+
+  it('plans again when a shape a connector is joined to changes its glyph while a stray shape moves', () => {
+    const { nodes, edges } = crossed(service('a', 0, 200), service('b', 640, 200));
+    const before = [...nodes, createNode({ id: 'stray', type: 'note', x: 6000, y: 6000, text: 'x' })];
+    const after = before.map((node) => (node.id === 'a' ? { ...node, serviceKind: 'gateway' as const } : node.id === 'stray' ? { ...node, x: 6200 } : node));
+    expect(sameNodeGeometryAround(before, after, edges)).toBe(false);
+    expect(sameRouteGeometryAround(before, after, edges)).toBe(false);
+  });
+
+  // A shape is compared field by field before its band is asked for: a field left off the list
+  // would keep every plan across a change to it.
+  it('compares a shape by every field its glyph stands by', () => {
+    const shape = Object.fromEntries(BAND_WORD_FIELDS.map((field) => [field, `${field} set`])) as Parameters<typeof bandWords>[0];
+    expect(Object.keys(bandWords(shape)).sort()).toEqual([...BAND_WORD_FIELDS].sort());
+  });
+
+  it('keeps every plan for a rename that leaves each glyph where it stood', () => {
+    const store = createNode({ id: 'db', type: 'database', x: 0, y: 0, width: 200, height: 170, text: 'Ledger' });
+    const { nodes, edges } = crossed(store, service('b', 640, 40));
+    const before = crossingPlan(nodes, edges);
+    // A card has no glyph at all, and a short name leaves a Data Store's glyph where it stood.
+    const renamed = nodes.map((node) => (node.id === 'b' ? { ...node, text: 'Payments' } : node.id === 'db' ? { ...node, text: 'Book' } : node));
+    expect(rectOf(renamed[0]!).anchorBand).toEqual(rectOf(store).anchorBand);
+    expect(sameNodeGeometry(nodes, renamed)).toBe(true);
+    expect(crossingPlan(renamed, edges)).toBe(before);
   });
 });

@@ -159,7 +159,11 @@ export function projectEdges(
       zIndex,
       selected,
       selectable: options.interactive,
-      focusable: options.interactive,
+      // No `focusable`: the canvas is the diagram's one Tab stop (`edgesFocusable={false}` in
+      // `Canvas.tsx`), and a connector's own `focusable` overrode that — every connector became a Tab
+      // stop that drew no focus at all, where Enter edited a label nobody could see was focused. The
+      // Outline is how a keyboard reaches a connector. Unfocusable, React Flow draws it as an image
+      // named by `ariaLabel` (see above).
       ariaLabel,
       // Geometry is derived by the edge component from live node rectangles, so
       // nothing about the shape of the connector is carried here.

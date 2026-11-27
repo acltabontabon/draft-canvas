@@ -18,6 +18,7 @@ import { GalleryHeading } from './GalleryHeading';
 import { LibraryBrand } from './LibraryBrand';
 import { LocalNote } from './LocalNote';
 import { backUpLibrary, looksLikeBackup, restoreLibrary } from './backupActions';
+import { importRepairsNotice } from '../common/importRepairs';
 import { MoveToProjectMenu } from './MoveToProjectMenu';
 import { MovedHouseNotice } from './MovedHouseNotice';
 import { hostKind } from '../../host/hostInfo';
@@ -133,9 +134,8 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
       notify(result.error, 'error');
       return;
     }
-    if (result.repairs.length > 0) {
-      notify(`Imported with repairs: ${result.repairs.join(' ')}`);
-    }
+    const repaired = importRepairsNotice(result.repairs);
+    if (repaired) notify(repaired);
     // Imported into a project's view, it belongs to that project, as a new canvas made there does.
     const document = result.document.metadata.projectId === undefined && viewProject
       ? { ...result.document, metadata: { ...result.document.metadata, projectId: viewProject } }

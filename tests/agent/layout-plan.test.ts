@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createDocument, createEdge, createNode } from '../../src/document/factory';
 import { addEdges, addNodes } from '../../src/document/operations';
 import { planArrange, planTidy, reuseOf } from '../../src/agent/layoutPlan';
@@ -27,11 +27,27 @@ describe('the work budget', () => {
       expect(workLeft()).toBe(-1);
       return pastDeadline();
     });
-    expect(run).toEqual({ value: true, used: 11, partial: true });
+    // Stopped by the budget, not the clock.
+    expect(run).toEqual({ value: true, used: 11, partial: true, timedOut: false });
     // Nothing is cut short, and nothing leaks out of a finished run.
     expect(withBudget({ work: 10 }, () => charge(3)).partial).toBe(false);
     expect(workLeft()).toBe(Number.POSITIVE_INFINITY);
     expect(pastDeadline()).toBe(false);
+  });
+
+  it('says when it was the backstop and not the budget that cut it short', () => {
+    let now = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => (now += 1_000));
+    try {
+      const run = withBudget({ work: 10, backstopMs: 1_500 }, () => {
+        charge(1);
+        return [pastDeadline(), pastDeadline()];
+      });
+      // In budget all along: the first look is inside the backstop, the second past it.
+      expect(run).toEqual({ value: [false, true], used: 1, partial: true, timedOut: true });
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('splits a budget between parts, and a spent slice leaves the rest alone', () => {

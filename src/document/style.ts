@@ -83,11 +83,20 @@ export const STYLE_LIMITS = {
   maxAssetsChars: 262_144,
   /** A drawing's own width and height, in its own units. */
   maxArtUnits: 1_000,
-  /** How far outside its own box a drawing's coordinates may reach. */
-  minArtCoordinate: -1_000,
-  maxArtCoordinate: 2_000,
+  /**
+   * How far past each side of its own box a drawing's coordinates may reach, in its own widths and
+   * heights (`artBounds`). It was once -1000 to 2000 whatever the drawing's size, and a 1×1 drawing
+   * reaching that far painted one Service over the whole canvas and every export.
+   */
+  artReach: 1,
   maxArtStrokeWidth: 64,
 } as const;
+
+/** The coordinates a drawing `w` by `h` may use, across and down: its box, and `artReach` of it past each side. */
+export function artBounds(w: number, h: number): { x: readonly [number, number]; y: readonly [number, number] } {
+  const reach = STYLE_LIMITS.artReach;
+  return { x: [-w * reach, w * (1 + reach)], y: [-h * reach, h * (1 + reach)] };
+}
 
 export interface SurfaceStyle {
   weight?: StyleWeight;
@@ -329,43 +338,75 @@ function paint(value: unknown): ArtPaint | undefined {
 }
 
 /**
- * How many drawing commands `d` holds, or `null` when it is anything but the stored form: absolute
- * `M`, `L`, `C` and `Z`, each with exactly its numbers, every number short and inside the drawing's
- * reach. Checked character by character because this is the one string in a style that is drawn.
+ * `d` as it is kept, with how many drawing commands it holds, or `null` when it is anything but the
+ * stored form: absolute `M`, `L`, `C` and `Z`, each with exactly its numbers, every number short.
+ * Checked character by character because this is the one string in a style that is drawn.
+ *
+ * A point past the reach of a drawing `w` by `h` (`artBounds`) is held to it, as the SVG importer
+ * holds what it reads (`held`). Refused instead, a drawing kept while the reach was -1000 to 2000
+ * whatever its size, with a stray path a few of its widths out, was left out of every file that had
+ * it on open, and on the desktop that loss was written to the file with the next edit.
  */
-export function pathCommands(d: string): number | null {
+export function storedPath(d: string, w: number, h: number): { d: string; commands: number; held: boolean } | null {
   if (d.length === 0 || d[0] !== 'M') return null;
+  const { x, y } = artBounds(w, h);
   let commands = 0;
   let at = 0;
+  let held = false;
+  let out = '';
   while (at < d.length) {
-    const arity = ARITY[d[at]!];
+    const command = d[at]!;
+    const arity = ARITY[command];
     if (arity === undefined) return null;
     let end = at + 1;
     while (end < d.length && ARITY[d[end]!] === undefined) end += 1;
     const body = d.slice(at + 1, end);
     if (arity === 0) {
       if (body !== '') return null;
+      out += command;
     } else {
       const numbers = body.split(' ');
       if (numbers.length !== arity) return null;
-      for (const entry of numbers) {
+      for (let index = 0; index < numbers.length; index += 1) {
+        const entry = numbers[index]!;
         if (!NUMBER.test(entry)) return null;
         const value = Number(entry);
-        if (value < STYLE_LIMITS.minArtCoordinate || value > STYLE_LIMITS.maxArtCoordinate) return null;
+        // Every command's numbers are points, across then down.
+        const [min, max] = index % 2 === 0 ? x : y;
+        if (value < min || value > max) {
+          // To two decimals, as every stored number is; the reach's own ends already are.
+          numbers[index] = String(Math.round(Math.min(max, Math.max(min, value)) * 100) / 100 || 0);
+          held = true;
+        }
       }
+      out += command + numbers.join(' ');
     }
     commands += 1;
     at = end;
   }
-  return commands;
+  // What was already the stored form is kept to the byte: the same drawing is the same text.
+  return { d: held ? out : d, commands, held };
+}
+
+/** How many drawing commands `d` holds, or `null` when it is not the stored form (`storedPath`). */
+export function pathCommands(d: string, w: number, h: number): number | null {
+  return storedPath(d, w, h)?.commands ?? null;
 }
 
 function bounded(value: unknown, min: number, max: number): number | undefined {
   return isFiniteNumber(value) && value >= min && value <= max ? Math.round(value * 100) / 100 : undefined;
 }
 
-/** One drawing, checked. `null` when any part of it is not the stored form: a drawing is kept whole or not at all. */
+/**
+ * One drawing, checked. `null` when any part of it is not the stored form: a drawing is kept whole or
+ * not at all. A point past its reach is the one thing mended rather than refused (`storedPath`).
+ */
 export function normalizeAsset(raw: unknown): StyleAsset | null {
+  return readAsset(raw)?.asset ?? null;
+}
+
+/** `normalizeAsset`, and whether any of the drawing's points had to be held to its reach. */
+function readAsset(raw: unknown): { asset: StyleAsset; held: boolean } | null {
   if (!isRecord(raw) || typeof raw.id !== 'string' || !ASSET_ID.test(raw.id)) return null;
   const w = bounded(raw.w, 1, STYLE_LIMITS.maxArtUnits);
   const h = bounded(raw.h, 1, STYLE_LIMITS.maxArtUnits);
@@ -374,19 +415,23 @@ export function normalizeAsset(raw: unknown): StyleAsset | null {
   const paths: ArtPath[] = [];
   let chars = 0;
   let commands = 0;
+  let held = false;
   for (const candidate of raw.paths) {
     if (!isRecord(candidate) || typeof candidate.d !== 'string') return null;
-    chars += candidate.d.length;
+    // Measured before it is read, so a string of any size costs nothing to turn away.
+    if (candidate.d.length > STYLE_LIMITS.maxAssetChars) return null;
+    const stored = storedPath(candidate.d, w, h);
+    if (stored === null) return null;
+    chars += stored.d.length;
     if (chars > STYLE_LIMITS.maxAssetChars) return null;
-    const count = pathCommands(candidate.d);
-    if (count === null) return null;
-    commands += count;
+    commands += stored.commands;
     if (commands > STYLE_LIMITS.maxAssetCommands) return null;
+    held ||= stored.held;
     const fill = paint(candidate.fill);
     const stroke = paint(candidate.stroke);
     // A path that paints nothing is not a smaller drawing, it is a mistake somewhere upstream.
     if (!fill && !stroke) return null;
-    const path: ArtPath = { d: candidate.d };
+    const path: ArtPath = { d: stored.d };
     if (fill) path.fill = fill;
     if (stroke) {
       path.stroke = stroke;
@@ -397,7 +442,7 @@ export function normalizeAsset(raw: unknown): StyleAsset | null {
     if (candidate.rule === 'evenodd') path.rule = 'evenodd';
     paths.push(path);
   }
-  return { id: raw.id, w, h, paths };
+  return { asset: { id: raw.id, w, h, paths }, held };
 }
 
 function surface(raw: Record<string, unknown>): SurfaceStyle {
@@ -446,7 +491,8 @@ export interface NormalizedStyle {
  * A style from anywhere (a file, a collaborator, a profile, a gallery pack), made safe to keep.
  *
  * Rebuilt from a whitelist, like the rest of a document: unknown keys are dropped, a bad value
- * falls back to "not set", and a drawing that is not exactly the stored form is dropped whole.
+ * falls back to "not set", and a drawing that is not exactly the stored form is dropped whole, but
+ * for a point past its reach, which is held to it (`storedPath`).
  * Pure string and number checks only, so it runs wherever a document is read, worker included.
  */
 export function normalizeStyle(raw: unknown): NormalizedStyle {
@@ -488,11 +534,13 @@ export function normalizeStyle(raw: unknown): NormalizedStyle {
   const assets: StyleAsset[] = [];
   if (Array.isArray(raw.assets)) {
     let dropped = 0;
+    let held = 0;
     let chars = 0;
     const seen = new Set<string>();
     for (const candidate of raw.assets) {
       if (!isRecord(candidate) || typeof candidate.id !== 'string' || !named.has(candidate.id)) continue;
-      const asset = assets.length < STYLE_LIMITS.maxAssets ? normalizeAsset(candidate) : null;
+      const read = assets.length < STYLE_LIMITS.maxAssets ? readAsset(candidate) : null;
+      const asset = read?.asset ?? null;
       const size = asset ? asset.paths.reduce((sum, path) => sum + path.d.length, 0) : 0;
       if (!asset || seen.has(asset.id) || chars + size > STYLE_LIMITS.maxAssetsChars) {
         dropped += 1;
@@ -501,8 +549,10 @@ export function normalizeStyle(raw: unknown): NormalizedStyle {
       seen.add(asset.id);
       chars += size;
       assets.push(asset);
+      if (read!.held) held += 1;
     }
     if (dropped > 0) repairs.push(`Left out ${dropped} custom drawing(s) that could not be read or were too large.`);
+    if (held > 0) repairs.push(`Pulled in ${held} custom drawing(s) that reached far outside their own box.`);
   }
   const known = new Set(assets.map((asset) => asset.id));
 

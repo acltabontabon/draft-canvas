@@ -107,6 +107,29 @@ describe('update_diagram operations', () => {
     expect(next.nodes.find((n) => n.id === 'n1')).toEqual(file.nodes.find((n) => n.id === 'n1'));
   });
 
+  // A file keeps boundaries nested only so deep; past it the next open cut a grouping link, and a
+  // create was refused only as INTERNAL "would be altered on its next open".
+  it('refuses boundaries nested past what a file keeps, in a create, an add and a move into one', () => {
+    const chain = (count: number, under?: string) => Array.from({ length: count }, (_, i) => ({ id: `g${i}`, label: `G${i}`, ...(i ? { parent: `g${i - 1}` } : under ? { parent: under } : {}) }));
+    const deep = chain(LIMITS.maxGroupDepth + 2);
+    const created = refusal(() => build({ groups: deep, nodes: [{ id: 'a', type: 'service', label: 'A', group: `g${deep.length - 1}` }] }));
+    expect(created.code).toBe('LIMIT_EXCEEDED');
+    expect(created.details?.path).toBe(`/groups/${LIMITS.maxGroupDepth + 1}/parent`);
+    expect(JSON.stringify(created.details)).toContain('/nodes/0/group');
+    // As deep as a file keeps is fine.
+    expect(() => build({ groups: chain(LIMITS.maxGroupDepth), nodes: [{ id: 'a', type: 'service', label: 'A', group: `g${LIMITS.maxGroupDepth - 1}` }] })).not.toThrow();
+
+    // Under a boundary that is already there, which counts too.
+    const added = refusal(() => applyUpdate(base(), [], [{ op: 'add', groups: chain(LIMITS.maxGroupDepth + 1, 'sys'), nodes: [{ id: 'a', type: 'service', label: 'A', group: `g${LIMITS.maxGroupDepth}` }] }], undefined));
+    expect(added.code).toBe('LIMIT_EXCEEDED');
+    expect(added.details?.path).toBe(`/ops/0/groups/${LIMITS.maxGroupDepth}/parent`);
+
+    const nested = applyUpdate(base(), [], [{ op: 'add', groups: chain(LIMITS.maxGroupDepth + 1) }], undefined).file;
+    const moved = refusal(() => applyUpdate(nested, [], [{ op: 'update', id: 'g0', set: { group: 'sys' } }], undefined));
+    expect(moved.code).toBe('LIMIT_EXCEEDED');
+    expect(moved.details?.path).toBe('/ops/0/set/group');
+  });
+
   it('keeps omitted fields, clears with null', () => {
     const file = base();
     const { file: next } = applyUpdate(file, [], [{ op: 'update', id: 'db', set: { description: 'Every order, append-only.' } }], undefined);

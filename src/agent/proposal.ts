@@ -9,12 +9,13 @@
 
 import type { DepthPath } from '../depth/tree';
 import { roomsOf, viewOf, walkGraphs } from '../depth/tree';
-import { AgentError } from './errors';
+import { AgentError, Problems } from './errors';
+import { Reader } from './input';
 import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftNode, OpenPoint } from '../document/types';
 import { GEOMETRY_FIELDS } from '../document/fieldClasses';
 import { OPEN_POINT_LABELS } from '../document/openPoints';
 import { applyUpdate, type PatchResult } from './patch';
-import { smallestArrange, unreadableFix, type QualityIssue } from './quality';
+import { elsewhereFix, smallestArrange, unreadableFix, type QualityIssue } from './quality';
 
 export interface EntitySnapshot {
   kind: 'node' | 'edge' | 'flow' | 'open point' | 'view';
@@ -82,12 +83,15 @@ export interface PreparedProposal {
  * message, and the problems only in details cost them retries.
  */
 export function unreadableProposal(issues: readonly QualityIssue[], view: DraftDocument | undefined): AgentError {
-  const suggestedOp = view ? smallestArrange(view, issues) : { op: 'arrange' };
+  // An arrange in these ops lays out the proposal's own view only, never one a problem is in elsewhere.
+  const elsewhere = elsewhereFix(issues);
+  const here = issues.filter((issue) => !issue.view);
+  const suggestedOp = elsewhere ? undefined : view ? smallestArrange(view, here) : { op: 'arrange' };
   const first = issues[0]!.message.replace(/\.$/, '');
   const more = issues.length > 1 ? ` (and ${issues.length - 1} more)` : '';
-  return new AgentError('LAYOUT_CONSTRAINED', `The proposal would leave unreadable content: ${first}${more}. ${unreadableFix(issues, suggestedOp)}`, {
+  return new AgentError('LAYOUT_CONSTRAINED', `The proposal would leave unreadable content: ${first}${more}. ${elsewhere ?? unreadableFix(here, suggestedOp!)}`, {
     hint: 'Nothing was submitted. Move existing shapes with set.place or an arrange op in the same ops list; a top-level layout does not move them.',
-    details: { problems: issues, suggestedOp },
+    details: { problems: issues, ...(suggestedOp ? { suggestedOp } : {}) },
   });
 }
 
@@ -274,6 +278,16 @@ function fieldOf(obj: Record<string, unknown>, key: string): string | undefined 
 }
 
 /**
+ * A declared label as the request reader stored it (`Reader.text`): trimmed, and a group's or a
+ * relationship's on one line. Compared raw, a proposal that did land with " Orders Worker " or
+ * "Enqueues  jobs" looked like something else at its ids, and was offered only Dismiss.
+ */
+function labelOf(obj: Record<string, unknown>, singleLine: boolean): string | undefined {
+  const label = fieldOf(obj, 'label');
+  return label === undefined ? undefined : (new Reader(new Problems()).text(label, '', Number.POSITIVE_INFINITY, { singleLine }) ?? '');
+}
+
+/**
  * What every `add` op in `ops` would create, well enough to check a live id against it — not just
  * that the id matches, but that it's plausibly *this* thing. Flows and notes are deliberately left
  * out: `looksAlreadyApplied` only trusts a match it can verify, and a bare id collision on either of
@@ -289,21 +303,21 @@ function declaredSpecsOf(rawOps: unknown): Map<string, DeclaredSpec> {
       for (const item of op.nodes) {
         const obj = item as Record<string, unknown> | null;
         const id = obj && fieldOf(obj, 'id');
-        if (id) specs.set(id, { kind: 'node', label: fieldOf(obj, 'label') });
+        if (id) specs.set(id, { kind: 'node', label: labelOf(obj, false) });
       }
     }
     if (Array.isArray(op.groups)) {
       for (const item of op.groups) {
         const obj = item as Record<string, unknown> | null;
         const id = obj && fieldOf(obj, 'id');
-        if (id) specs.set(id, { kind: 'group', label: fieldOf(obj, 'label') });
+        if (id) specs.set(id, { kind: 'group', label: labelOf(obj, true) });
       }
     }
     if (Array.isArray(op.relationships)) {
       for (const item of op.relationships) {
         const obj = item as Record<string, unknown> | null;
         const id = obj && fieldOf(obj, 'id');
-        if (id) specs.set(id, { kind: 'edge', source: fieldOf(obj, 'from'), target: fieldOf(obj, 'to'), label: fieldOf(obj, 'label') });
+        if (id) specs.set(id, { kind: 'edge', source: fieldOf(obj, 'from'), target: fieldOf(obj, 'to'), label: labelOf(obj, true) });
       }
     }
   }
@@ -339,13 +353,13 @@ export function looksAlreadyApplied(rawOps: unknown, conflictingIds: readonly st
       if (!edge) return false;
       if (spec.source !== undefined && edge.source !== spec.source) return false;
       if (spec.target !== undefined && edge.target !== spec.target) return false;
-      return spec.label === undefined || edge.label === spec.label;
+      return spec.label === undefined || (edge.label ?? '') === spec.label;
     }
     const node = liveNodes.get(id);
     if (!node) return false;
     const isGroup = node.type === 'group';
     if (isGroup !== (spec.kind === 'group')) return false;
-    return spec.label === undefined || node.text === spec.label;
+    return spec.label === undefined || (node.text ?? '') === spec.label;
   });
 }
 

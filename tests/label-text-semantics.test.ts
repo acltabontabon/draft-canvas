@@ -16,7 +16,7 @@ function firstRun(list: DisplayList): TextRun {
   if (!rich || rich.t !== 'rich') throw new Error('no rich text shape');
   return rich.lines[0]!.runs[0]!;
 }
-import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
+import { __resetInteraction, fileWithLiveViewport, useEditorStore } from '../src/store/editorStore';
 
 /**
  * Label/Text: "visual annotation with no architectural behaviour" — Draft Canvas's existing
@@ -104,6 +104,16 @@ describe('Label/Text — creation, editing, and generic node machinery', () => {
     expect(store.getState().history.past).toHaveLength(0);
     store.getState().undo();
     expect(store.getState().document.nodes).toHaveLength(0);
+  });
+
+  /** Taking the node back cleared the camera on screen, so the next save kept the one the diagram opened with. */
+  it('finishTextEdit taking an abandoned Text node back keeps the camera where the person is', () => {
+    store.setState({ path: [], outer: null, liveViewport: null });
+    store.getState().persistViewport({ x: -800, y: -400, zoom: 1.5 });
+    const node = store.getState().addNode({ type: 'text', x: 900, y: 500 });
+    store.getState().finishTextEdit(node.id, '');
+    expect(store.getState().document.nodes).toHaveLength(0);
+    expect(fileWithLiveViewport(store.getState()).viewport).toEqual({ x: -800, y: -400, zoom: 1.5 });
   });
 
   it('finishTextEdit records an undoable delete when other edits happened since the add', () => {

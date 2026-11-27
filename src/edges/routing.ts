@@ -9,6 +9,7 @@ import {
   type EdgeRouting,
   type Side,
 } from '../document/types';
+import { compensationDisplayLabel } from '../document/compensation';
 import { anchorBandOf, anchorOnShape, bandReach, bandSpan, middlePointsOnly, type AnchorBand } from '../document/queueGeometry';
 import { centerOf, clamp } from '../lib/math';
 import { longestRunMidpoint, orthogonalThrough, polylineMidpoint, polylinePath, responseWaypoints, smoothPath, stepPolyline } from './waypoints';
@@ -2565,9 +2566,11 @@ export function routeEdge(
   const source = nodes.get(edge.source);
   const target = nodes.get(edge.target);
   if (!source || !target) return null;
+  // The words its chip shows, as every renderer places them (`routedLabel` in `edgeRoutes.ts`).
+  const words = compensationDisplayLabel(edge);
   return routeBetween(rectOf(source), rectOf(target), edge.routing, {
     ...options,
-    label: edge.label ? { ...edgeLabelSize(edge.label), away: responseAwayFor(edge.hasResponse, options?.lane ?? 0), ...options?.label } : options?.label,
+    label: words ? { ...edgeLabelSize(words), away: responseAwayFor(edge.hasResponse, options?.lane ?? 0), ...options?.label } : options?.label,
     anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
     waypoints: edge.waypoints,
   });

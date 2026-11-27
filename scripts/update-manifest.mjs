@@ -24,9 +24,9 @@
 //   node scripts/update-manifest.mjs channels <version> --existing <dir> [--force]
 
 import { createHash, createPublicKey, verify as edVerify } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ChangelogError, findEntry, changelogUrl, parseChangelog, releaseNotes, unwrap } from './changelog.mjs';
 import { changelogSection } from './release-notes.mjs';
 
@@ -305,7 +305,7 @@ export function configProblems(updater) {
     const { keyId } = decodePublicKey(updater.pubkey ?? '');
     if (keyId.every((byte) => byte === 0)) problems.push('the public key has an empty key id');
   } catch {
-    problems.push('plugins.updater.pubkey is not a real public key yet — see docs/reference/desktop-updates.md');
+    problems.push('plugins.updater.pubkey is not a real public key yet — see docs/reference/releases.md#update-key-setup');
   }
   const endpoints = updater.endpoints ?? [];
   if (endpoints.length !== 1 || endpoints[0] !== ENDPOINT) problems.push(`the one endpoint must be ${ENDPOINT}`);
@@ -437,4 +437,8 @@ function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) main();
+// `file://${argv[1]}` is never this module's URL on Windows (backslashes, a drive letter), so the
+// script exited 0 there having done nothing; the Windows release job's signature check checked nothing.
+// Node also runs a script from its real path, so one reached through a link (macOS's /tmp, a linked
+// checkout) is compared by its real path too.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) main();

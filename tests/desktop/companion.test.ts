@@ -327,6 +327,27 @@ describe('the controller', () => {
     expect(companion.snapshot().has(conversationKey('d_1', 'codex'))).toBe(false);
   });
 
+  it('keeps a waiting proposal up when looking it up fails, and takes the next answer that comes', async () => {
+    const h = createHarness();
+    await h.controller.start();
+    companion.begin('d_1', RUN, 'Add a cache', null);
+    companion.apply(RUN, { type: 'tool-call', id: 'submit', tool: 'submit_proposal', status: 'completed' });
+    companion.apply(RUN, TURN.at(-1)!);
+    h.agent.proposals.set('p1', { proposalId: 'p1', diagramId: 'd_1', status: 'pending', run: RUN } as never);
+    await h.controller.refreshCompanionProposals();
+    const proposalOf = () => companion.snapshot().get(conversationKey('d_1'))!.turns[0]!.proposalId;
+    expect(proposalOf()).toBe('p1');
+
+    // One lookup the shell couldn't answer says nothing about the proposal: it is still waiting.
+    h.api.agentProposalList.mockRejectedValueOnce(new Error('The agent bridge is busy.'));
+    await h.controller.refreshCompanionProposals();
+    expect(proposalOf()).toBe('p1');
+
+    h.agent.proposals.set('p1', { proposalId: 'p1', diagramId: 'd_1', status: 'rejected', run: RUN } as never);
+    await h.controller.refreshCompanionProposals();
+    expect(proposalOf()).toBeNull();
+  });
+
   it('ends the turn with the shell’s own words when it refuses to start', async () => {
     const h = createHarness();
     await h.controller.start();

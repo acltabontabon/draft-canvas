@@ -328,9 +328,10 @@ export async function installMockShell(page: Page): Promise<void> {
         return { handle, name, displayPath: moved.displayPath };
       },
       save_document: (bytes: unknown, options: unknown) => {
-        const { handle, expectedStamp } = meta(options) as { handle: string; expectedStamp?: string };
+        const { handle, expectedStamp, expectMissing } = meta(options) as { handle: string; expectedStamp?: string; expectMissing?: boolean };
         const file = files.get(handle)!;
-        if (expectedStamp !== undefined && expectedStamp !== stamp(file)) return { outcome: 'conflict' };
+        // Every file here is there, so one asked to have gone is a conflict too, as the shell answers.
+        if (expectMissing || (expectedStamp !== undefined && expectedStamp !== stamp(file))) return { outcome: 'conflict', current: stamp(file) };
         file.text = decode(bytes);
         file.version += 1;
         return { outcome: 'saved', stamp: stamp(file) };

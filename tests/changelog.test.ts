@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseChangelog, releaseNotes, versionFromTag, whatsNew } from '../scripts/changelog.mjs';
@@ -350,6 +352,26 @@ describe('the real changelog and release configuration', () => {
     expect(desktop).toContain('--draft=false --prerelease --latest=false');
     expect(desktop).toContain('installer: Draft-Canvas_VERSION_macOS_arm64.dmg');
     expect(desktop).toContain('installer: Draft-Canvas_VERSION_Windows_x64.exe');
+  });
+
+  it('prints the release notes when the script is reached through a linked folder', () => {
+    // Node runs a script from its real path, so a check against argv[1] as given never matched a
+    // linked checkout and the script exited 0 having printed nothing.
+    const dir = mkdtempSync(join(tmpdir(), 'dc-linked-scripts-'));
+    const linked = join(dir, 'scripts');
+    // A junction on Windows, which needs no special rights; a plain link elsewhere.
+    symlinkSync(join(root, 'scripts'), linked, 'junction');
+    try {
+      const stable = parseChangelog(read('CHANGELOG.md')).find((entry) => !entry.version.includes('-'));
+      const tag = `v${stable?.version}`;
+      const run = spawnSync(process.execPath, [join(linked, 'release-notes.mjs'), tag], { encoding: 'utf8' });
+      expect(run.status, run.stderr).toBe(0);
+      expect(run.stdout.trim()).not.toBe('');
+    } finally {
+      // The link itself first, so removing the folder can never reach into the real scripts.
+      unlinkSync(linked);
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

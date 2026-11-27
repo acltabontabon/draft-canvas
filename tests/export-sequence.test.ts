@@ -58,17 +58,18 @@ describe('sequenceSourceFor — every room', () => {
     return { ...createDocument('Checkout'), nodes: [ordersApi, b], edges: [edge], flows: [flow] };
   }
 
-  it('emits one section per room in tree order, each under a comment naming the room', () => {
+  it('emits one Mermaid block per room in tree order, each opening with a comment naming the room', () => {
+    // Two rooms with Flows were two `sequenceDiagram`s in one text, which Mermaid refuses whole.
     const out = sequenceSourceFor(twoRooms(), 'mermaid');
-    const rootAt = out.indexOf('%% Room: Checkout\n');
-    const innerAt = out.indexOf('%% Room: Checkout / Orders API\n');
+    const rootAt = out.indexOf('```mermaid\n%% Room: Checkout\n');
+    const innerAt = out.indexOf('```mermaid\n%% Room: Checkout / Orders API\n');
     expect(rootAt).toBe(0);
     expect(innerAt).toBeGreaterThan(rootAt);
     expect(out.match(/^sequenceDiagram$/gm)).toHaveLength(2);
     // Each room's flows read exactly as a flat canvas's would, and the blocks are kept apart.
     expect(out.indexOf('Go')).toBeLessThan(innerAt);
     expect(out.indexOf('Persist')).toBeGreaterThan(innerAt);
-    expect(out).toContain('\n\n%% Room: Checkout / Orders API\n');
+    expect(out).toContain('\n```\n\n```mermaid\n%% Room: Checkout / Orders API\n');
   });
 
   it('keeps a Mermaid directive in a room title from reaching the renderer', () => {

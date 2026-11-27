@@ -10,7 +10,7 @@
  * `alt` or `par` are never one after the other, so destroying a participant in one branch and using
  * it in the next is fine.
  */
-import { findItem, isBranching, walkItems, type SeqSlot } from '../document/sequenceModel';
+import { findItem, isBranching, slotOf, waitingCall, walkItems, type SeqSlot } from '../document/sequenceModel';
 import { moveItem, updateMessage } from '../document/sequenceOps';
 import type { DraftSequence, SeqItem, SeqMessage } from '../document/types';
 import { executionsOf } from './executions';
@@ -130,7 +130,12 @@ export function checkSequence(sequence: DraftSequence): SequenceFinding[] {
     if (reply.message.kind !== 'reply') continue;
     const call = reply.message.replyTo ? byId.get(reply.message.replyTo) : undefined;
     if (!call) {
-      found.push({ kind: 'reply-without-call', itemIds: [reply.message.id], message: 'This reply has no matching call.' });
+      const finding: SequenceFinding = { kind: 'reply-without-call', itemIds: [reply.message.id], message: 'This reply has no matching call.' };
+      // A call above it, the other way, still waiting: what a reply drawn back would have answered.
+      const slot = slotOf(sequence, reply.message.id);
+      const waiting = slot ? waitingCall(sequence, reply.message.from, reply.message.to, slot) : undefined;
+      if (waiting) finding.fix = { label: 'Answer the call above', apply: (current) => updateMessage(current, reply.message.id, { replyTo: waiting.id }) };
+      found.push(finding);
       continue;
     }
     if (call.order > reply.order) {

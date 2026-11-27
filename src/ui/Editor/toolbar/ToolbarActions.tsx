@@ -132,7 +132,10 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
               // and a bare `onClick={onPresent}` hands it the click event instead — truthy, so
               // the presentation would start on a flow that doesn't exist and quietly do nothing.
               onClick={() => onPresent()}
-              aria-label={presentsSelection ? 'Present selection' : toolbarLabel('present')}
+              // The flow it will play is in its name too, as it is on the button: "Present" alone
+              // left a screen reader not knowing which flow, and a speech user's "Present Checkout"
+              // matching nothing.
+              aria-label={presentsSelection ? 'Present selection' : activeFlowTitle ? `${toolbarLabel('present')} ${activeFlowTitle}` : toolbarLabel('present')}
               {...tip}
             >
               <span className="dc-mode-label">{presentsSelection ? 'Present selection' : 'Present'}</span>

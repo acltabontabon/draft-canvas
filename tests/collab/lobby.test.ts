@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GREETING_TIMEOUT_MS, HostLobby, knock, type LobbyStatus } from '../../src/collab/lobby';
 import { newOwnerIdentity, newSessionLink } from '../../src/collab/rendezvous';
+import type { CollabTransport } from '../../src/collab/transport/types';
+import { joinFromInvite } from '../../src/collab/transport/webrtc';
+
+// The real thing unless a test says otherwise: a knocker's connection is made by it.
+vi.mock('../../src/collab/transport/webrtc', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/collab/transport/webrtc')>();
+  return { ...actual, joinFromInvite: vi.fn(actual.joinFromInvite) };
+});
 
 /** A WebSocket that records how it was opened and lets the test decide what happens to it. */
 class FakeSocket {
@@ -158,6 +166,57 @@ describe('the knocker’s side', () => {
     expect(statuses.indexOf('waiting')).toBeLessThan(statuses.indexOf('joining'));
     vi.unstubAllGlobals();
   });
+
+  it('takes the new offer of an owner who lost the relay before hearing the answer, rather than waiting out the old one', async () => {
+    FakeSocket.made = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
+    const rendezvous = await import('../../src/collab/rendezvous');
+    const identity = await newOwnerIdentity();
+    const link = newSessionLink(identity);
+    const key = await rendezvous.roomKey(link);
+    // The first offer's connection never comes: the owner cancelled it when its relay dropped.
+    const abandoned = vi.fn();
+    const connected = { close: vi.fn() } as unknown as CollabTransport;
+    vi.mocked(joinFromInvite)
+      .mockImplementationOnce(async () => ({ replyCode: 'reply-1', transport: new Promise<CollabTransport>(() => {}), cancel: abandoned }))
+      .mockImplementationOnce(async () => ({ replyCode: 'reply-2', transport: Promise.resolve(connected), cancel: () => {} }));
+    const statuses: string[] = [];
+    const knocking = await knock(link, 'wss://relay.example', { name: 'Gus' }, '', (status) => statuses.push(status.kind));
+    let joined: CollabTransport | null | undefined;
+    void knocking.transport.then((transport) => (joined = transport));
+    const socket = FakeSocket.made[0]!;
+    socket.fire('open');
+    const hostIs = (present: boolean) => socket.fire('message', { data: JSON.stringify({ event: 'host', present }) });
+    const fromHost = (data: string) => socket.fire('message', { data: JSON.stringify({ from: 'host', data }) });
+    const knocks = async () => {
+      const frames = await Promise.all(socket.sent.map(async (text) => rendezvous.unseal(key, 'to-host', (JSON.parse(text) as { data: string }).data)));
+      return frames.filter((frame) => (frame as { t?: string }).t === 'knock') as { publicKey: string }[];
+    };
+    /** The owner greets the knock afresh and lets them in, as it does after a relay drop. */
+    const letIn = async (invite: string) => {
+      const [knocked] = await knocks();
+      const exchange = await rendezvous.newExchange();
+      const pair = await exchange.pairWith(knocked!.publicKey, link);
+      const signature = await identity.sign(rendezvous.greetingStatement(link, knocked!.publicKey, exchange.publicKey, 'Olive'));
+      fromHost(await rendezvous.seal(key, 'to-guest', { t: 'seen', owner: 'Olive', publicKey: exchange.publicKey, ownerKey: identity.publicKey, signature }));
+      fromHost(await rendezvous.seal(key, 'to-guest', { t: 'offer', box: await rendezvous.seal(pair, 'to-guest', { invite }) }));
+    };
+
+    hostIs(true);
+    await vi.waitFor(async () => expect(await knocks()).toHaveLength(1));
+    await letIn('1.first');
+    // Their answer goes, but the owner's relay drops before it arrives; the owner forgets the offer.
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(2));
+    hostIs(false);
+    hostIs(true);
+    await vi.waitFor(async () => expect(await knocks()).toHaveLength(2));
+    await letIn('1.second');
+
+    await vi.waitFor(() => expect(joined).toBe(connected));
+    expect(abandoned).toHaveBeenCalled();
+    expect(statuses).not.toContain('unavailable');
+    vi.unstubAllGlobals();
+  });
 });
 
 describe('the door, against squatters', () => {
@@ -231,6 +290,37 @@ describe('what the owner says at the door', () => {
     // Every greeting went, ahead of the "busy" replies, and the excess "busy" replies were let go.
     for (let i = 0; i < 25; i += 1) expect(to).toContain(`g_greet${i}`);
     expect(to.filter((id) => id.startsWith('g_busy')).length).toBeLessThanOrEqual(20);
+    await lobby.close();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+});
+
+describe('the owner’s door, when the owner’s clock steps back', () => {
+  it('still says what it has to at once: the relay budget never refills by less than nothing', async () => {
+    // Timers and `performance` run on; `Date` is stepped (time sync, a VM resuming, a change by hand).
+    vi.useFakeTimers();
+    FakeSocket.made = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
+    const identity = await newOwnerIdentity();
+    const lobby = new HostLobby(newSessionLink(identity), identity, 'wss://relay.example', 'Olive', { localOnly: true, server: '' }, {
+      status: () => {},
+      knocks: () => {},
+      admitted: () => {},
+      isReturning: () => null,
+      failed: () => {},
+    });
+    await lobby.open();
+    const socket = FakeSocket.made[0]!;
+    socket.fire('open');
+    const say = (lobby as unknown as { toGuest(id: string, data: string, busy?: boolean): void }).toGuest.bind(lobby);
+    const to = () => socket.sent.map((text) => (JSON.parse(text) as { to: string }).to);
+    say('g_before', 'seen');
+    vi.setSystemTime(Date.now() - 60_000);
+    // A minute back took the budget to minus 150: the greeting waited the minute, and the knocker
+    // gave up on it after 30 s, told the door was busy.
+    say('g_after', 'seen');
+    expect(to()).toEqual(['g_before', 'g_after']);
     await lobby.close();
     vi.unstubAllGlobals();
     vi.useRealTimers();

@@ -8,10 +8,16 @@
  * whether the other reading direction is worked out, depends on how much work was spent and never on
  * how fast the machine is, so the same diagram gives the same preview anywhere. A result that stopped
  * on the budget says so (`partial`); applying it and asking again continues from where it left off.
+ *
+ * Each keeps the routes it works out for as long as it runs (`withRouteMemo`): a candidate redraws
+ * the whole view, almost all of it as the one before drew it. A unit of the budget is charged for a
+ * connector drawn whether its route was worked out or found, so the budget is spent, and the preview
+ * comes out, exactly as it would without them.
  */
 
 import type { DraftDocument } from '../document/types';
 import { visibleEdges } from '../document/compensation';
+import { withRouteMemo } from '../edges/edgeRoutes';
 import { fixedIds, heldCount } from '../document/held';
 import type { ArrangeFix } from '../lib/arrangeFixes';
 import { arrangeView, readingDirectionOf } from './arrange';
@@ -39,15 +45,34 @@ export interface ArrangePreset {
  * replaced gave — the same on every machine now, and measured by `tests/performance.test.ts`.
  */
 export const ARRANGE_WORK_UNITS = 12_000;
-/** The work budget of one Tidy up: a base, and more for every connector, since each repair redraws them all. */
+/** The work budget of one Tidy up: a base, and more for every connector, since each repair redraws them
+ *  all — up to `TIDY_WORK_MAX` (`tidyBudget`). */
 export const TIDY_WORK_UNITS = 12_000;
 export const TIDY_WORK_PER_CONNECTOR = 60;
 /**
- * The wall-clock net behind both budgets: only a machine so slow that the budget would take this long
- * ever meets it, and what it stops is flagged `partial` like the budget. Below the worker's hard limit
- * (`offThread.ts`), so a runaway is stopped here, with a result, rather than killed without one.
+ * The most one Tidy up spends, however large the diagram. Uncapped, 1,500 connectors were budgeted
+ * 102,000 units: 20 s on a fast desktop, and past the clock's backstop on a machine half as fast, which
+ * then stopped somewhere else and showed another preview. A unit costs about the same at any size
+ * now, so this is a time every machine the editor supports spends well inside the backstop: it is the
+ * budget that ends a Tidy up, not the clock. Reached at 800 connectors (the benchmark's Large diagram),
+ * so no smaller diagram tidies any differently; a larger one stops early and says so, and tidying it
+ * again carries on.
  */
-export const LAYOUT_BACKSTOP_MS = 40_000;
+export const TIDY_WORK_MAX = 60_000;
+
+/** The work budget of one Tidy up of `connectors` connectors. */
+export function tidyBudget(connectors: number): number {
+  return Math.min(TIDY_WORK_MAX, TIDY_WORK_UNITS + TIDY_WORK_PER_CONNECTOR * connectors);
+}
+/**
+ * The wall-clock net behind both budgets, a guard against a run that never ends and nothing more: the
+ * largest budget (`TIDY_WORK_MAX`) is spent in about 13 s on a fast desktop, so only a machine several
+ * times slower ever meets it. What it stops is flagged `partial` like the budget, and `timedOut`, since
+ * only then can a preview depend on the machine. It was 40 s, which a 1,500-connector Tidy up reached
+ * on a machine half a desktop's speed. Below the worker's hard limit (`offThread.ts`), with room for
+ * what follows the budget, so a runaway is stopped here, with a result, rather than killed without one.
+ */
+export const LAYOUT_BACKSTOP_MS = 60_000;
 
 export interface ArrangePlan {
   /** The room arranged, by reading direction. A selection, which has to read the way the rest of the
@@ -65,6 +90,9 @@ export interface ArrangePlan {
   fixes: Partial<Record<PlanDirection, ArrangeFix[]>>;
   /** The work budget was spent before every repair and alternative was tried. */
   partial: boolean;
+  /** It was the clock's backstop that stopped it, not the budget (`route.ts`'s `Bounded.timedOut`):
+   *  on a machine that fast the same room can come out otherwise. Present only when it happened. */
+  timedOut?: true;
   /** The other reading direction was not worked out because the budget was spent on this one. */
   alternativeSkipped: boolean;
   /** Units of work spent (`route.ts`'s `charge`): what a test or a benchmark holds to a bound. */
@@ -93,6 +121,8 @@ export interface TidyPlan {
   scoped: boolean;
   /** The work budget was spent before every repair was tried. */
   partial: boolean;
+  /** The clock's backstop stopped it, not the budget — see `ArrangePlan.timedOut`. */
+  timedOut?: true;
   /** Units of work spent. */
   used: number;
   /** Shapes held in place that the cleanup left alone. */
@@ -103,7 +133,7 @@ export type TidyPlanResult =
   | { kind: 'plan'; plan: TidyPlan }
   /** Nothing to tidy. `reads` is what reads badly all the same (`proportion.ts`) — a whole room only,
    *  since the findings are about the whole view — which laying it out again may fix. */
-  | { kind: 'unchanged'; partial: boolean; reads: ArrangeFix[]; used: number };
+  | { kind: 'unchanged'; partial: boolean; timedOut?: true; reads: ArrangeFix[]; used: number };
 
 /** `view` with every node, connector and field that came back equal to `base`'s replaced by `base`'s
  *  own object — a result from another thread is a copy, and the editor keeps what didn't change by
@@ -139,6 +169,10 @@ export function reuseOf(base: DraftDocument, view: DraftDocument): DraftDocument
  * straight.
  */
 export function planArrange(doc: DraftDocument, ask: { selection?: readonly string[]; preset?: ArrangePreset } = {}): ArrangePlanResult {
+  return withRouteMemo(() => arrangeWithin(doc, ask));
+}
+
+function arrangeWithin(doc: DraftDocument, ask: { selection?: readonly string[]; preset?: ArrangePreset }): ArrangePlanResult {
   const scoped = ask.selection !== undefined;
   const preset = ask.preset ?? {};
   // Held shapes stay exactly where they are: the rest is arranged as a selection is, set back down
@@ -232,30 +266,37 @@ export function planArrange(doc: DraftDocument, ask: { selection?: readonly stri
     if (view) after[direction] = legibilityOf(view.nodes, view.edges).crossings;
   }
   const crossings = { before: legibilityOf(doc.nodes, doc.edges).crossings, after };
-  return { kind: 'plan', plan: { ...result.plan, partial: bounded.partial, used: bounded.used, crossings } };
+  return { kind: 'plan', plan: { ...result.plan, partial: bounded.partial, used: bounded.used, crossings, ...timedOutOf(bounded) } };
 }
+
+/** `timedOut`, on a result the clock's backstop stopped, and nothing on any other. */
+const timedOutOf = (bounded: { timedOut: boolean }) => (bounded.timedOut ? { timedOut: true as const } : {});
 
 /**
  * Works out what Tidy up would do to `doc`, or to the neighbourhood of `scope` (shape ids), and
  * applies none of it.
  */
 export function planTidy(doc: DraftDocument, scope?: readonly string[]): TidyPlanResult {
+  return withRouteMemo(() => tidyWithin(doc, scope));
+}
+
+function tidyWithin(doc: DraftDocument, scope: readonly string[] | undefined): TidyPlanResult {
   const edges = visibleEdges(doc.edges).length;
   // Held shapes are never nudged: the cleanup is scoped to everything else.
   const fixed = fixedIds(doc.nodes);
   const movable = fixed.size > 0 ? new Set((scope ?? doc.nodes.map((node) => node.id)).filter((id) => !fixed.has(id))) : scope ? new Set(scope) : undefined;
   const held = fixed.size > 0 ? { held: heldCount(doc.nodes) } : {};
-  const bounded = withBudget({ work: TIDY_WORK_UNITS + TIDY_WORK_PER_CONNECTOR * edges, backstopMs: LAYOUT_BACKSTOP_MS }, () =>
+  const bounded = withBudget({ work: tidyBudget(edges), backstopMs: LAYOUT_BACKSTOP_MS }, () =>
     tidyView(doc, movable, measureContext()),
   );
   const tidied = bounded.value;
   if (tidied.view === doc) {
     const reads = scope || bounded.partial ? [] : proportionFindings(doc, measureContext()).map(({ kind, id }) => ({ kind, id }));
-    return { kind: 'unchanged', partial: bounded.partial, reads, used: bounded.used };
+    return { kind: 'unchanged', partial: bounded.partial, reads, used: bounded.used, ...timedOutOf(bounded) };
   }
   return {
     kind: 'plan',
-    plan: { view: tidied.view, moved: tidied.moved.length, reattached: tidied.reattached.length, scoped: Boolean(scope), partial: bounded.partial, used: bounded.used, ...held },
+    plan: { view: tidied.view, moved: tidied.moved.length, reattached: tidied.reattached.length, scoped: Boolean(scope), partial: bounded.partial, used: bounded.used, ...held, ...timedOutOf(bounded) },
   };
 }
 

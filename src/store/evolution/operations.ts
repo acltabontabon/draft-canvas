@@ -20,10 +20,11 @@ import { archivedBranchOf, branchOf } from '../../evolution/refs';
 import { formatMessage } from '../../evolution/trailers';
 import { isSharedEditing } from '../collabStore';
 import { fileOf, isInteracting, useEditorStore } from '../editorStore';
-import { historyService, historySignature } from './bridge';
+import { historyEnabled, historyService, historySignature } from './bridge';
 import { historyCompute } from './client';
 import { useEvolutionStore } from './evolutionStore';
 import { closeLens, loadTimeline, snapshotOf } from './historyView';
+import type { OperationContext } from './service';
 
 export type Outcome = { ok: true; message?: string } | { ok: false; message: string };
 
@@ -188,6 +189,19 @@ function sharedRefusal(): Outcome | null {
 }
 
 /**
+ * Exploring, switching and bringing an alternative in replace what is on screen with a recorded
+ * revision (a switch starts undo afresh), so it must be in history first. `flush` records it, but not
+ * while recording is paused for this diagram or off on this device: they once went ahead anyway, lost
+ * every edit made meanwhile and said the architecture left was unchanged. Refused instead, rather than
+ * recording what the person paused; once what is on screen is the recorded tip, they go ahead.
+ */
+export function unrecordedRefusal(doing: string): Outcome {
+  const why = historyService().paused ? ['Recording is paused for this diagram', 'Record this diagram’s history'] : !historyEnabled() ? ['History is off on this device', 'Keep a history of every diagram'] : null;
+  if (!why) return refused('Your latest changes aren’t in history yet. Try again in a moment.');
+  return refused(`${why[0]}, so your latest changes aren’t in history and ${doing} would replace them. Turn on “${why[1]}” in History settings first.`);
+}
+
+/**
  * Moves the working copy onto another alternative: what is pending is recorded on the one being
  * left, the copy's binding moves, and the diagram becomes that alternative's latest revision. A
  * change of context, not an edit: undo starts afresh, as when opening a diagram.
@@ -207,6 +221,7 @@ export async function switchAlternative(altId: string | null): Promise<Outcome> 
     const next = withLiveBookkeeping(await snapshotOf(target), live);
     const compute = historyCompute();
     const [before, after] = await Promise.all([compute.prepare(live), compute.prepare(next)]);
+    if (before.blobId !== context.tipBlob) return unrecordedRefusal('switching');
     const opId = randomId('o');
     const data = opData(context, store.repoId, { kind: 'binding', copyId: context.copyId, fromAlt, toAlt: altId }, before.blobId, after.blobId, target);
     // Read again before anything moves: an edit (the person's, an agent's) or another diagram opened
@@ -246,13 +261,12 @@ export async function createAlternative(name: string, from?: Oid): Promise<Outco
     const { service, context, store } = await begin();
     const start = from ?? context.tip;
     if (!start) return refused('Draw something first: an alternative starts from a recorded version.');
+    if ((await historyCompute().prepare(fileOf(useEditorStore.getState()))).blobId !== context.tipBlob) return unrecordedRefusal('exploring an alternative');
     const altId = randomId('a');
     const created = await store.updateRef({ ref: branchOf(altId), expected: null, next: start });
     if (!created.ok) return refused('That alternative could not be created; try again.');
-    const meta = await store.meta();
     const alternative: AlternativeMeta = { altId, name: name.trim().slice(0, 80) || 'Alternative', createdAt: Date.now(), from: start };
-    const nextMeta = { ...meta, alternatives: [...meta.alternatives, alternative] };
-    await store.writeMeta(nextMeta);
+    const nextMeta = await service.changeMeta(store, (meta) => ({ ...meta, alternatives: [...meta.alternatives, alternative] }));
     await service.adopt(context.token, { tip: context.tip, meta: nextMeta });
     const moved = await switchAlternative(altId);
     return moved.ok ? { ok: true, message: `Exploring “${alternative.name}”. The architecture you left is unchanged.` } : moved;
@@ -264,10 +278,10 @@ export async function createAlternative(name: string, from?: Oid): Promise<Outco
 export async function renameAlternative(altId: string, name: string): Promise<Outcome> {
   try {
     const { service, context, store } = await begin();
-    const meta = await store.meta();
-    const alternatives = meta.alternatives.map((alt) => (alt.altId === altId ? { ...alt, name: name.trim().slice(0, 80) || alt.name } : alt));
-    const nextMeta = { ...meta, alternatives };
-    await store.writeMeta(nextMeta);
+    const nextMeta = await service.changeMeta(store, (meta) => ({
+      ...meta,
+      alternatives: meta.alternatives.map((alt) => (alt.altId === altId ? { ...alt, name: name.trim().slice(0, 80) || alt.name } : alt)),
+    }));
     await service.adopt(context.token, { tip: context.tip, meta: nextMeta });
     return { ok: true };
   } catch (error) {
@@ -298,9 +312,7 @@ export async function archiveAlternative(altId: string, archived: boolean): Prom
       await store.updateRef({ ref: to, expected: tip, next: null });
       return refused('That alternative changed meanwhile; try again.');
     }
-    const meta = await store.meta();
-    const nextMeta = { ...meta, alternatives: meta.alternatives.map((alt) => (alt.altId === altId ? { ...alt, archived: archived || undefined } : alt)) };
-    await store.writeMeta(nextMeta);
+    const nextMeta = await service.changeMeta(store, (meta) => ({ ...meta, alternatives: meta.alternatives.map((alt) => (alt.altId === altId ? { ...alt, archived: archived || undefined } : alt)) }));
     await service.adopt(now.token, { tip: now.tip, meta: nextMeta });
     return { ok: true, message: archived ? 'Archived. Its revisions are kept.' : 'Back among the alternatives.' };
   } catch (error) {
@@ -327,7 +339,10 @@ export async function recoverOperations(): Promise<void> {
     const decision = recoveryFor(op, { pointerAt, working });
     if (decision.action === 'discard' || decision.action === 'finish') await store.journalDelete(op.opId);
     else if (decision.action === 'complete') await complete(op);
-    else useEvolutionStore.setState({ unfinished: { opId: op.opId, kind: op.kind, reason: decision.reason } });
+    else {
+      if (op.kind === 'switch') service.holdCapture(true);
+      useEvolutionStore.setState({ unfinished: { opId: op.opId, kind: op.kind, reason: decision.reason } });
+    }
   }
 }
 
@@ -357,11 +372,27 @@ export async function resolveUnfinished(resume: boolean): Promise<Outcome> {
     const op = (await context.store.journalList()).filter(isOperation).find((candidate) => candidate.opId === unfinished.opId);
     if (op && resume && !(await complete(op))) return refused('The diagram is busy; try again in a moment.');
     // Keeping the current diagram: it simply becomes the next revision, on top of what was recorded.
-    if (op && !resume) await context.store.journalDelete(op.opId);
+    if (op && !resume) {
+      // A switch kept this way never happened: the copy goes back to the alternative it left, and
+      // what is on screen becomes that one's next revision. It once stayed bound to the alternative
+      // the switch was headed for, and recorded the other one's content there.
+      if (op.data.pointer.kind === 'binding') await stayOn(op.data.pointer.fromAlt, context);
+      await context.store.journalDelete(op.opId);
+    }
     useEvolutionStore.setState({ unfinished: null });
+    historyService().holdCapture(false);
     if (!resume) historyService().requestCapture('manual');
     return { ok: true };
   } catch (error) {
     return refused(messageOf(error));
   }
+}
+
+/** Puts the copy's binding back on `altId`, the alternative an interrupted switch left. */
+async function stayOn(altId: string | null, context: OperationContext): Promise<void> {
+  if (!context.store || !context.binding || context.binding.altId === altId) return;
+  const tip = await context.store.readRef(branchOf(altId));
+  const binding = { ...context.binding, altId, lastSeen: tip, at: Date.now() };
+  await historyService().putBindingFor(binding);
+  await historyService().adopt(context.token, { tip, binding });
 }

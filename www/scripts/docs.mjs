@@ -266,6 +266,9 @@ export function renderDocs({ docsDir, repoDir, stylesheet, policy = () => '' }) 
   }
   files['docs/index.html'] = redirectPage(DOCS_START, 'Getting started', DOCS_START);
   files['docs/security/index.html'] = redirectPage('privacy/', 'Privacy and security', '../privacy/');
+  // Guides folded into others keep their addresses.
+  files['docs/examples/index.html'] = redirectPage('getting-started/', 'Getting started', '../getting-started/#start-from-a-starter');
+  files['docs/open-points/index.html'] = redirectPage('shapes-and-connectors/', 'Shapes and connectors', '../shapes-and-connectors/#open-points');
   const catalog = searchCatalog(pages.get('index.md'), pages, navigation);
   files['docs-search-data.js'] = `export default ${JSON.stringify(catalog)};\n`;
   return { files, media };

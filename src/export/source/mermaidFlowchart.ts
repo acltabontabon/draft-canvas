@@ -76,10 +76,13 @@ const ENTITY: Record<string, string> = {
   ']': '#93;',
   '{': '#123;',
   '}': '#125;',
+  // A quote then a backtick opens a Markdown string: `"`orders` table"` never closed and failed the
+  // whole file, and one wrapped in backticks was drawn as Markdown with its backticks gone.
+  '`': '#96;',
 };
 
 function escapeLabel(text: string): string {
-  return oneLine(text).replace(/["#;%<>&|()[\]{}]/g, (ch) => ENTITY[ch]!);
+  return oneLine(text).replace(/["#;%<>&|()[\]{}`]/g, (ch) => ENTITY[ch]!);
 }
 
 function quoted(text: string, fallback: string): string {

@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { requestPersistentStorage } from '../lib/storagePersistence';
-import { isPlausibleDate, parseDocument } from '../document/validate';
+import { isPlausibleDate, parseDocument, realRepairs } from '../document/validate';
 import { decryptDocument } from '../crypto/documentCipher';
 import { getMasterKey } from '../crypto/keyStore';
 import { isEncryptedBody, isLegacyBody, isPlainBody, type LegacyBody } from '../crypto/bodyShapes';
@@ -350,7 +350,7 @@ export class IndexedDbRepository implements DraftRepository {
     this.loadFailures.delete(id);
 
     const priorVersion = isRecord(rawDocument) ? rawDocument.version : undefined;
-    const changed = result.repairs.filter((line) => !line.startsWith('Upgraded document format'));
+    const changed = realRepairs(result.repairs);
     if (changed.length > 0) this.repairs.set(id, changed);
     else this.repairs.delete(id);
     return { document: result.document, priorVersion, row, misdated: isMisdated(rawDocument) };

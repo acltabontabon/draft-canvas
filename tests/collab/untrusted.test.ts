@@ -8,6 +8,7 @@ import { diffFile } from '../../src/collab/diff';
 import { HostCore, idsUnique } from '../../src/collab/hostCore';
 import { applyChanges } from '../../src/collab/apply';
 import { encode, MAX_MESSAGE_BYTES, parseWire, readGuestMessage, readHostMessage } from '../../src/collab/protocol';
+import { Replica } from '../../src/collab/replica';
 import { sanitizeChanges } from '../../src/collab/sanitize';
 import { randomEdit, rngFrom, seededFile } from './support';
 
@@ -91,6 +92,28 @@ describe('sanitizeChanges', () => {
     // A link on a connector that is not a compensation is still not kept.
     const plain = sanitizeChanges([{ kind: 'edge', id: 'e_x', room: '', value: { id: 'e_x', source: a.id, target: b.id, compensationFor: charge.id } }]);
     expect(plain.ok && (plain.changes[0] as { value: object }).value).not.toHaveProperty('compensationFor');
+  });
+
+  it('puts a connector’s end on a point its shape really has, as a file from disk would be', () => {
+    const service = createNode({ id: 'n_api', type: 'service', x: 0, y: 0 });
+    const junction = createNode({ id: 'n_join', type: 'ellipse', text: 'J', x: 400, y: 0 });
+    const host = new HostCore({ ...createDocument('Anchors'), nodes: [service, junction] });
+    // A Junction has only the middle of each side: a modified copy names a point it doesn't have.
+    const edge = { id: 'e_odd', source: service.id, target: junction.id, sourceAnchor: { side: 'right', offset: 0.2 }, targetAnchor: { side: 'left', offset: 0.2 } };
+    const outcome = host.receivePatch('p', { role: 'editor', lastClientSeq: 0 }, 1, [{ kind: 'edge', id: edge.id, room: '', value: edge }]);
+
+    expect(outcome.commit).toBeDefined();
+    const kept = host.file.edges.find((candidate) => candidate.id === edge.id);
+    expect(kept?.targetAnchor).toEqual({ side: 'left', offset: 0.5 });
+    // The Service's own end stays where it was put: it has that point.
+    expect(kept?.sourceAnchor).toEqual({ side: 'right', offset: 0.2 });
+    // What the commit says is what everyone applies, and what the owner's file reopens as.
+    expect(outcome.commit!.changes).toContainEqual(expect.objectContaining({ kind: 'edge', value: kept }));
+    const reopened = parseDocument(JSON.parse(JSON.stringify(host.file)));
+    expect(reopened.ok && reopened.document.edges).toEqual(host.file.edges);
+    // And a collaborator holds an owner's commit to the same rule.
+    const copy = new Replica({ ...createDocument('Anchors'), nodes: [service, junction] }, 0);
+    expect(copy.receiveCommit(1, [{ kind: 'edge', id: edge.id, room: '', value: edge as never }])).toBe('invalid');
   });
 
   it('refuses ids validation would have to rename', () => {

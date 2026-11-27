@@ -1,5 +1,6 @@
 import { openStarter } from './library';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { presentButton } from './canvas';
 
 /**
  * Presentation callouts: while a flow plays, the step's element tells what it carries — no click.
@@ -15,7 +16,7 @@ async function presentSubmitCommand(page: Page) {
   await page.goto('/');
   await openStarter(page, 'CQRS');
   await expect(page.locator('.dc-editor')).toBeVisible();
-  await page.getByRole('button', { name: 'Present', exact: true }).click();
+  await presentButton(page).click();
   // The flow picker is a menu, and each flow one of its options — see `FlowBar.tsx`, where that
   // role is what stands the walkthrough's own arrow keys down while the list is open.
   await page.getByRole('menuitemradio', { name: 'Submit command' }).click();

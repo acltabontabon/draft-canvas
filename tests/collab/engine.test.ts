@@ -6,8 +6,9 @@ import { diffFile } from '../../src/collab/diff';
 import { GuestSession, type GuestEvents } from '../../src/collab/guestSession';
 import { HostSession } from '../../src/collab/hostSession';
 import { encode, MAX_COLLABORATORS, PROTOCOL_VERSION, type PeerView } from '../../src/collab/protocol';
-import { changeKeys, revertKeys } from '../../src/collab/selective';
-import { indexOf } from '../../src/collab/fileIndex';
+import { changeKeys, revertKeys, sameAt } from '../../src/collab/selective';
+import { elementsOf, indexOf, itemsOf } from '../../src/collab/fileIndex';
+import { embed, viewOf } from '../../src/depth/tree';
 import { createDocument, createEdge, createNode } from '../../src/document/factory';
 import { addFlow, createFlow, deleteFlow } from '../../src/document/flow';
 import { addEdges, addNodes, removeElements, updateNode } from '../../src/document/operations';
@@ -681,6 +682,34 @@ it('selective undo of any set of deletions restores the list order exactly', () 
   );
 });
 
+it('selective undo refuses to empty a room somebody else has since given a level', () => {
+  const owner = createNode({ id: 'n_owner', type: 'service', x: 0, y: 0, text: 'Payments' });
+  const f0 = addNodes(createDocument('Levels'), [owner]);
+  // One step puts the first shape inside the Service, which is what makes its room exist.
+  const f1 = embed(f0, [owner.id], addNodes(viewOf(f0, [owner.id])!, [createNode({ id: 'n_inner', type: 'service', x: 0, y: 0, text: 'Ledger' })]));
+  // Somebody else then says what level that room is drawn at.
+  const f2 = embed(f1, [owner.id], { ...viewOf(f1, [owner.id])!, level: 'context' });
+  expect(viewOf(f2, [owner.id])!.level).toBe('context');
+
+  // Taking the shape back would take the room, and their level with it.
+  const step = revertKeys(f2, f1, f0, changeKeys(f0, f1));
+  expect(step.blocked).toBe(true);
+  expect(step.file).toBe(f2);
+});
+
+it('selective undo of deleting a shape brings back the level of the room inside it', () => {
+  const owner = createNode({ id: 'n_owner', type: 'service', x: 0, y: 0, text: 'Payments' });
+  const alone = addNodes(createDocument('Levels'), [owner]);
+  const inside = addNodes(viewOf(alone, [owner.id])!, [createNode({ id: 'n_inner', type: 'service', x: 0, y: 0, text: 'Ledger' })]);
+  const f0 = embed(alone, [owner.id], { ...inside, level: 'container' });
+  const f1 = removeElements(f0, [owner.id]);
+
+  const step = revertKeys(f1, f1, f0, changeKeys(f0, f1));
+  expect(step.blocked).toBe(false);
+  expect(viewOf(step.file, [owner.id])?.level).toBe('container');
+  expect(step.file).toEqual(f0);
+});
+
 it('selective undo refuses to take away a connector somebody else changed, even one the undone edit added', () => {
   const a = createNode({ type: 'service', x: 0, y: 0, text: 'A' });
   const f0 = addNodes(createDocument('Theirs'), [a]);
@@ -695,11 +724,23 @@ it('selective undo refuses to take away a connector somebody else changed, even 
   expect(step.file).toBe(f2);
 });
 
+/** The ids an order key (`order:<room>:<collection>`) is about, in the order `file` has them. */
+function orderOf(file: DraftDocument, key: string): string[] {
+  const rest = key.slice('order:'.length);
+  const split = rest.lastIndexOf(':');
+  const room = rest.slice(0, split);
+  const collection = rest.slice(split + 1) as 'nodes' | 'edges' | 'flows' | 'ink' | 'points';
+  if (collection === 'points') return file.openPoints.map((point) => point.id);
+  const graph = indexOf(file).rooms.get(room)?.graph;
+  return graph ? itemsOf(graph, collection).map((item) => item.id) : [];
+}
+
 /**
  * Whatever a collaborator did after the owner's edit, undoing the owner's edit leaves everything only
- * the collaborator touched exactly as they left it, and removes nothing they touched at all. (An
- * element both touched may lose the owner's part of it — a flow keeps the collaborator's step and
- * drops the owner's — which is what undoing the owner's part means.)
+ * the collaborator touched exactly as they left it — shapes, connectors, flows, sketches, open points,
+ * levels, the title, settings and style — keeps their order of what is still there, and removes
+ * nothing they touched at all. (An element both touched may lose the owner's part of it — a flow
+ * keeps the collaborator's step and drops the owner's — which is what undoing the owner's part means.)
  */
 it('selective undo never changes what somebody else did', () => {
   fc.assert(
@@ -725,17 +766,21 @@ it('selective undo never changes what somebody else did', () => {
       const result = indexOf(step.file);
       const after = indexOf(f2);
       for (const key of theirs) {
-        const [kind, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)];
-        if (kind !== 'node' && kind !== 'edge' && kind !== 'flow') continue;
-        const map = kind === 'node' ? 'nodes' : kind === 'edge' ? 'edges' : 'flows';
-        const now = after[map].get(id);
-        const then = result[map].get(id);
-        if (!now) continue;
-        expect(then, `${key} survives`).toBeDefined();
+        const colon = key.indexOf(':');
+        const kind = colon === -1 ? key : key.slice(0, colon);
+        if (kind === 'node' || kind === 'edge' || kind === 'flow' || kind === 'ink') {
+          const id = key.slice(colon + 1);
+          if (elementsOf(after, kind).has(id)) expect(elementsOf(result, kind).has(id), `${key} survives`).toBe(true);
+        }
         if (mine.has(key)) continue;
-        expect(then!.room).toBe(now.room);
-        if (kind === 'node') expect({ ...then!.value, inside: undefined }).toEqual({ ...now.value, inside: undefined });
-        else expect(then!.value).toEqual(now.value);
+        if (kind === 'order') {
+          // Their order of what is still there stands; one of the owner's leaving the list is no change to it.
+          const now = orderOf(step.file, key);
+          const theirOrder = orderOf(f2, key).filter((id) => now.includes(id));
+          expect(now.filter((id) => theirOrder.includes(id)), `${key} keeps their order`).toEqual(theirOrder);
+          continue;
+        }
+        expect(sameAt(step.file, f2, key), `${key} is as they left it`).toBe(true);
       }
       // And the owner's own edit is gone wherever nobody touched it since.
       expect(diffFile(step.file, f2).every((change) => change.kind !== 'title' || changeKeys(f0, f1).includes('title'))).toBe(true);

@@ -1,7 +1,12 @@
 // Generated from Rust by npm run desktop:bindings. Do not edit.
 export type OpenedDoc = { handle: string, name: string, displayPath: string, text: string, stamp: string, readOnly: boolean, };
 export type SavedAs = { handle: string, name: string, displayPath: string, stamp: string, };
-export type SaveResult = { "outcome": "saved", stamp: string, } | { "outcome": "conflict" };
+export type SaveResult = { "outcome": "saved", stamp: string, } | { "outcome": "conflict",
+/**
+ * The stamp of what is there now, or `None` when there is no file. An Overwrite the person
+ * agrees to is sent with this, so it replaces that version and nothing that changes later.
+ */
+current: string | null, };
 export type DocsImage = {
 /**
  * `payments.svg`, `payments.ledger.svg`.

@@ -1,15 +1,19 @@
+import { categoryOf } from '../document/connectorSemantics';
+import { anchorBandOf, BAND_WORD_FIELDS, type AnchorBand } from '../document/queueGeometry';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { sequenceAnchorRect } from './sequenceAnchors';
 import { OBSTACLE_REACH, rectOf } from './routing';
 
 /**
- * Whether two node arrays put every shape in the same place: same shapes, same kinds, same boxes.
+ * Whether two node arrays put every shape in the same place: same shapes, same kinds, same boxes,
+ * and the same ends for their connectors (`sameEnds`).
  *
  * The whole-document derivations (`routingPlan`, `crossingPlan`) are memoized on array *identity*,
  * and any edit — a rename, a colour, a note's text — makes a new `nodes` array, so a keystroke in a
  * label re-planned every connector on the canvas for a result that could not have changed. What those
  * plans read of a node is its id, its kind (a boundary is no obstacle, a junction is no bundle
- * member) and its box; when all of that matches, the plan already built is still the answer.
+ * member), its box and where on it a connector lands; when all of that matches, the plan already
+ * built is still the answer.
  *
  * Positional: a reorder is not "the same", and it is cheap to say so.
  */
@@ -23,9 +27,33 @@ export function sameNodeGeometry(a: readonly DraftNode[], b: readonly DraftNode[
     if (x.id !== y.id || x.type !== y.type || x.x !== y.x || x.y !== y.y || x.width !== y.width || x.height !== y.height) {
       return false;
     }
+    if (!sameEnds(x, y)) return false;
   }
   return true;
 }
+
+/**
+ * Whether a shape that kept its box still gives its connectors the same ends to route between: the
+ * band they land on and the category their captions are worded for.
+ *
+ * A box is not the whole of it. A Service or Component drawn as a glyph, a Data Store and an
+ * Artifact are met on the glyph (`anchorBandOf`), which stands where the shape's kind and the words
+ * under it leave it room; and a caption is worded, and placed, for the categories of the two shapes
+ * it joins (`routedCaption`). Comparing boxes alone kept every plan across a Generic Service turned
+ * into a Worker, or a description taken off a grown Data Store: the canvas drew the line on the new
+ * glyph, and its line jumps, shared label, spread ends and tracks stayed where the old one was. The
+ * band is asked of the shape whole, the way every renderer asks it, so a rename that leaves the glyph
+ * where it was (any card, and most names) still keeps the plan.
+ */
+function sameEnds(x: DraftNode, y: DraftNode): boolean {
+  if (categoryOf(x) !== categoryOf(y)) return false;
+  // What of a shape stands its glyph, and so its connectors' ends, field by field (`bandWords`).
+  if (BAND_WORD_FIELDS.every((field) => x[field] === y[field])) return true;
+  return sameBand(anchorBandOf(x), anchorBandOf(y));
+}
+
+const sameBand = (a: AnchorBand | undefined, b: AnchorBand | undefined) =>
+  a === b || (a !== undefined && b !== undefined && a.top === b.top && a.bottom === b.bottom && a.left === b.left && a.right === b.right && a.glyphTop === b.glyphTop);
 
 const participantEdges = new WeakMap<readonly DraftEdge[], readonly DraftEdge[]>();
 
@@ -163,7 +191,8 @@ function judgeStrayMoves(previous: readonly DraftNode[], next: readonly DraftNod
     const y = next[i]!;
     if (x === y) continue;
     if (x.id !== y.id || x.type !== y.type) return false;
-    if (x.x !== y.x || x.y !== y.y || x.width !== y.width || x.height !== y.height) moved.push(i);
+    // A shape whose glyph or caption category changed in place has moved its connectors' ends.
+    if (x.x !== y.x || x.y !== y.y || x.width !== y.width || x.height !== y.height || !sameEnds(x, y)) moved.push(i);
   }
   // Nothing moved at all: the caller's own "same geometry" test already said what it had to.
   if (moved.length === 0) return false;

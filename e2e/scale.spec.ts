@@ -75,9 +75,11 @@ test('stays workable with 100 nodes and 180 connections', async ({ page }) => {
   await expect(page.locator('.dc-node[data-type="code"] tspan').first()).toBeVisible();
 
   // The canvas stays one Tab stop regardless of how many nodes it holds — none of React Flow's
-  // own per-node tabindex attributes should exist at any scale (`nodesFocusable={false}`).
+  // own per-node tabindex attributes should exist at any scale (`nodesFocusable={false}`), nor
+  // per-connector ones: a connector's own `focusable` once made each of these 180 a Tab stop.
   const focusableNodeCount = await page.locator('.react-flow__node[tabindex]').count();
   expect(focusableNodeCount).toBe(0);
+  await expect(page.locator('.react-flow__edge[tabindex]')).toHaveCount(0);
 
   const node = page.locator('.dc-node').first();
   const before = (await node.boundingBox())!;

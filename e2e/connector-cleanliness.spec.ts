@@ -106,7 +106,7 @@ test('global drawing style controls all arrows without per-arrow appearance cont
     // An imported file carries no style of its own, so it follows the style in use on this device.
     await settings.locator('.dc-look-card', { has: page.getByText(style, { exact: true }) }).click();
     await expect(settings.getByRole('group', { name: 'My style' }).getByRole('radio', { name: new RegExp(`^${style}`) })).toBeChecked();
-    await settings.getByRole('button', { name: 'Close appearance', exact: true }).click();
+    await settings.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(page.locator(':root')).toHaveAttribute('data-personality', style.toLowerCase());
     const paths = await page.locator('.dc-edge-line').evaluateAll(paths => paths.map(p => p.getAttribute('d')));
     if (style === 'Clean') expect(paths).toEqual(cleanPaths);
@@ -134,7 +134,7 @@ test('global drawing style controls all arrows without per-arrow appearance cont
   const settings = page.getByRole('complementary', { name: 'Appearance', exact: true });
   await settings.locator('.dc-look-card', { has: page.getByText('Sketch', { exact: true }) }).click();
   await expect(settings.getByRole('group', { name: 'My style' }).getByRole('radio', { name: /^Sketch/ })).toBeChecked();
-  await settings.getByRole('button', { name: 'Close appearance', exact: true }).click();
+  await settings.getByRole('button', { name: 'Done', exact: true }).click();
   await page.reload();
   await expect(page.locator('.dc-editor')).toBeVisible();
   await expect(page.locator(':root')).toHaveAttribute('data-personality', 'sketch');

@@ -9,15 +9,23 @@
 import { convertedNode, isConvertibleType } from './convert';
 import { displayNameFor } from './factory';
 import { SEQ_PARTICIPANT_TYPES, type DraftDocument, type DraftNode, type SeqParticipant, type SeqParticipantType } from './types';
+import { participantName } from './validateSequence';
 
 /** Whether a shape is one a participant can stand for: a piece of architecture. */
 export function isLinkable(node: Pick<DraftNode, 'type'>): node is DraftNode & { type: SeqParticipantType } {
   return (SEQ_PARTICIPANT_TYPES as readonly string[]).includes(node.type);
 }
 
+/**
+ * A shape's name as a participant holds it. Cut the way a sequence cuts a name, so both ends compare
+ * one identity: a shape named past 120 characters left its participant "drifted" for good, and
+ * "Update from shape" changed nothing.
+ */
+const nameOf = (node: DraftNode): string => participantName(displayNameFor(node).replace(/\s+/g, ' ').trim());
+
 /** What a shape is, as a participant carries it. */
 export function identityOf(node: DraftNode & { type: SeqParticipantType }): Omit<SeqParticipant, 'id' | 'ref'> {
-  const identity: Omit<SeqParticipant, 'id' | 'ref'> = { name: displayNameFor(node).replace(/\s+/g, ' ').trim(), type: node.type };
+  const identity: Omit<SeqParticipant, 'id' | 'ref'> = { name: nameOf(node), type: node.type };
   if (node.type === 'service') identity.serviceKind = node.serviceKind ?? 'generic';
   if (node.type === 'database') identity.databaseKind = node.databaseKind ?? 'generic';
   if (node.type === 'queue') {
@@ -74,7 +82,8 @@ const KIND_FIELDS = ['serviceKind', 'databaseKind', 'queueKind', 'deliveryRole',
 function shapeFrom(shape: DraftNode & { type: SeqParticipantType }, participant: SeqParticipant): DraftNode {
   const base: DraftNode = shape.type !== participant.type && isConvertibleType(shape.type) && isConvertibleType(participant.type) ? convertedNode(shape, participant.type) : shape;
   const next: DraftNode = { ...base };
-  if (participant.name !== displayNameFor(base).replace(/\s+/g, ' ').trim()) {
+  // Against the name as the participant holds it: a long name the participant only shortened is not a rename.
+  if (participant.name !== nameOf(base)) {
     next.text = participant.name;
     next.textOrigin = 'explicit';
   }

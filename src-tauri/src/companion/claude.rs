@@ -61,6 +61,10 @@ impl Backend for ClaudeCode {
         if let Some(path) = clients::path_with(spec.program.parent()) {
             command.env("PATH", path);
         }
+        // Claude Code connects its MCP servers in the background unless told to wait, so its init
+        // line can say Draft Canvas is still `pending`. Waiting gives `init` a real answer, and costs
+        // only Draft Canvas's own start: `--strict-mcp-config` makes it the only server.
+        command.env("MCP_CONNECTION_NONBLOCKING", "0");
         Ok(command)
     }
 
@@ -189,13 +193,21 @@ impl StreamJson {
                 session: session.to_string(),
             });
         }
-        let connected = value["mcp_servers"].as_array().is_none_or(|servers| {
+        // Only a definite answer stops the run: Draft Canvas missing, failed, or waiting on a
+        // sign-in. `pending`, or a status this doesn't know, isn't one; a run that failed on it
+        // would fail whenever the connection was a moment slow.
+        let unreachable = value["mcp_servers"].as_array().is_some_and(|servers| {
             servers
                 .iter()
                 .find(|s| s["name"] == SERVER_NAME)
-                .is_some_and(|s| s["status"] == "connected")
+                .is_none_or(|s| {
+                    matches!(
+                        s["status"].as_str(),
+                        Some("failed" | "needs-auth" | "disabled")
+                    )
+                })
         });
-        if !connected {
+        if unreachable {
             events.push(RunEvent::Stopped {
                 reason: StopReason::Failed {
                     message: "Claude Code couldn’t reach Draft Canvas. Check that agent access is on in Settings → AI agents.".into(),
@@ -555,18 +567,45 @@ pub(crate) mod tests {
 
     #[test]
     fn draft_canvas_missing_from_the_agent_stops_the_run_at_once() {
-        let line = r#"{"type":"system","subtype":"init","session_id":"s","mcp_servers":[{"name":"draft-canvas","status":"failed"}]}"#;
-        let events = ClaudeCode.parser().parse(line);
-        assert!(matches!(
-            &events[..],
-            [
-                RunEvent::Started { .. },
-                RunEvent::Stopped {
-                    reason: StopReason::Failed { .. },
-                    ..
-                }
-            ]
-        ));
+        for servers in [
+            r#"[{"name":"draft-canvas","status":"failed"}]"#,
+            r#"[{"name":"draft-canvas","status":"needs-auth"}]"#,
+            r#"[{"name":"other","status":"connected"}]"#,
+        ] {
+            let line = format!(
+                r#"{{"type":"system","subtype":"init","session_id":"s","mcp_servers":{servers}}}"#
+            );
+            let events = ClaudeCode.parser().parse(&line);
+            assert!(
+                matches!(
+                    &events[..],
+                    [
+                        RunEvent::Started { .. },
+                        RunEvent::Stopped {
+                            reason: StopReason::Failed { .. },
+                            ..
+                        }
+                    ]
+                ),
+                "{servers}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_draft_canvas_still_connecting_does_not_stop_the_run() {
+        // Claude Code connects in the background unless told to wait, and a failure now stands for
+        // the whole run: failing on `pending` failed runs whose connection was a moment slow.
+        for status in ["connected", "pending"] {
+            let line = format!(
+                r#"{{"type":"system","subtype":"init","session_id":"s","mcp_servers":[{{"name":"draft-canvas","status":"{status}"}}]}}"#
+            );
+            let events = ClaudeCode.parser().parse(&line);
+            assert!(
+                matches!(&events[..], [RunEvent::Started { .. }]),
+                "{status}"
+            );
+        }
     }
 
     #[test]
@@ -586,6 +625,7 @@ pub(crate) mod tests {
     fn the_command_keeps_the_agent_to_draft_canvas_and_the_prompt_off_the_command_line() {
         let spec = RunSpec {
             program: Path::new("/bin/claude"),
+            version: Some("2.1.310"),
             work_dir: Path::new("/tmp/work"),
             mcp_config: Path::new("/tmp/runs/r/mcp.json"),
             server: Path::new("/App/draft-canvas-mcp"),
@@ -609,6 +649,13 @@ pub(crate) mod tests {
         assert_eq!(after("--json-schema"), Some(super::super::decision::SCHEMA));
         assert!(args.contains(&"--strict-mcp-config".to_string()));
         assert!(after("--resume").is_none());
+        let command = ClaudeCode.command(&spec).unwrap();
+        assert!(
+            command
+                .get_envs()
+                .any(|(k, v)| k == "MCP_CONNECTION_NONBLOCKING" && v == Some("0".as_ref())),
+            "Claude waits for Draft Canvas before it starts"
+        );
         let resumed = super::args(&RunSpec {
             session: SessionArg::Resume("s-old"),
             ..spec

@@ -21,6 +21,7 @@ import type { DocsSettings } from '../export/docs/marker';
 import { picturesOf } from '../export/docs/names';
 import { logDiagnostic } from '../lib/diagnostics';
 import { isRecord } from '../lib/isRecord';
+import { typingInField } from '../lib/recentTyping';
 import { exampleCanvas } from '../gallery/example';
 import {
   DesktopError,
@@ -292,6 +293,13 @@ export class DesktopController {
   private latestText: string | null = null;
   /** The first `opened` after a load sets the saved baseline — except for recovered work, which is unsaved by definition. */
   private expectBaseline = true;
+  /**
+   * The load an agent's change to a just-opened file is being applied to (`loadOpened`): shown as it
+   * was before the change, then changed on screen. The file on disk already holds the change, so
+   * there is nothing to save meanwhile. Counted as unsaved instead, a ⌘S or a quit's Save in that
+   * moment wrote the "before" over the agent's change while the screen went on to show it as saved.
+   */
+  private applyingWrite: number | null = null;
   /** A Quick Draft with anything in it: one left untouched has nothing worth keeping. */
   private edited = false;
   private snapshotTimer: unknown = null;
@@ -533,14 +541,32 @@ export class DesktopController {
   }
 
   /**
+   * Why opening another diagram over the one open would interrupt the person: they are typing in a
+   * field (a label, the title, Nodi's message), and replacing the canvas would close it under them,
+   * with what they typed into it. Not part of `quietOpenRefusal`: that settles whether an agent's
+   * change may be made at all, and someone typing only holds back the open, never the change to the
+   * file. Typing, as for an agent's change (`busyReason`), not a field merely holding focus: Nodi's
+   * composer takes focus when Nodi opens and keeps it after Send, and every open an agent asked for
+   * while Nodi was open was refused.
+   */
+  private typingRefusal(): string | null {
+    if (this.session.kind === 'none' || !typingInField()) return null;
+    return 'Someone is typing, and opening another diagram would close the field under them.';
+  }
+
+  /**
    * An agent's `activate`/`open`: makes `handle` the open document without a single question — so it
    * refuses whenever a question would have been needed (unsaved changes, a recovery copy to decide
-   * about, a live session it would end). Never brings the window forward; says so in a notice instead.
+   * about, a live session it would end), and while someone is typing. Never brings the window forward;
+   * says so in a notice instead.
    */
   private async openQuietly(handle: Handle): Promise<{ opened: true } | { opened: false; reason: string }> {
     if (this.session.kind === 'file' && this.session.handle === handle) return { opened: true };
-    await this.flushApp();
-    const refusal = this.quietOpenRefusal();
+    // An agent's flush, as `agentHost.flush` is. The settling one took the field from under the person
+    // mid-word, committing the half-typed text, and the open was then refused for the very change that
+    // made. Someone typing is a reason not to open (`typingRefusal`), never something to interrupt.
+    await this.flushApp({ keepFocus: true });
+    const refusal = this.quietOpenRefusal() ?? this.typingRefusal();
     if (refusal) return { opened: false, reason: refusal };
     const opened = await this.api.openHandle(handle);
     const parsed = deserializeDocument(opened.text);
@@ -551,9 +577,9 @@ export class DesktopController {
     }
     const leaving = this.session;
     if (leaving.kind === 'quick' || leaving.kind === 'pending') await this.discard(leaving.id);
-    // The person can edit or start sharing while the shell reads the target and its recovery list.
-    await this.flushApp();
-    const latestRefusal = this.quietOpenRefusal();
+    // The person can edit, type or start sharing while the shell reads the target and its recovery list.
+    await this.flushApp({ keepFocus: true });
+    const latestRefusal = this.quietOpenRefusal() ?? this.typingRefusal();
     if (latestRefusal) return { opened: false, reason: latestRefusal };
     this.session = {
       kind: 'file',
@@ -669,6 +695,10 @@ export class DesktopController {
         this.agentReplies.get(message.id)?.(message.reply);
         return;
       case 'draft-canvas:closed':
+        // A close of a load this has since replaced is not about what is open now. Heard anyway, the
+        // close Back made, drawn slowly, emptied the session under the Quick Draft ⌘N had opened since:
+        // its edits were dropped, ⌘S and Back did nothing, and quitting lost it without a word.
+        if (message.seq !== undefined && message.seq !== this.seq) return;
         this.onClosed();
         return;
       default:
@@ -703,6 +733,16 @@ export class DesktopController {
     return this.latestText !== this.savedText && contentOf(this.latestText) !== contentOf(this.savedText);
   }
 
+  /**
+   * A file loaded as it is saved and not on screen yet (the app hasn't said `opened`). `dirty` has
+   * nothing to compare it with and answers yes, so nothing writes it on a guess, but nothing in it has
+   * been edited. Told as unsaved, every open of a large diagram flashed "Unsaved changes" and told the
+   * shell the window was edited, and a quit asked to save a file nobody had touched, then cancelled.
+   */
+  private get loading(): boolean {
+    return (this.session.kind === 'file' && this.expectBaseline && this.savedText === null) || this.applyingWrite === this.seq;
+  }
+
   private get displayName(): string {
     return this.session.kind === 'file' ? this.session.name : QUICK_DRAFT_TITLE;
   }
@@ -713,15 +753,16 @@ export class DesktopController {
     let doc: DesktopDoc;
     let state: DocState;
     if (session.kind === 'file') {
+      const dirty = this.dirty && !this.loading;
       doc = {
         kind: 'file',
         name: session.name,
         displayPath: session.displayPath,
-        dirty: this.dirty,
+        dirty,
         readOnly: session.readOnly,
         ...(this.outside ? { outside: this.outside } : {}),
       };
-      state = { kind: 'file', dirty: this.dirty, name: session.name, handle: session.handle };
+      state = { kind: 'file', dirty, name: session.name, handle: session.handle };
     } else if (session.kind === 'quick' || session.kind === 'pending') {
       // A pending canvas has no file yet either, so it shows and is reported exactly like a Quick
       // Draft: the folder it remembers is an implementation detail of the next Save, not shell state.
@@ -802,6 +843,18 @@ export class DesktopController {
       await this.api.showError(`Draft Canvas couldn’t open ${opened.name}.draftcanvas`, parsed.error);
       return false;
     }
+    // Recovered changes are checked as the file's own text is, and a draft picked on Home before
+    // anything is settled. Loaded unchecked, a copy this version can't read (written by a newer one
+    // before a downgrade, or damaged) left the previous diagram on screen under a banner blaming the
+    // file, while this one was taken for open with unsaved changes, and the next open waited 10 s.
+    const recoveredText = recovered ? await this.api.recoveryRead(recovered.id) : null;
+    if (recoveredText !== null) {
+      const readable = deserializeDocument(recoveredText);
+      if (!readable.ok) {
+        await this.api.showError('Couldn’t recover the draft', readable.error);
+        return false;
+      }
+    }
     if (!settled && !(await this.settleBeforeLeaving())) return false;
 
     let text = opened.text;
@@ -811,8 +864,8 @@ export class DesktopController {
     let staleBase: string | null = null;
     const movedSince = (entry: RecoveryEntry) =>
       entry.origin.kind === 'file' && entry.origin.baseStamp !== opened.stamp ? entry.origin.baseStamp : null;
-    if (recovered) {
-      text = await this.api.recoveryRead(recovered.id);
+    if (recovered && recoveredText !== null) {
+      text = recoveredText;
       baseline = false;
       recoveryId = recovered.id;
       staleBase = movedSince(recovered);
@@ -830,12 +883,22 @@ export class DesktopController {
           ['Recover', 'Discard', 'Cancel'],
         );
         if (choice === 2) return false;
-        for (const entry of found) if (choice === 1 || entry.id !== newest.id) await this.discard(entry.id);
-        if (choice === 0) {
-          text = await this.api.recoveryRead(newest.id);
-          baseline = false;
-          recoveryId = newest.id;
-          staleBase = movedSince(newest);
+        const copy = choice === 0 ? await this.api.recoveryRead(newest.id) : null;
+        const readable = copy === null ? null : deserializeDocument(copy);
+        if (readable && !readable.ok) {
+          // Kept, with the others, for a version that can read it; the file opens as it is on disk.
+          await this.api.showError(
+            `Couldn’t recover the unsaved changes to ${opened.name}.draftcanvas`,
+            `${readable.error} They are kept, and ${opened.name}.draftcanvas opens as it is on disk.`,
+          );
+        } else {
+          for (const entry of found) if (choice === 1 || entry.id !== newest.id) await this.discard(entry.id);
+          if (copy !== null) {
+            text = copy;
+            baseline = false;
+            recoveryId = newest.id;
+            staleBase = movedSince(newest);
+          }
         }
       }
     }
@@ -896,14 +959,20 @@ export class DesktopController {
       await shown;
       return;
     }
+    this.applyingWrite = seq;
     this.load(write.before, opened.name, { baseline: false });
     this.publish();
-    await shown;
-    const snapshot = this.seq === seq ? await this.askEditor({ kind: 'snapshot' }).catch(() => null) : null;
-    const committed =
-      snapshot?.kind === 'snapshot' && this.seq === seq
-        ? await this.askEditor({ kind: 'commit', expectedRevision: snapshot.revision, file: after.document, label: 'Agent edit' }).catch(() => null)
-        : null;
+    let committed: AgentEditorReply | null = null;
+    try {
+      await shown;
+      const snapshot = this.seq === seq ? await this.askEditor({ kind: 'snapshot' }).catch(() => null) : null;
+      committed =
+        snapshot?.kind === 'snapshot' && this.seq === seq
+          ? await this.askEditor({ kind: 'commit', expectedRevision: snapshot.revision, file: after.document, label: 'Agent edit' }).catch(() => null)
+          : null;
+    } finally {
+      if (this.applyingWrite === seq) this.applyingWrite = null;
+    }
     if (this.seq !== seq) return;
     if (committed?.kind === 'committed') {
       // The editor now shows the file exactly as on disk; only its undo history holds the "before".
@@ -1010,9 +1079,14 @@ export class DesktopController {
   async discardRecovery(id: string): Promise<void> {
     const entry = this.store.getSnapshot().recovery.find((candidate) => candidate.id === id);
     if (!entry) return;
-    const choice = await this.api.ask('Discard this draft?', `“${entry.title}” will be deleted from this computer. This can’t be undone.`, ['Discard', 'Cancel']);
-    if (choice !== 0) return;
-    await this.discard(id);
+    await this.guard('Couldn’t discard the draft', async () => {
+      const choice = await this.api.ask('Discard this draft?', `“${entry.title}” will be deleted from this computer. This can’t be undone.`, ['Discard', 'Cancel']);
+      if (choice !== 0) return;
+      // Not `discard`, which keeps quiet for the clean-ups made on the way: this one the person asked
+      // for, and the tile staying put with no word was all a failure told them. Never the open
+      // document's copy, which Home doesn't list.
+      await this.api.recoveryDiscard(id);
+    });
     await this.refreshRecovery();
   }
 
@@ -1055,17 +1129,23 @@ export class DesktopController {
       await this.guard('Couldn’t save', () => this.saveAsFlow());
       return;
     }
-    if (!this.dirty) return;
+    // An agent's change is still being put on screen; the file already holds it (`applyingWrite`).
+    if (!this.dirty || this.applyingWrite === this.seq) return;
     await this.guard(`Couldn’t save ${session.name}.draftcanvas`, async () => {
       const text = this.latestText;
       if (text === null) return;
       this.store.update({ saving: true });
       const bytes = encoder.encode(text);
       let result = await this.api.saveDocument(session.handle, bytes, session.stamp);
-      if (result.outcome === 'conflict') {
+      // Overwrite replaces the version the person was asked about and nothing newer: a file that
+      // changes again while the question is up (a sync client, a pull) is asked about again. Written
+      // unconditionally, that second change was replaced without anyone ever seeing it.
+      for (let again = false; result.outcome === 'conflict'; again = true) {
         const choice = await this.api.ask(
           `${session.name}.draftcanvas changed on disk`,
-          'It was changed by something else since you opened it. Overwriting it replaces those changes with what is on your screen.',
+          again
+            ? 'It changed again while you were deciding. Overwriting it replaces that change too with what is on your screen.'
+            : 'It was changed by something else since you opened it. Overwriting it replaces those changes with what is on your screen.',
           ['Overwrite', 'Save As…', 'Cancel'],
         );
         if (choice === 2) return;
@@ -1073,9 +1153,8 @@ export class DesktopController {
           await this.saveAsFlow();
           return;
         }
-        result = await this.api.saveDocument(session.handle, bytes, undefined);
+        result = await this.api.saveDocument(session.handle, bytes, result.current);
       }
-      if (result.outcome !== 'saved') return;
       await this.finishSave(session, result.stamp, text);
     });
   }
@@ -1430,7 +1509,8 @@ export class DesktopController {
       else await this.discard(session.id);
       return true;
     }
-    if (!this.dirty) {
+    // Still loading what is saved (a revert, a reload): nothing in it to ask about.
+    if (!this.dirty || this.loading) {
       await this.discardCleanSnapshot();
       return true;
     }
@@ -1579,6 +1659,8 @@ export class DesktopController {
         }
         return void (await this.api.quitAck('ready'));
       }
+      // Still loading what is saved: nothing has been edited, so nothing to keep or ask about.
+      if (this.loading) return void (await this.api.quitAck('ready'));
       if (this.dirty) await this.snapshotNow();
       if (!this.dirty) {
         await this.discardCleanSnapshot();
@@ -1847,24 +1929,29 @@ export class DesktopController {
     }
   }
 
+  // Like the rest of what Home and Settings ask for, these say why when the shell refuses: the callers
+  // don't wait, and a refusal was an unhandled rejection, the radio or tile going back without a word.
+
   async forgetRecent(handle: Handle): Promise<void> {
-    await this.api.recentsRemove(handle);
+    await this.guard('Couldn’t remove it from Recent', () => this.api.recentsRemove(handle));
     await this.refreshRecents();
   }
 
   async clearRecents(): Promise<void> {
-    await this.api.recentsClear();
+    await this.guard('Couldn’t clear Recent', () => this.api.recentsClear());
     await this.refreshRecents();
   }
 
   async setCloseBehavior(closeBehavior: 'ask' | 'tray' | 'quit'): Promise<void> {
-    const settings = await this.api.settingsSet({ closeBehavior });
-    this.store.update({ settings });
+    await this.guard('Couldn’t change what closing the window does', async () => {
+      this.store.update({ settings: await this.api.settingsSet({ closeBehavior }) });
+    });
   }
 
   async setAutoCheckUpdates(autoCheckUpdates: boolean): Promise<void> {
-    const settings = await this.api.settingsSet({ autoCheckUpdates });
-    this.store.update({ settings });
+    await this.guard('Couldn’t change checking for updates', async () => {
+      this.store.update({ settings: await this.api.settingsSet({ autoCheckUpdates }) });
+    });
   }
 
   /** Where agent access stands: asked at start, by Settings → AI agents and by Nodi when it opens,
@@ -1955,11 +2042,16 @@ export class DesktopController {
   }
 
   async listProposals(diagramId?: string): Promise<Proposal[]> {
+    return (await this.lookUpProposals(diagramId)) ?? [];
+  }
+
+  /** The proposals, or null when the shell couldn't say. */
+  private async lookUpProposals(diagramId?: string): Promise<Proposal[] | null> {
     try {
       return await this.api.agentProposalList(diagramId);
     } catch (error) {
       logDiagnostic(error, { operation: 'desktop-agent-proposal-list' });
-      return [];
+      return null;
     }
   }
 
@@ -2186,7 +2278,10 @@ export class DesktopController {
       }
     }
     for (const [diagramId, runIds] of watched) {
-      const proposals = await this.listProposals(diagramId);
+      // A lookup that failed says nothing about these runs. Taken for "no proposal", it took down the
+      // chip of a turn still waiting for review, and kept an older lookup's answer from putting it back.
+      const proposals = await this.lookUpProposals(diagramId);
+      if (!proposals) continue;
       for (const runId of runIds) {
         if (seq < (this.companionProposalAnswered.get(runId) ?? 0)) continue;
         this.companionProposalAnswered.set(runId, seq);

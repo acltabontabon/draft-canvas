@@ -1,6 +1,6 @@
 import { openStarter } from './library';
 import { expect, test, type Page } from '@playwright/test';
-import { cameraAtRest } from './canvas';
+import { cameraAtRest, presentButton } from './canvas';
 
 /**
  * Presentation Mode's journey — "follow the signal": an opening that frames the flow under its
@@ -13,7 +13,7 @@ async function presentSubmitCommand(page: Page) {
   await page.goto('/');
   await openStarter(page, 'CQRS');
   await expect(page.locator('.dc-editor')).toBeVisible();
-  await page.getByRole('button', { name: 'Present', exact: true }).click();
+  await presentButton(page).click();
   await page.getByRole('menuitemradio', { name: 'Submit command' }).click();
   await expect(page.locator('.dc-present-card[data-kind="opening"]')).toBeVisible();
 }
@@ -149,7 +149,7 @@ test.describe('Presentation journey', () => {
     await cameraAtRest(page);
     const before = await cameraOf(page);
 
-    await page.getByRole('button', { name: 'Present', exact: true }).click();
+    await presentButton(page).click();
     await page.getByRole('menuitemradio', { name: 'Call another service' }).click();
     await expect(page.locator('.dc-present-card[data-kind="opening"]')).toBeVisible();
     await page.keyboard.press('ArrowRight');

@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
+import type { Preset } from '../../lib/presets';
 import { Button } from '../common/Button';
 import { Tooltip, TooltipGroup } from '../common/Tooltip';
 import { CreateRail } from './toolbar/CreateRail';
@@ -13,6 +14,8 @@ interface ToolbarProps {
   onBack?: () => void;
   onPresent: (flowId?: string) => void;
   onExport: () => void;
+  /** Puts a shape picked from the keyboard down at once — see `CreateRail`'s `onPlace`. */
+  onPlaceShape?: (preset: Preset) => void;
   /** A shared diagram on screen (`uiStore.readOnly`): no renaming, no create tools. The editor
    *  store's own guard is what protects the document; this just stops offering what it refuses. */
   readOnly?: boolean;
@@ -30,6 +33,7 @@ export function Toolbar({
   onBack,
   onPresent,
   onExport,
+  onPlaceShape,
   readOnly = false,
 }: ToolbarProps) {
   const headerRef = useRef<HTMLElement>(null);
@@ -85,7 +89,7 @@ export function Toolbar({
           <DiagramTitleField title={title} onTitleChange={onTitleChange} readOnly={readOnly} />
         </div>
 
-        {readOnly ? <div aria-hidden="true" /> : <CreateRail />}
+        {readOnly ? <div aria-hidden="true" /> : <CreateRail onPlace={onPlaceShape} />}
 
         <ToolbarActions onPresent={onPresent} onExport={onExport} />
       </header>

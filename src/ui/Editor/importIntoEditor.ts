@@ -13,6 +13,7 @@ import { routeImportFile, unsupportedNotice } from '../../import/route';
 import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import type { DocumentSession } from '../../store/useDocumentSession';
+import { importRepairsNotice } from '../common/importRepairs';
 import { notifyLoadFailure } from '../common/notifyLoadFailure';
 
 export { looksLikeMermaid } from '../../import/mermaid/sniff';
@@ -72,7 +73,8 @@ async function importFile(file: File, session: DocumentSession): Promise<void> {
     notify(routed.result.error, 'error');
     return;
   }
-  if (routed.result.repairs.length > 0) notify(`Imported with repairs: ${routed.result.repairs.join(' ')}`);
+  const repaired = importRepairsNotice(routed.result.repairs);
+  if (repaired) notify(repaired);
   const notice = unsupportedNotice(routed.unsupported ?? []);
   if (notice) notify(notice);
   await session.adoptDocument(routed.result.document);

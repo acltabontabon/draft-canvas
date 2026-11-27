@@ -37,6 +37,10 @@ const COMPACT_AFTER: usize = 200;
 /// either is refused until some are accepted, rejected or dismissed. Revising one in place is not new.
 pub const PENDING_PER_DIAGRAM: usize = 50;
 pub const PENDING_TOTAL: usize = 500;
+/// And by size: one proposal can carry up to a request frame (4 MiB) of ops, preconditions and
+/// sourceRef, so the count caps alone let a runaway agent hold gigabytes in memory, in the journal
+/// and in the review panel's list. Thousands of ordinary proposals fit.
+pub const PENDING_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -151,6 +155,9 @@ impl Proposal {
 pub struct Proposals {
     file: PathBuf,
     entries: HashMap<String, Proposal>,
+    /// Each entry's journal line length, kept as it is written or read: the size cap sums these
+    /// instead of serializing every waiting proposal again on each new one.
+    sizes: HashMap<String, usize>,
     appended: usize,
 }
 
@@ -163,6 +170,7 @@ impl Proposals {
         let mut store = Self {
             file,
             entries: HashMap::new(),
+            sizes: HashMap::new(),
             appended: 0,
         };
         let tidy = store.load()?;
@@ -197,6 +205,9 @@ impl Proposals {
             clean &= complete;
             match serde_json::from_slice::<Proposal>(&line) {
                 Ok(proposal) => {
+                    // Without its newline, as `put` counts it.
+                    self.sizes
+                        .insert(proposal.id.clone(), line.len() - usize::from(complete));
                     self.entries.insert(proposal.id.clone(), proposal);
                 }
                 // Only an unterminated final record can be a torn append.
@@ -232,9 +243,14 @@ impl Proposals {
 
     /// Why another waiting proposal for `diagram_id` can't be added, if it can't.
     pub fn pending_limit(&self, diagram_id: &str) -> Option<String> {
-        let (mut here, mut total) = (0, 0);
+        let (mut here, mut total, mut bytes) = (0, 0, 0);
         for p in self.entries.values().filter(|p| !p.status.is_terminal()) {
             total += 1;
+            bytes += self
+                .sizes
+                .get(&p.id)
+                .copied()
+                .unwrap_or_else(|| serde_json::to_vec(p).map_or(0, |line| line.len()));
             if p.diagram_id == diagram_id {
                 here += 1;
             }
@@ -247,6 +263,11 @@ impl Proposals {
             Some(format!(
                 "There are already {PENDING_TOTAL} proposals waiting for review."
             ))
+        } else if bytes >= PENDING_BYTES {
+            Some(
+                "The proposals waiting for review are already as large as Draft Canvas keeps."
+                    .into(),
+            )
         } else {
             None
         }
@@ -258,6 +279,7 @@ impl Proposals {
         let line = serde_json::to_vec(&proposal).map_err(io::Error::other)?;
         super::ledger::append_record(&self.file, &line)?;
         let now = proposal.updated_at;
+        self.sizes.insert(proposal.id.clone(), line.len());
         self.entries.insert(proposal.id.clone(), proposal);
         // Retention also applies to an app left running for weeks, not just its next launch.
         self.evict(now);
@@ -294,6 +316,7 @@ impl Proposals {
                 self.entries.remove(id);
             }
         }
+        self.sizes.retain(|id, _| self.entries.contains_key(id));
     }
 
     /// Rewrites the journal to exactly the live entries. Temp file, flush, rename: a crash leaves either
@@ -545,6 +568,47 @@ mod tests {
             others += 1;
         }
         assert!(store.pending_limit("d_new").unwrap().contains("500"));
+    }
+
+    #[test]
+    fn the_size_cap_reads_sizes_kept_as_proposals_are_written_and_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Proposals::open(dir.path(), 1).unwrap();
+        for i in 0..3 {
+            store
+                .put(proposal(&format!("p{i}"), ProposalStatus::Pending, 1))
+                .unwrap();
+        }
+        store
+            .put(proposal("old", ProposalStatus::Rejected, 1))
+            .unwrap();
+        let serialized = |store: &Proposals| -> HashMap<String, usize> {
+            store
+                .entries
+                .values()
+                .map(|p| (p.id.clone(), serde_json::to_vec(p).unwrap().len()))
+                .collect()
+        };
+        assert_eq!(store.sizes, serialized(&store));
+        // Read back, with the resolved one aged out: the sizes follow the entries.
+        let reopened = Proposals::open(dir.path(), 2 + RESOLVED_RETENTION_MS).unwrap();
+        assert!(reopened.get("old").is_none());
+        assert_eq!(reopened.sizes.len(), 3);
+        assert_eq!(reopened.sizes, serialized(&reopened));
+    }
+
+    #[test]
+    fn waiting_proposals_are_capped_by_size_too() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Proposals::open(dir.path(), 1).unwrap();
+        // A request frame's worth each, spread over three diagrams: well under both count caps.
+        for i in 0..(PENDING_BYTES / (4 * 1024 * 1024) + 1) {
+            let mut p = proposal(&format!("big{i}"), ProposalStatus::Pending, 1);
+            p.diagram_id = format!("d_{}", i % 3);
+            p.source_ref = Some(serde_json::json!("x".repeat(4 * 1024 * 1024)));
+            store.entries.insert(p.id.clone(), p);
+        }
+        assert!(store.pending_limit("d_new").unwrap().contains("as large"));
     }
 
     #[test]

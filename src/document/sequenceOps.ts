@@ -19,6 +19,8 @@ import {
   heightOf,
   isBranching,
   itemsAt,
+  slotOf,
+  waitingCall,
   type SeqSlot,
 } from './sequenceModel';
 import type {
@@ -259,7 +261,8 @@ export function updateParticipant(
 
 /**
  * Takes a lifeline away, with the messages to and from it: a message with one end missing says
- * nothing. A note that sat over others too stays over them; fragments stay, emptier.
+ * nothing. A note or a reference that sat over others too stays over them, and one over this
+ * participant alone goes with it; fragments stay, emptier.
  */
 export function removeParticipant(sequence: DraftSequence, id: string): DraftSequence {
   if (!sequence.participants.some((participant) => participant.id === id)) return sequence;
@@ -272,10 +275,11 @@ export function removeParticipant(sequence: DraftSequence, id: string): DraftSeq
       return over.length > 0 ? { ...item, over } : null;
     }
     if (!item.covers?.includes(id)) return undefined;
+    // Only a `ref` covers participants by name, and it holds nothing to look inside. Covering no
+    // one is not something it can say — absent `covers` is everyone — so one left with nobody
+    // goes, as a note does; it used to widen to every participant.
     const covers = item.covers.filter((other) => other !== id);
-    // Only a `ref` covers participants by name, and it holds nothing to look inside.
-    const { covers: _old, ...rest } = item;
-    return covers.length > 0 ? { ...rest, covers } : rest;
+    return covers.length > 0 ? { ...item, covers } : null;
   });
   return dropLostReplies(settleGroups({ ...sequence, participants, items }));
 }
@@ -548,8 +552,11 @@ export function updateMessageAttachment(
 /**
  * Makes a message a different kind, by someone's choice. It takes that kind's own starting
  * settings: a call starts work, a reply ends it, and anything that is not a reply answers nothing.
+ * A reply answers the call above it that came the other way and is still waiting, as one drawn
+ * back does; made a reply from the kind menu, it answered nothing and was flagged at once.
  */
 export function setMessageKind(sequence: DraftSequence, id: string, kind: SeqMessageKind): DraftSequence {
+  const slot = kind === 'reply' ? slotOf(sequence, id) : null;
   return rewrite(sequence, (item) => {
     if (item.id !== id) return undefined;
     if (item.t !== 'message') return item;
@@ -559,7 +566,13 @@ export function setMessageKind(sequence: DraftSequence, id: string, kind: SeqMes
     if (kind === 'sync' && item.from !== item.to) next.activate = true;
     if (kind === 'reply') {
       next.deactivate = true;
+      const call = replyTo || !slot ? undefined : waitingCall(sequence, item.from, item.to, slot);
       if (replyTo) next.replyTo = replyTo;
+      else if (call) {
+        next.replyTo = call.id;
+        // It ends the work its call started, and none when the call started none (`createReply`).
+        if (!call.activate) delete next.deactivate;
+      }
     }
     return next;
   });

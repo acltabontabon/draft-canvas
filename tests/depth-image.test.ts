@@ -57,6 +57,21 @@ it('reuses two prepared cameras, then evicts the oldest and clears on a file swi
   expect(renderDocumentSvg).toHaveBeenCalledTimes(6);
 });
 
+it('draws a room again once its sketches change, as the canvas would', async () => {
+  // The picture draws a room's sketches, but the key once left them out: flying out of a room just
+  // sketched on showed it as it was before the sketch.
+  const room = createDocument('Sketched');
+  const pane = { width: 800, height: 600 };
+  await createRoomImage(room, { x: 0, y: 0, zoom: 1 }, pane);
+  const circled = { ...room, ink: [{ id: 'k1', tool: 'pen' as const, color: 'red' as const, size: 3, x: 10, y: 10, points: [0, 0, 20, 5, 40, 0] }] };
+  await createRoomImage(circled, { x: 0, y: 0, zoom: 1 }, pane);
+  expect(renderDocumentSvg).toHaveBeenCalledTimes(2);
+  expect(renderDocumentSvg).toHaveBeenLastCalledWith(circled, expect.anything());
+  // The same sketches are the same picture.
+  await createRoomImage({ ...circled, ink: [...circled.ink] }, { x: 0, y: 0, zoom: 1 }, pane);
+  expect(renderDocumentSvg).toHaveBeenCalledTimes(2);
+});
+
 it('freezes vector scaling into a bounded bitmap when canvas rasterization is available', async () => {
   const drawImage = vi.fn();
   vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue({ drawImage } as unknown as CanvasRenderingContext2D);

@@ -263,7 +263,9 @@ describe('CI evidence CLI defaults to fresh checks', () => {
   });
 
   // This correctness test launches several Git/CLI processes; allow full-suite CPU contention.
-  it('reuses real merge-tree evidence through the CLI without downloading or running PR build code', () => {
+  // The stub `gh` is an extensionless shebang script on a `:`-joined PATH: on Windows it is never found,
+  // and the CLI ran the real gh against GitHub instead.
+  it.skipIf(process.platform === 'win32')('reuses real merge-tree evidence through the CLI without downloading or running PR build code', () => {
     const { original, prHead, prTree, tested, pullRequest } = prepareMerge();
     expect(cli('record', 'pull_request', { pull_request: pullRequest }).status).toBe(0);
     const proof = JSON.parse(readFileSync(join(repo, 'ci-evidence.json'), 'utf8'));

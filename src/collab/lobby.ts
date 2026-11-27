@@ -12,6 +12,7 @@
  * waiting for them, they are let back in without asking — and the session still makes them prove
  * the place is theirs with its private key before giving it back (`HostSession.attach`'s `requireKey`).
  */
+import { REAL_CLOCK } from './clock';
 import { followOwner, iceConfig, type ConnectionPreferences } from './connect';
 import { MAX_GUEST_MESSAGE_BYTES, readName, type Role } from './protocol';
 import {
@@ -105,7 +106,7 @@ export class HostLobby {
   /** What waits to be said to knockers, and the budget it is paced by (`toGuest`). */
   private outgoing: { id: string; data: string; busy: boolean }[] = [];
   private tokens = RELAY_BUDGET;
-  private refilledAt = Date.now();
+  private refilledAt = REAL_CLOCK.now();
   private pacing: ReturnType<typeof setTimeout> | null = null;
   /** Knocks whose key exchange is still being worked out; they count toward the door's limit. */
   private readonly pendingKnocks = new Set<string>();
@@ -211,8 +212,12 @@ export class HostLobby {
   }
 
   private pumpOutgoing(): void {
-    const now = Date.now();
-    this.tokens = Math.min(RELAY_BUDGET, this.tokens + ((now - this.refilledAt) * RELAY_BUDGET) / RELAY_WINDOW_MS);
+    // On the monotonic clock its pacing timer runs on, and never refilled by less than nothing. On the
+    // wall clock, a step back (time sync, a VM resuming, a change by hand) took the budget below zero
+    // for as long as the step: greetings, offers and refusals waited that long, and whoever knocked
+    // meanwhile was told the door was busy.
+    const now = REAL_CLOCK.now();
+    this.tokens = Math.min(RELAY_BUDGET, this.tokens + (Math.max(0, now - this.refilledAt) * RELAY_BUDGET) / RELAY_WINDOW_MS);
     this.refilledAt = now;
     while (this.tokens >= 1 && this.outgoing.length > 0) {
       const next = this.outgoing.findIndex((item) => !item.busy);
@@ -430,6 +435,9 @@ export async function knock(
   let settled = false;
   /** Answering an offer: the connection settles it now, not the relay (the owner may already be opening it). */
   let joining = false;
+  /** The greeting whose offer the join under way answers, and which join that is (`join`). */
+  let joiningWith: CryptoKey | null = null;
+  let attempt = 0;
   let cancelJoin: (() => void) | null = null;
   let joinTimer: ReturnType<typeof setTimeout> | null = null;
   let greetTimer: ReturnType<typeof setTimeout> | null = null;
@@ -509,29 +517,43 @@ export async function knock(
     } else if (message.t === 'offer' && pair) {
       const opened = await unseal(pair, 'to-guest', message.box);
       const invite = typeof opened === 'object' && opened !== null ? (opened as { invite?: unknown }).invite : undefined;
-      if (typeof invite !== 'string' || joining) return;
+      // The same greeting's offer again (the relay can repeat a frame) is the join already under way.
+      if (typeof invite !== 'string' || joiningWith === pair) return;
       // Not awaited: the owner's later messages (a refusal, the session ending) are still read meanwhile.
       void join(invite, pair);
     }
   };
 
+  /**
+   * Answers `invite`. An offer from a later greeting replaces a join still under way: the owner's
+   * relay dropped before this side's answer reached it, so the owner forgot that offer, greeted the
+   * knock again when it was back and let them in anew. Ignored, it left this person connecting to
+   * nothing until they were told the owner was unavailable.
+   */
   const join = async (invite: string, sealedWith: CryptoKey) => {
+    const mine = (attempt += 1);
+    const current = () => mine === attempt && !settled;
+    cancelJoin?.();
+    cancelJoin = null;
     joining = true;
+    joiningWith = sealedWith;
     onStatus({ kind: 'joining', owner });
+    if (joinTimer !== null) clearTimeout(joinTimer);
     joinTimer = setTimeout(() => finish({ kind: 'unavailable' }, null), JOIN_TIMEOUT_MS);
     try {
       const answer = await joinFromInvite(invite, followOwner(invite, stunServer));
+      if (!current()) return answer.cancel();
       cancelJoin = answer.cancel;
-      if (settled) return answer.cancel();
-      const box = await seal(sealedWith, 'to-host', { reply: answer.replyCode });
+      const sealed = await seal(key, 'to-host', { t: 'answer', box: await seal(sealedWith, 'to-host', { reply: answer.replyCode }) });
+      if (!current()) return;
       // An answer that never left (the relay dropped meanwhile) is a connection that never comes.
-      if (!relay.send('host', await seal(key, 'to-host', { t: 'answer', box }))) return finish({ kind: 'unavailable' }, null);
+      if (!relay.send('host', sealed)) return finish({ kind: 'unavailable' }, null);
       const connected = await answer.transport;
-      // Cancelled while it connected: nobody is waiting for it any more.
-      if (settled) connected.close('cancelled');
+      // Cancelled, or replaced, while it connected: nobody is waiting for it any more.
+      if (!current()) connected.close('cancelled');
       else finish(null, connected);
     } catch {
-      finish({ kind: 'unavailable' }, null);
+      if (current()) finish({ kind: 'unavailable' }, null);
     }
   };
 

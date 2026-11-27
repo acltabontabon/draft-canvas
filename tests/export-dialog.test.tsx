@@ -614,4 +614,26 @@ describe('ExportDialog — every level', () => {
     expect(screen.getByRole('button', { name: 'Export Mermaid' })).toBeEnabled();
     expect(screen.getByText('1 Flow · plain text')).toBeInTheDocument();
   });
+
+  it('calls the Source export Markdown when several sequence diagrams go out as Markdown blocks', async () => {
+    const user = userEvent.setup();
+    const sequence = (text: string, x: number) => ({
+      ...createNode({ type: 'sequence', x, y: 0, text }),
+      sequence: {
+        participants: [
+          { id: 'p_a', name: 'Web', type: 'service' as const },
+          { id: 'p_b', name: 'API', type: 'service' as const },
+        ],
+        items: [{ id: 'm_1', t: 'message' as const, from: 'p_a', to: 'p_b', kind: 'sync' as const, label: 'call' }],
+      },
+    });
+    const doc = { ...createDocument('Two stories'), nodes: [sequence('One', 0), sequence('Two', 900)] };
+    useEditorStore.setState({ document: doc, selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    renderDialog();
+    await switchMode(user, /Other formats/);
+
+    expect(screen.getByTitle('two-stories.md')).toBeInTheDocument();
+    expect(screen.getByText('MD')).toBeInTheDocument();
+    expect(screen.getByText('2 sequences · Markdown')).toBeInTheDocument();
+  });
 });

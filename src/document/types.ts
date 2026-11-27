@@ -628,8 +628,12 @@ export interface SeqMessage {
 export const SEQ_OPERATORS = ['alt', 'opt', 'loop', 'par', 'break', 'critical', 'ref'] as const;
 export type SeqOperator = (typeof SEQ_OPERATORS)[number];
 
-/** The operators that may have more than one branch. Every other holds exactly one; `ref` none. */
-export const SEQ_BRANCHING_OPERATORS: readonly SeqOperator[] = ['alt', 'par'];
+/**
+ * The operators that may have more than one branch. Every other holds exactly one; `ref` none. A
+ * `critical` section's later branches are what Mermaid calls its `option`s: what happens instead
+ * when something goes wrong, so they are read as `alt`'s are.
+ */
+export const SEQ_BRANCHING_OPERATORS: readonly SeqOperator[] = ['alt', 'par', 'critical'];
 
 export interface SeqOperand {
   id: string;

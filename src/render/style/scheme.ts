@@ -18,6 +18,9 @@ export const CONTRAST = {
   line: 2.4,
   /** A shape's name on its own fill. */
   label: 4.5,
+  /** What the editor marks on the canvas and beside it (what is chosen, what would be removed): a
+   *  graphic that has to be seen, WCAG 1.4.11's 3:1. */
+  mark: 3,
 } as const;
 
 /** The canvas's own colours come as a set: words chosen for one canvas mean nothing on another. */
@@ -52,6 +55,17 @@ function mix(a: string, b: string, amount: number): string {
 }
 
 /**
+ * `colour` as it is when it holds `floor` against every one of `grounds`. Otherwise it is taken
+ * toward `toward` until it does, and is `toward` itself when a few steps fall short.
+ */
+function heldOn(colour: string, grounds: readonly string[], toward: string, floor: number): string {
+  const holds = (value: string) => grounds.every((ground) => contrast(value, ground) >= floor);
+  let out = colour;
+  for (let step = 0; step < 8 && !holds(out); step += 1) out = mix(out, toward, 0.3);
+  return holds(out) ? out : toward;
+}
+
+/**
  * Everything that is drawn beside the canvas colour rather than on it, worked out from it: the
  * panels and bars around the diagram, their hairlines and their faintest words. A style names a
  * canvas, not a toolbar, so these follow the canvas: the whole editor is then one piece of paper,
@@ -70,12 +84,41 @@ function chromeFor(next: Theme): void {
   }
   next.border = mix(next.canvas, next.text, 0.15);
   next.borderStrong = mix(next.canvas, next.text, 0.3);
-  next.textFaint = mix(next.canvas, next.text, 0.62);
+  // Still words: on a canvas of middling tone a fixed share of the way to the words fell under 3:1.
+  next.textFaint = heldOn(mix(next.canvas, next.text, 0.62), [next.canvas, next.surface], next.text, CONTRAST.muted);
 }
 
 /** `rgba()` of a `#rrggbb` colour: the soft wash a selection is laid in. */
 function wash(hex: string, alpha: number): string {
   return `rgba(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)}, ${alpha})`;
+}
+
+/**
+ * The colours the editor marks things in, what is chosen and what would be removed, on a canvas
+ * that is not the one they were chosen for. On a brand's blue the built-in teal was 1.4:1, and a
+ * removed shape in a preview could vanish into a red canvas. Each is taken toward the words' side
+ * until it can be seen, on the canvas and on a panel. The words already read there, so their side
+ * always has room. Where a colour reads as it is, it is kept: every palette and every pack keeps the
+ * marks it always had.
+ *
+ * Twice over, for words and for marks. Where words are written in a colour or on it, it reads as
+ * words do: canvas-coloured words are written on the selection (a solid button), and the danger
+ * colour is words of its own (a Delete). The ring round what is chosen and a crossed-out removal are
+ * graphics, held to a graphic's 3:1 (`selectionMark`, `dangerMark`). Held to words' 4.5:1 as well, on
+ * a canvas of middling tone (a brand's blue, a red) only black or white was left, and the ring and
+ * what a preview would remove read as the diagram's own words.
+ */
+function marksFor(next: Theme, base: Theme): void {
+  const ink = luminance(next.text) > luminance(next.canvas) ? '#ffffff' : '#000000';
+  const grounds = [next.canvas, next.surfaceRaised];
+  const selection = heldOn(base.selection, grounds, ink, CONTRAST.text);
+  if (selection !== base.selection) {
+    next.selection = selection;
+    next.selectionSoft = wash(selection, next.name === 'light' ? 0.12 : 0.16);
+  }
+  next.danger = heldOn(base.danger, grounds, ink, CONTRAST.text);
+  next.selectionMark = heldOn(base.selectionMark, grounds, ink, CONTRAST.mark);
+  next.dangerMark = heldOn(base.dangerMark, grounds, ink, CONTRAST.mark);
 }
 
 /** `base` with a scheme's colours over it. `base` itself when the scheme changes nothing. */
@@ -92,11 +135,15 @@ export function schemeTheme(base: Theme, scheme: StyleScheme | undefined): Theme
       }
     }
   }
-  if (next.canvas !== base.canvas) chromeFor(next);
+  if (next.canvas !== base.canvas) {
+    chromeFor(next);
+    marksFor(next, base);
+  }
   // A brand's colour is kept only where it can be seen: on the canvas, and on the panels beside it.
   if (scheme.selection && scheme.selection !== base.selection && contrast(scheme.selection, next.canvas) >= CONTRAST.line && contrast(scheme.selection, next.surfaceRaised) >= CONTRAST.line) {
     next.selection = scheme.selection;
     next.selectionSoft = wash(scheme.selection, next.name === 'light' ? 0.12 : 0.16);
+    next.selectionMark = scheme.selection;
     changed = true;
   }
   if (scheme.accents) {

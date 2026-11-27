@@ -86,6 +86,7 @@ interface Run {
 }
 
 const EMPTY: SeparationPlan = { tracksFor: () => undefined, skipped: 0 };
+const NO_TRACKS: ReadonlyMap<string, EdgeTracks> = new Map();
 const cache = new WeakMap<readonly DraftNode[], WeakMap<readonly DraftEdge[], SeparationPlan>>();
 const transientCache = new WeakMap<readonly DraftNode[], WeakMap<readonly DraftEdge[], SeparationPlan>>();
 let last: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[]; plan: SeparationPlan } | null = null;
@@ -258,7 +259,9 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
     }
   }
 
-  if (shifts.size === 0) return skipped ? { tracksFor: () => undefined, skipped } : EMPTY;
+  // Through `planOf` even with no tracks: an arrow built here shares `compute`'s scope, and a plan
+  // that only counted skipped corridors kept every one of their runs and lines alive with it.
+  if (shifts.size === 0) return skipped ? planOf(NO_TRACKS, skipped) : EMPTY;
   const byEdge = new Map<string, EdgeTracks>();
   for (const [line, map] of shifts) {
     const tracks = [...map.entries()].sort(([a], [b]) => a - b).map(([run, delta]) => ({ run, delta }));

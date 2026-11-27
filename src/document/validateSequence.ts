@@ -52,6 +52,9 @@ const words = (value: unknown, max: number): string => (typeof value === 'string
 /** One line: a name or a guard never holds a line break. */
 const line = (value: unknown, max: number): string => words(value, max).replace(/\s+/g, ' ').trim();
 
+/** A participant's name as a sequence holds it: one line, at most `maxSequenceNameLength`. */
+export const participantName = (value: unknown): string => line(value, LIMITS.maxSequenceNameLength);
+
 function idOf(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -66,7 +69,7 @@ function idOf(value: unknown): string | null {
 export function normalizeParticipant(raw: unknown, id: string): SeqParticipant | null {
   if (!isRecord(raw)) return null;
   const type = oneOf<SeqParticipantType>(raw.type, SEQ_PARTICIPANT_TYPES) ?? 'service';
-  const participant: SeqParticipant = { id, name: line(raw.name, LIMITS.maxSequenceNameLength), type };
+  const participant: SeqParticipant = { id, name: participantName(raw.name), type };
   if (type === 'service') participant.serviceKind = oneOf(raw.serviceKind, SERVICE_KINDS) ?? 'generic';
   if (type === 'database') participant.databaseKind = oneOf(raw.databaseKind, DATABASE_KINDS) ?? 'generic';
   if (type === 'queue') {

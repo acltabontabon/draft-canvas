@@ -7,6 +7,7 @@ import { drawioSource } from '../src/export/source/drawio';
 import { SOURCE_FORMAT_INFO, SOURCE_FORMATS, sourceFileNameFor, sourceTextFor } from '../src/export/source';
 import { mermaidFlowchartSource } from '../src/export/source/mermaidFlowchart';
 import { structurizrSource } from '../src/export/source/structurizr';
+import { parseMermaidFlowchart } from '../src/import/mermaid/parse';
 import { ARCHITECTURE_STARTERS } from './fixtures/starters-v1/catalog';
 import { starterDocument } from './fixtures/starters-v1/document';
 
@@ -39,6 +40,9 @@ const HOSTILE_LABELS = [
   'two\nlines',
   'end note',
   '<b>tag</b> & ampersand',
+  // Mermaid opens a Markdown string at a quote and a backtick: one never closed failed the whole file.
+  '`orders` table',
+  '`Svc`',
   '',
 ];
 
@@ -90,6 +94,19 @@ describe('Mermaid flowchart', () => {
     expect(text).toContain('flowchart LR');
     expect(text).not.toMatch(/%%\{/);
     expect(await mermaidParses(text)).toBe(true);
+  });
+
+  it('keeps a label in backticks as text, backticks and all', async () => {
+    const api = createNode({ type: 'service', x: 0, y: 0, text: '`OrderService`' });
+    const db = createNode({ type: 'database', x: 300, y: 0, text: '`orders` table' });
+    const text = mermaidFlowchartSource({ ...createDocument('Ticks'), nodes: [api, db], edges: [createEdge({ source: api.id, target: db.id, label: 'writes `orders`' })] });
+    expect(await mermaidParses(text)).toBe(true);
+    const diagram = await mermaid.mermaidAPI.getDiagramFromText(text);
+    const vertices = [...(diagram.db as unknown as { getVertices(): Map<string, { labelType: string }> }).getVertices().values()];
+    // A label wrapped in backticks was rendered as Markdown, its backticks gone.
+    expect(vertices.map((vertex) => vertex.labelType)).toEqual(['string', 'string']);
+    const back = parseMermaidFlowchart(text);
+    expect(back.ok && back.create.nodes.map((node) => node.label)).toEqual(['`OrderService`', '`orders` table']);
   });
 
   it('draws each kind with its own silhouette and keeps labels, boundaries and rooms', () => {
@@ -201,6 +218,47 @@ describe('Structurizr DSL', () => {
     expect(text).toMatch(/model \{\n\s+Customer = person "Customer"\n/);
     expect(text).toMatch(/Shop = softwareSystem "Shop" \{\n\s+Web = container "Web"\n\s+\}/);
     expect(text).toContain('Customer -> Web "browses"');
+  });
+
+  it('declares a system outside ours at model level, as the C4 reading does', () => {
+    // Stripe and the partner were containers inside the canvas's own system, while `depth/c4.ts` and
+    // C4-PlantUML (`System_Ext`) call them external software systems.
+    const user = createNode({ type: 'actor', x: 0, y: 0, text: 'Shopper' });
+    const api = createNode({ type: 'service', x: 300, y: 0, text: 'Checkout API' });
+    const stripe = createNode({ type: 'service', x: 600, y: 0, text: 'Stripe', serviceKind: 'external' });
+    const partner = createNode({ type: 'actor', x: 600, y: 300, text: 'Partner system', actorKind: 'system' });
+    const edges = [createEdge({ source: user.id, target: api.id, label: 'buys' }), createEdge({ source: api.id, target: stripe.id, label: 'charges' }), createEdge({ source: api.id, target: partner.id, label: 'notifies' })];
+    const document = { ...createDocument('Shop'), level: 'container' as const, nodes: [user, api, stripe, partner], edges };
+    const text = structurizrSource(document);
+    expect(text).toMatch(/model \{\n\s+Shopper = person "Shopper"\n\s+Stripe = softwareSystem "Stripe" "" "External"\n\s+PartnerSystem = softwareSystem "Partner system" "" "External"\n\s+System = softwareSystem "Shop" \{\n\s+CheckoutAPI = container "Checkout API"\n\s+\}/);
+    expect(text).toContain('CheckoutAPI -> Stripe "charges"');
+    expect(c4PlantUmlSource(document)).toContain('System_Ext(Stripe, "Stripe")');
+
+    // In a system's own room too, and with what is drawn inside it as its containers.
+    const shop = createNode({ type: 'service', x: 0, y: 0, text: 'Shop' });
+    const bank = createNode({ type: 'service', x: 0, y: 0, text: 'Bank', serviceKind: 'external' });
+    const ledger = createNode({ type: 'database', x: 0, y: 0, text: 'Ledger' });
+    bank.inside = { nodes: [ledger], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } };
+    shop.inside = { nodes: [createNode({ type: 'service', x: 0, y: 0, text: 'Web' }), bank], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } };
+    const nested = structurizrSource({ ...createDocument('Landscape'), level: 'context' as const, nodes: [shop], edges: [] });
+    expect(nested).toMatch(/model \{\n\s+Bank = softwareSystem "Bank" "" "External" \{\n\s+Ledger = container "Ledger" "" "" "Database"\n\s+\}\n\s+Shop = softwareSystem "Shop" \{\n\s+Web = container "Web"\n\s+\}/);
+    expect(nested).toContain('container Bank {');
+  });
+
+  it('declares the separator Structurizr needs before it nests one group in another', () => {
+    const outer = createNode({ type: 'group', x: -50, y: -50, width: 1200, height: 600, text: 'Shop platform' });
+    const inner = createNode({ type: 'group', x: 250, y: -20, width: 500, height: 300, text: 'CI/CD' });
+    const api = createNode({ type: 'service', x: 300, y: 0, text: 'Orders API' });
+    inner.parentId = outer.id;
+    api.parentId = inner.id;
+    const text = structurizrSource({ ...createDocument('Nested'), level: 'container' as const, nodes: [outer, inner, api], edges: [] });
+    expect(text).toMatch(/model \{\n\s+properties \{\n\s+"structurizr\.groupSeparator" "\/"\n\s+\}\n/);
+    // A slash in a name would read as one more level.
+    expect(text).toContain('group "Shop platform" {\n                group "CI\u2215CD" {');
+    // Without nesting, the workspace is as it was.
+    const flat = structurizrSource({ ...createDocument('Flat'), level: 'container' as const, nodes: [inner, { ...api, parentId: inner.id }].map((node) => (node.id === inner.id ? { ...node, parentId: undefined } : node)), edges: [] });
+    expect(flat).not.toContain('properties');
+    expect(flat).toContain('group "CI/CD" {');
   });
 
   it('keeps the contents of a room when its owner is hoisted to model level', () => {

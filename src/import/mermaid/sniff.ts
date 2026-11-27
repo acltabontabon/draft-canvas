@@ -11,7 +11,11 @@ export const DEFAULT_IMPORT_TITLE = 'Imported diagram';
 export const MERMAID_TEXT_LIMIT = 512 * 1024;
 
 export const HEADER = /^(?:flowchart|graph)(?:\s+(TD|TB|LR|RL|BT))?\s*$/i;
-const FENCE = /```\s*mermaid[^\n]*\n([\s\S]*?)```/gi;
+/**
+ * A fence opens and closes at the start of a line, as Markdown has it: one closed by three backticks
+ * anywhere ended a block at a message saying "returns ```json".
+ */
+const FENCE = /^[ \t]*```[ \t]*mermaid[^\n]*\n([\s\S]*?)^[ \t]*```/gim;
 export const FRONT_MATTER = /^\s*---\s*\n([\s\S]*?)\n---\s*\n/;
 
 /**
@@ -32,6 +36,20 @@ export function otherFencedBlocks(text: string): number {
 
 export function stripFrontMatter(text: string): string {
   return text.replace(FRONT_MATTER, '');
+}
+
+/**
+ * The `title:` a front-matter block gives, read a line at a time. `title\s*:\s*(.+?)\s*$` over the
+ * whole block backtracked over every split of a long run of spaces: 2 s at 40 KB.
+ */
+export function frontMatterTitle(text: string): string | undefined {
+  const front = FRONT_MATTER.exec(text)?.[1];
+  for (const line of front?.split('\n') ?? []) {
+    const named = /^\s*title\s*:/.exec(line);
+    const title = named ? line.slice(named[0].length).trim() : '';
+    if (title) return title;
+  }
+  return undefined;
 }
 
 function firstStatement(line: string): string {

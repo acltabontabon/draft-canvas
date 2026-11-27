@@ -1,13 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { isCanvasEmpty } from '../../document/operations';
 import type { DraftDocument } from '../../document/types';
 import { renderSvgText } from '../../export/image';
 import { GALLERY_CATEGORIES, GALLERY_PAGE, matchesQuery, starterFile, type GalleryCategory, type GalleryStarter } from '../../gallery';
 import { openLink } from '../../host/openLink';
 import { relativeTime } from '../../lib/relativeTime';
+import { backdropTile } from '../../render/style/backdrop';
+import { resolveStyle, type ResolvedStyle } from '../../render/style/resolve';
+import { THEMES } from '../../render/theme/tokens';
 import { useEditorStore } from '../../store/editorStore';
 import { useGalleryStore } from '../../store/galleryStore';
+import { activeStyleOf, useStyleStore } from '../../store/styleStore';
 import { useUiStore } from '../../store/uiStore';
+import { usePersonality } from '../../theme/usePersonality';
 import { useTheme } from '../../theme/useTheme';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
@@ -254,15 +259,18 @@ function Browse({
   );
 }
 
-/** The starter drawn by the app's own exporter, in the current palette — exactly what will land. */
-function Preview({ file, name }: { file: DraftDocument | null | undefined; name: string }) {
+/**
+ * The starter drawn by the app's own exporter in `look`, the style it will land in, on that style's
+ * own canvas when it has one — exactly what will land.
+ */
+function Preview({ file, name, look }: { file: DraftDocument | null | undefined; name: string; look: ResolvedStyle }) {
   const { name: theme } = useTheme();
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     if (!file) return;
     let live = true;
     let made: string | null = null;
-    void renderSvgText(file, { theme, padding: 32, openPoints: false, transparent: true })
+    void renderSvgText(file, { theme, style: look, padding: 32, openPoints: false, transparent: true })
       .then((svg) => {
         if (!live) return;
         made = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
@@ -273,9 +281,17 @@ function Preview({ file, name }: { file: DraftDocument | null | undefined; name:
       live = false;
       if (made) URL.revokeObjectURL(made);
     };
-  }, [file, theme]);
+  }, [file, theme, look]);
+  // A style with a canvas or a backdrop of its own is drawn on it, as `StylePreview` draws one: the
+  // pale words of a dark style would be lost on the dialog's paper.
+  const drawnOn = look.theme(theme);
+  const tile = backdropTile(look, theme);
+  const surface: CSSProperties | undefined =
+    drawnOn === THEMES[theme] && !tile
+      ? undefined
+      : { backgroundColor: drawnOn.canvas, backgroundImage: tile ? tile.uri : 'none', ...(tile ? { backgroundSize: `${tile.width / 2}px ${tile.height / 2}px` } : {}) };
   return (
-    <div className="dc-starters-preview" data-ready={url ? 'true' : undefined}>
+    <div className="dc-starters-preview" data-ready={url ? 'true' : undefined} style={surface}>
       {url ? <img src={url} alt={`The ${name} starter`} /> : <span className="dc-starters-preview-wait" aria-hidden="true" />}
     </div>
   );
@@ -284,6 +300,9 @@ function Preview({ file, name }: { file: DraftDocument | null | undefined; name:
 function Detail({ starter, onAdd, onDone }: { starter: GalleryStarter; onAdd: (id: string) => void; onDone: () => void }) {
   const canvasEmpty = useEditorStore((state) => isCanvasEmpty(state.document));
   const readOnly = useUiStore((state) => Boolean(state.readOnly));
+  const own = useEditorStore((state) => state.document.style);
+  const { preset } = usePersonality();
+  const mine = useStyleStore((state) => activeStyleOf(state, preset));
   const [file, setFile] = useState<DraftDocument | null | undefined>(undefined);
   // Opening a starter marks it seen; what it was marked as stays on screen while it's looked at.
   const [mark] = useState(starter.mark);
@@ -306,6 +325,10 @@ function Detail({ starter, onAdd, onDone }: { starter: GalleryStarter; onAdd: (i
   const ready = starter.availability === 'ready' && !!file;
   // Onto a blank canvas, adding is the obvious move; onto a drawing, a canvas of its own is.
   const addFirst = canvasEmpty && !readOnly;
+  // Shown as the first button would leave it. Added, it is drawn in the canvas's own style; opened
+  // as a new diagram, in the style every new diagram is given (`deviceStyle`). Neither keeps a style
+  // the starter's file carries.
+  const look = resolveStyle(addFirst ? (own ?? mine) : mine, preset);
   // The palette's own command (`EditorScreen`), so adding from here frames the result the same way.
   const add = () => {
     onDone();
@@ -324,7 +347,7 @@ function Detail({ starter, onAdd, onDone }: { starter: GalleryStarter; onAdd: (i
   return (
     <article className="dc-starters-detail">
       <div className="dc-starters-hero">
-        <Preview file={file} name={starter.name} />
+        <Preview file={file} name={starter.name} look={look} />
 
         <div className="dc-starters-title">
           <div className="dc-starters-heading">

@@ -114,6 +114,8 @@ export function HistorySettings({ children }: { children?: ReactNode } = {}) {
   const [message, setMessage] = useState<string | null>(null);
   const [paused, setPaused] = useState(() => historyService().paused);
   const [agentsRead, setAgentsRead] = useState(() => readPreference(HISTORY_PREFS.agentsRead) === 'on');
+  /** Other diagrams on this device that continue this diagram's history (a copy's "Continue its history"). */
+  const [shared, setShared] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const { repoId, changes } = useEvolutionStore(useShallow((state) => ({ repoId: state.repoId, changes: state.changes })));
 
@@ -123,10 +125,16 @@ export function HistorySettings({ children }: { children?: ReactNode } = {}) {
       .usage()
       .then((bytes) => live && setUsage(bytes))
       .catch(() => live && setUsage(null));
+    historyService()
+      .sharedWith()
+      .then((count) => live && setShared(count))
+      .catch(() => live && setShared(0));
     return () => {
       live = false;
     };
   }, [changes]);
+
+  const others = shared === 1 ? 'the other diagram' : `the ${shared} other diagrams`;
 
   const exportHistory = async () => {
     setMessage(null);
@@ -233,16 +241,39 @@ export function HistorySettings({ children }: { children?: ReactNode } = {}) {
               if (file) void importHistory(file);
             }}
           />
-          <ConfirmAction
-            label="Remove this diagram’s history…"
-            confirmLabel="Remove history"
-            disabled={!repoId}
-            warning="Every revision of this diagram on this device is deleted. The diagram stays as it is. Exported or published copies are not affected. Recording starts again with your next change unless you turn it off above first."
-            onConfirm={async () => {
-              await historyService().removeHistory();
-              setMessage('This diagram’s history was removed from this device.');
-            }}
-          />
+          {shared > 0 ? (
+            <>
+              <ConfirmAction
+                label="Remove this diagram’s history…"
+                confirmLabel="Remove from this diagram"
+                warning={`${shared === 1 ? 'Another diagram on this device continues' : `${shared} other diagrams on this device continue`} this history, so it is kept for ${shared === 1 ? 'that diagram' : 'them'} and nothing is deleted. This diagram stops using it and stays as it is. Recording starts a new history with your next change unless you turn it off above first.`}
+                onConfirm={async () => {
+                  await historyService().removeHistory();
+                  setMessage(`This diagram no longer uses that history. It is still on this device for ${others}.`);
+                }}
+              />
+              <ConfirmAction
+                label="Delete the shared history…"
+                confirmLabel="Delete for every diagram"
+                warning={`Every revision of this history on this device is deleted, for this diagram and ${others} that ${shared === 1 ? 'continues' : 'continue'} it. The diagrams stay as they are. Exported or published copies are not affected.`}
+                onConfirm={async () => {
+                  await historyService().removeHistory({ everywhere: true });
+                  setMessage('The shared history was removed from this device.');
+                }}
+              />
+            </>
+          ) : (
+            <ConfirmAction
+              label="Remove this diagram’s history…"
+              confirmLabel="Remove history"
+              disabled={!repoId}
+              warning="Every revision of this diagram on this device is deleted. The diagram stays as it is. Exported or published copies are not affected. Recording starts again with your next change unless you turn it off above first."
+              onConfirm={async () => {
+                await historyService().removeHistory();
+                setMessage('This diagram’s history was removed from this device.');
+              }}
+            />
+          )}
         </div>
         {message && (
           <p className="dc-prefs-description" role="status">

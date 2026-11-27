@@ -35,6 +35,7 @@ import {
   descendantsOf,
   detachFromEdge,
   detachFromNode,
+  fitsGroupDepth,
   hasAttachmentRoom,
   removeAttachment,
   removeEdgeAttachment,
@@ -54,7 +55,9 @@ import { messagesOf, sequenceOf } from '../document/sequenceModel';
 import { editMessageAttachments } from '../document/sequenceOps';
 import { fitSequenceNode, fitSequences } from '../nodes/sequenceFit';
 import { aliasesOf } from '../sequence/native/shared';
-import { linked, readSequenceSource, sequenceNode, unsupportedAdvice } from './sequences';
+import { keepUnwritten, linked, readSequenceSource, sequenceNode, unsupportedAdvice } from './sequences';
+import { sameValue } from '../collab/equal';
+import { classOfField } from '../document/fieldClasses';
 import { DEFAULTS, LIMITS } from '../document/limits';
 import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftInside, DraftNode, DraftSequence } from '../document/types';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
@@ -65,6 +68,7 @@ import { naturalCodeSize, naturalTextSize } from '../nodes/describe';
 import { AgentError, Problems } from './errors';
 import {
   AGENT_LIMITS,
+  boundaryDepths,
   extrasOf,
   readDeliveryAttempts,
   readLink, readReplicas,
@@ -78,13 +82,14 @@ import {
   Reader,
   type LayoutSpec,
   type Lightable,
+  type RoomContext,
   type RoomSpec,
 } from './input';
 import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, flowFromSpec, lineOf, measureContext, noteNode, placeBlock, placeRoom, sizeToFit } from './place';
 import { pastDeadline, relaxLayoutAnchors, repairAnchors } from './route';
 import { arrangeView, fitGroups, placeBeside, placeInGroup, readArrange, scopeOf } from './arrange';
 import { arrangeFreshRoom } from './compile';
-import { checkQuality, isBetterReport, isClean, type QualityReport } from './quality';
+import { asDrawn, checkQuality, isBetterReport, isClean, type QualityIssue, type QualityReport } from './quality';
 import { moveInside, moveOutside } from './restructure';
 import { newFindings, REVIEW_LIMIT, reviewView } from './review';
 import { technologyAdvice } from './advice';
@@ -154,8 +159,8 @@ function readScope(r: Reader, raw: unknown, at: string, view: DraftDocument): Sc
   if (raw === undefined || raw === null) return undefined;
   const obj = r.object(raw, at);
   if (!obj) return undefined;
-  const nodeIds = r.array(obj.nodes, `${at}/nodes`, 300).filter((id): id is string => typeof id === 'string');
-  const edgeIds = r.array(obj.edges, `${at}/edges`, 300).filter((id): id is string => typeof id === 'string');
+  const nodeIds = r.array(obj.nodes, `${at}/nodes`, AGENT_LIMITS.scopeIds).filter((id): id is string => typeof id === 'string');
+  const edgeIds = r.array(obj.edges, `${at}/edges`, AGENT_LIMITS.scopeIds).filter((id): id is string => typeof id === 'string');
   const knownNodes = new Set(view.nodes.map((n) => n.id));
   const knownEdges = new Set(view.edges.map((e) => e.id));
   const missing = [...nodeIds.filter((id) => !knownNodes.has(id)), ...edgeIds.filter((id) => !knownEdges.has(id))];
@@ -174,6 +179,50 @@ function outOfScope(scope: Scope | undefined, ids: readonly string[], within: 'n
 function refuseOutOfScope(r: Reader, at: string, offending: readonly string[]) {
   if (!offending.length) return;
   r.problems.add('OUT_OF_SCOPE', at, `${offending.map((id) => `"${id}"`).join(', ')} ${offending.length === 1 ? 'is' : 'are'} outside the captured selection; expand the scope, or make this change without one`);
+}
+
+/**
+ * A shape or connector that changed only where it is drawn (`classOfField`'s layout: a move, a
+ * resize, a reroute). A room inside is compared as a room of its own, and an attachment added
+ * beside the ones it had is an add's, which a scope always allows; one changed or taken off is not.
+ */
+function saysTheSame(before: object, after: object): boolean {
+  const a = before as Record<string, unknown>;
+  const b = after as Record<string, unknown>;
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (key !== 'inside' && key !== 'attachments' && classOfField(key) !== 'layout' && !sameValue(a[key], b[key])) return false;
+  }
+  const had = (a.attachments ?? []) as Attachment[];
+  return sameValue(had, ((b.attachments ?? []) as Attachment[]).filter((attachment) => had.some((old) => old.id === attachment.id)));
+}
+
+/**
+ * What a scoped request changed that the scope doesn't hold, in any room: a shape or connector that
+ * was there and now says something else or is gone, and a flow it changed (no scope holds a flow).
+ * Where something is drawn is not what it says: a boundary grown round a shape moved into it, the
+ * contents of a moved group and connectors re-anchored to a shape that moved are not counted. A
+ * room that is gone went with the shape it was inside, which was in the scope.
+ */
+function reachedOutside(file: DraftDocument, next: DraftDocument, scope: Scope): { shapes: { id: string; path: DepthPath }[]; flows: string[] } {
+  const shapes: { id: string; path: DepthPath }[] = [];
+  const flows: string[] = [];
+  walkGraphs(file, (graph, path) => {
+    const now = viewOf(next, path);
+    if (!now || (now.nodes === graph.nodes && now.edges === graph.edges && now.flows === graph.flows)) return;
+    const nodes = new Map(now.nodes.map((node) => [node.id, node]));
+    const edges = new Map(now.edges.map((edge) => [edge.id, edge]));
+    const kept = new Map(now.flows.map((flow) => [flow.id, flow]));
+    for (const node of graph.nodes) {
+      const after = nodes.get(node.id);
+      if (!scope.nodes.has(node.id) && (!after || !saysTheSame(node, after))) shapes.push({ id: node.id, path });
+    }
+    for (const edge of graph.edges) {
+      const after = edges.get(edge.id);
+      if (!scope.edges.has(edge.id) && (!after || !saysTheSame(edge, after))) shapes.push({ id: edge.id, path });
+    }
+    for (const flow of graph.flows) if (!sameValue(flow, kept.get(flow.id))) flows.push(flow.id);
+  });
+  return { shapes, flows };
 }
 
 /** The first of the document's file-wide limits `file` is past, if any. */
@@ -225,7 +274,6 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   let base = file;
   let view = viewOf(file, path);
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
-  const originalView = view;
   const explainOrder = laterAdd(ops);
   let otherViews: Map<string, DepthPath> | undefined;
   const missingTarget = (current: DraftDocument, at: string, id: string): void => {
@@ -248,6 +296,9 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   const explicit = new Set<string>();
   const counts: PatchResult['counts'] = { added: 0, updated: 0, removed: 0 };
   const advisories: string[] = [];
+  // One request, one label per new group, whichever of its adds a junction comes in: read per add,
+  // a group split over two adds was made reading two ways, which one add is refused for.
+  const junctionLabels: NonNullable<RoomContext['junctionLabels']> = new Map();
 
   ops.forEach((raw, i) => {
     const at = `/ops/${i}`;
@@ -287,11 +338,26 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       // Arrange in the editor (`layoutPlan.ts`): the rest is arranged around them.
       const fixed = fixedIds(view.nodes);
       if (fixed.size > 0) {
+        // Said, as the editor's Arrange bar says it: an arrange that moved nothing for this reason
+        // used to come back "unchanged" with no word of why.
+        const holding = view.nodes.filter((n) => n.held).map((n) => `"${n.id}"`);
+        const names = `${holding.slice(0, 6).join(', ')}${holding.length > 6 ? ` and ${holding.length - 6} more` : ''}`;
+        const one = holding.length === 1;
+        const still = `Nothing was arranged: ${names} ${one ? 'is' : 'are'} held in place by the person, which keeps the boundary a held shape is in, and what a held boundary holds, where it is. Ask them to let go of ${one ? 'it' : 'them'} (Let go, in ⌘K) to arrange ${one ? 'it' : 'them'}.`;
         if (request.scope?.group !== undefined) {
-          if (fixed.has(request.scope.group)) return;
+          if (fixed.has(request.scope.group)) {
+            advisories.push(still);
+            return;
+          }
         } else {
           const moving = (request.scope?.nodes ?? view.nodes.map((n) => n.id)).filter((id) => !fixed.has(id));
-          if (moving.length === 0) return;
+          if (moving.length === 0) {
+            advisories.push(still);
+            return;
+          }
+          if (moving.length < (request.scope?.nodes ?? view.nodes).length) {
+            advisories.push(`Arranged around ${names}, which the person holds in place with what ${one ? 'it keeps' : 'they keep'} where it is; Let go, in ⌘K, frees ${one ? 'it' : 'them'}.`);
+          }
           request = { ...request, scope: { nodes: moving }, keepOutsideFixed: true, bothDirections: false };
         }
       }
@@ -320,8 +386,9 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
         relationshipSemantics: new Map(view.edges.map((e) => [e.id, e.semantic])),
         pairs: pairsOf(view.edges),
         flows: new Map(view.flows.map((f) => [f.id, f.variantOf])),
+        groupDepths: boundaryDepths(view.nodes),
       };
-      const room = readRoom(r, op, at, { taken, depth: path.length, existing });
+      const room = readRoom(r, op, at, { taken, depth: path.length, existing, junctionLabels });
       const anchorable = new Set([...existing.elements, ...existing.relationships, ...room.nodes.map((n) => n.id), ...room.relationships.map((e) => e.id)]);
       const newPoints = readOpenPoints(r, op.openPoints, `${at}/openPoints`, taken, anchorable);
       // One flow per title: a second "Main flow" is almost always the first one asked for again.
@@ -581,23 +648,8 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     const synced = fitSequences(started, syncLinks(started, view).doc, () => ctx);
     const beforeSync = new Map(view.nodes.map((node) => [node.id, node]));
     const syncedIds = synced.nodes.filter((node) => beforeSync.get(node.id) !== node).map((node) => node.id);
-    refuseOutOfScope(r, '/scope', outOfScope(scope, syncedIds.filter((id) => originalView.nodes.some((node) => node.id === id)), 'nodes'));
     for (const id of syncedIds) touched.add(id);
     view = synced;
-  }
-  if (scope) {
-    // A sequence replacement may delete incident connectors, and link sync or unlink can
-    // change identities on either side. Arrange still owns its existing incident-route policy.
-    const nodes = new Map(view.nodes.map((node) => [node.id, node]));
-    const edges = new Set(view.edges.map((edge) => edge.id));
-    refuseOutOfScope(r, '/scope', [
-      ...outOfScope(scope, originalView.nodes.filter((node) => {
-        const next = nodes.get(node.id);
-        return node.type === 'sequence' && next && next.sequence !== node.sequence;
-      }).map((node) => node.id), 'nodes'),
-      ...outOfScope(scope, originalView.edges.filter((edge) => !edges.has(edge.id)).map((edge) => edge.id), 'edges'),
-    ]);
-    problems.throwIfAny();
   }
 
   let nextFile = path.length ? embed(base, path, view) : view;
@@ -621,6 +673,22 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       advisories.push(`Junction "${id}" joined group "${link}" and reads "${label}", the group's label, not "${was}". To rename the group, update any of its junctions with set.label.`);
     }
   }
+  // Checked once every cascade has run, in every room: each op was checked on the ids it names, but
+  // what it carries along (a connector re-inferred for a retyped shape, a linked junction renamed with
+  // its group, a sequence participant with its shape, connectors and flow steps of a removed shape)
+  // reached past the scope unchecked when it was settled after the op's own check.
+  if (scope) {
+    const reached = reachedOutside(file, nextFile, scope);
+    if (reached.shapes.length) {
+      const named = reached.shapes.map(({ id, path: at }) => (samePath(at, path) ? `"${id}"` : `"${id}" (${at.length ? `inside ${at.join(' ▸ ')}` : 'in the top view'})`));
+      const elsewhere = reached.shapes.some(({ path: at }) => !samePath(at, path));
+      problems.add('OUT_OF_SCOPE', '/scope', `this change would also change ${named.join(', ')}, outside the captured selection; ${elsewhere ? 'a scope holds only what is in the view it was captured in, so make this change without one' : `expand the scope to take ${named.length === 1 ? 'it' : 'them'} in, or make this change without one`}`);
+    }
+    if (reached.flows.length) {
+      problems.add('OUT_OF_SCOPE', '/scope', `this change would also change ${reached.flows.length === 1 ? 'flow' : 'flows'} ${reached.flows.map((id) => `"${id}"`).join(', ')}, which a captured selection never covers; make this change without a scope`);
+    }
+    problems.throwIfAny();
+  }
   // Only what this request could plausibly have broken — `touched` plus, through `checkQuality`'s
   // pairwise checks, anything untouched it collides with — never a claim the whole file is clean.
   const quality: QualityReport = { errors: [], warnings: [] };
@@ -631,9 +699,14 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     // `embed` rewrites every owner up the chain, so each ancestor room reads as changed. One holding
     // nothing this request touched has nothing for a focused check to judge — skip its whole pass.
     if (!inTouchedRoom && !graph.nodes.some((n) => touched.has(n.id)) && !graph.edges.some((e) => touched.has(e.id))) return;
-    const report = checkQuality(graph.nodes, graph.edges, ctx, inTouchedRoom ? undefined : touched, explicit);
-    quality.errors.push(...report.errors);
-    quality.warnings.push(...report.warnings);
+    // Judged as the canvas will draw it (`asDrawn`): this request's repairs re-anchored connectors in place.
+    const report = checkQuality(graph.nodes, asDrawn(graph.edges), ctx, inTouchedRoom ? undefined : touched, explicit);
+    // A problem in another view (a linked junction renamed there) says which, as a create's do: an
+    // arrange of this view, the op it was otherwise answered with, can't reach it.
+    const elsewhere = !samePath(graphPath, path);
+    const where = (issue: QualityIssue): QualityIssue => (elsewhere ? { ...issue, view: graphPath, message: `${graphPath.length ? `inside ${graphPath.join(' ▸ ')}` : 'in the top view'}: ${issue.message}` } : issue);
+    quality.errors.push(...report.errors.map(where));
+    quality.warnings.push(...report.warnings.map(where));
   });
   // What this change left a pattern missing (`review.ts`): only the findings it brought in, never the
   // view's standing ones — read_diagram's `review` lists those.
@@ -789,7 +862,14 @@ function keepMessageAttachments(before: DraftSequence, after: DraftSequence, id:
   const taken = new Set<string>();
   const matches = new Map<string, string>();
   const sameRoute = (a: (typeof old)[number], b: (typeof next)[number]) => a.from === b.from && a.to === b.to && a.kind === b.kind;
+  // A message `keepUnwritten` found in the new text is the same message, its attachments already on it.
   for (const message of old) {
+    if (!next.some((candidate) => candidate.id === message.id)) continue;
+    matches.set(message.id, message.id);
+    taken.add(message.id);
+  }
+  for (const message of old) {
+    if (matches.has(message.id)) continue;
     const found = next.find((candidate) => !taken.has(candidate.id) && sameRoute(message, candidate) && message.label === candidate.label);
     if (!found) continue;
     matches.set(message.id, found.id);
@@ -799,6 +879,7 @@ function keepMessageAttachments(before: DraftSequence, after: DraftSequence, id:
     const attachments = message.attachments;
     if (!attachments?.length) continue;
     let target = matches.get(message.id);
+    if (target === message.id) continue;
     if (!target) {
       const alternatives = next.filter((candidate) => !taken.has(candidate.id) && sameRoute(message, candidate));
       const remaining = old.filter((candidate) => !matches.has(candidate.id) && sameRoute(message, candidate));
@@ -834,7 +915,7 @@ function updateSequence(r: Reader, view: DraftDocument, node: DraftNode, set: Js
     const read = readSequenceSource(r, set, at, elementIds, current);
     if (!read) return undefined;
     advisories.push(...unsupportedAdvice(node.id, read.unsupported));
-    sequence = linked(read.sequence, read.links, shapes, node.id, advisories);
+    sequence = linked(keepUnwritten(node, read.sequence), read.links, shapes, node.id, advisories);
     sequence = keepMessageAttachments(current, sequence, node.id, advisories);
     if (current.numberMessages === false) sequence = { ...sequence, numberMessages: false };
     if (set.title === undefined && read.title) title = read.title;
@@ -858,6 +939,8 @@ function updateSequence(r: Reader, view: DraftDocument, node: DraftNode, set: Js
     sequence = linked(unlinked, links, shapes, node.id, advisories);
   }
   if (!r.problems.empty) return undefined;
+  // The text sent back as it was read, or links it already had: nothing to commit, nothing to undo.
+  if (title === (node.text ?? '') && sameValue(sequence, current)) return view;
   const changed = fitSequenceNode(node, { ...node, text: title, sequence }, ctx);
   const kept = new Set(sequence.participants.map((participant) => participant.id));
   const removed = new Set(current.participants.filter((participant) => !kept.has(participant.id)).map((participant) => participant.id));
@@ -1039,6 +1122,10 @@ function updateOne(
           }
           seen.add(at2);
           at2 = view.nodes.find((n) => n.id === at2)?.parentId;
+        }
+        // As the editor's own grouping refuses it: past this the next open cuts a grouping link.
+        if (!fitsGroupDepth(view, [id], set.group)) {
+          r.problems.add('LIMIT_EXCEEDED', `${at}/group`, `boundaries nest at most ${LIMITS.maxGroupDepth} deep, and "${id}", with what it holds, would go past that inside "${set.group}"; put it in a boundary further out`);
         }
         patch.parentId = set.group;
       } else r.problems.add('INVALID_REFERENCE', `${at}/group`, `no group "${String(set.group)}" in this view`);

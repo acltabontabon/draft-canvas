@@ -205,7 +205,7 @@ export class HostSession {
     // The first copy anyone gets is held to the same rules as every commit after it (`commitLocal`).
     const file = env.readFile();
     const repaired = repairReferences(file);
-    this.core = new HostCore(repaired !== file && !env.isBusy() && env.applyRemote(repaired) ? repaired : file);
+    this.core = new HostCore(repaired !== file && !env.isBusy() && env.applyRemote(repaired) ? repaired : file, () => clock.now());
     this.scheduleHeartbeat();
   }
 

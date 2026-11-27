@@ -279,6 +279,17 @@ function drainInsides(ctx: FileContext, repairs: string[]): void {
   }
 }
 
+const UPGRADED = 'Upgraded document format from';
+
+/**
+ * The repairs worth telling a person about: `parseDocument` lists bringing an older file up to
+ * this version's format with them, and that is no repair. Told as one, every valid older export,
+ * share link and desktop file opened "with repairs" and looked damaged.
+ */
+export function realRepairs(repairs: readonly string[]): string[] {
+  return repairs.filter((line) => !line.startsWith(UPGRADED));
+}
+
 /**
  * Parses a `.draftcanvas` payload. Accepts either a JSON string or an
  * already-parsed value so callers can reuse it for IndexedDB records.
@@ -313,7 +324,7 @@ export function parseDocument(input: unknown): NormalizeResult {
     const result = migrateToCurrent(raw);
     migrated = result.doc;
     if (result.applied.length > 0) {
-      repairs.push(`Upgraded document format from v${result.applied[0]} to v${CURRENT_VERSION}.`);
+      repairs.push(`${UPGRADED} v${result.applied[0]} to v${CURRENT_VERSION}.`);
     }
   } catch (error) {
     if (error instanceof UnsupportedVersionError) return { ok: false, error: error.message, reason: 'newer' };

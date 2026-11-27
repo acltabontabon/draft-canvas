@@ -1,3 +1,5 @@
+import { setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { createEdge, createNode } from '../src/document/factory';
 import type { DraftEdge, DraftNode } from '../src/document/types';
@@ -17,6 +19,16 @@ const edge = (id: string, source: string, target: string, extra: Partial<DraftEd
 
 const right = { side: 'right' as const, offset: 0.5 };
 const left = { side: 'left' as const, offset: 0.5 };
+
+/** A full collection, where the runtime lets a test ask for one. */
+function collector(): (() => void) | undefined {
+  try {
+    setFlagsFromString('--expose-gc');
+    return runInNewContext('gc') as () => void;
+  } catch {
+    return undefined;
+  }
+}
 
 /** Two connectors from a left column to a right column, both stepping down through the same midline. */
 function corridor(extra: Partial<DraftEdge> = {}) {
@@ -88,6 +100,25 @@ describe('separating connectors that share a corridor', () => {
     expect(plan.tracksFor('a')).toBeUndefined();
     expect(plan.tracksFor('b')).toBeUndefined();
     expect(plan.skipped).toBeGreaterThan(0);
+  });
+
+  // AGENTS.md: memoized plans must not keep planner scratch through closures. Undo history holds a
+  // plan per step, and a plan that only counted skipped corridors kept every run and line of them.
+  it.skipIf(!collector())('keeps none of its working state in a plan that only counts what it skipped', async () => {
+    const gc = collector()!;
+    // Built out of the test's reach, so only the plan could keep the connectors alive.
+    const { plan, connector } = (() => {
+      const nodes = [box('l0', 0, 0), box('l1', 0, 100), box('r0', 200, 300), box('r1', 200, 700)];
+      const pins = { sourceAnchor: right, targetAnchor: left };
+      const edges = [edge('a', 'l0', 'r0', { semantic: 'calls', ...pins }), edge('b', 'l1', 'r1', { semantic: 'writes', ...pins })];
+      return { plan: separationPlan(nodes, edges, 'transient'), connector: new WeakRef(edges[0]!) };
+    })();
+    expect(plan.skipped).toBeGreaterThan(0);
+    // A WeakRef holds on to its target until the job that made it is over.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    gc();
+    expect(connector.deref()).toBeUndefined();
+    expect(plan.tracksFor('a')).toBeUndefined();
   });
 
   it('hands back the same tracks object while nothing it depends on changes', () => {

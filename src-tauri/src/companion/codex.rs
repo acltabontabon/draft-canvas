@@ -58,7 +58,10 @@ impl Backend for Codex {
         let mut command = Command::new(spec.program);
         let probe_home = spec.mcp_config.parent().ok_or_else(AppError::internal)?;
         command
-            .args(args(spec, &features(spec.program, probe_home)?))
+            .args(args(
+                spec,
+                &features(spec.program, spec.version, probe_home)?,
+            ))
             .current_dir(spec.work_dir);
         if let Some(path) = clients::path_with(spec.program.parent()) {
             command.env("PATH", path);
@@ -127,13 +130,25 @@ const NOT_FOR_A_CANVAS: &[&str] = &[
     "workspace_dependencies",
 ];
 
-/// The features this Codex has (`codex features list`), asked once per program per app run.
-fn features(program: &Path, probe_home: &Path) -> Result<HashSet<String>, AppError> {
-    static KNOWN: std::sync::OnceLock<
-        std::sync::Mutex<std::collections::HashMap<std::path::PathBuf, HashSet<String>>>,
-    > = std::sync::OnceLock::new();
+/// The features this Codex has (`codex features list`), asked once per program and version per app
+/// run. Keyed by the version too: an npm update leaves the same `codex.cmd` in place, and a list
+/// cached from before it disabled flags the new Codex no longer has (every run failed until a restart)
+/// and missed a feature it newly has (left on). The version is the one `locate` just read for this
+/// run, not asked for again.
+fn features(
+    program: &Path,
+    version: Option<&str>,
+    probe_home: &Path,
+) -> Result<HashSet<String>, AppError> {
+    type Known = std::collections::HashMap<(std::path::PathBuf, String), HashSet<String>>;
+    static KNOWN: std::sync::OnceLock<std::sync::Mutex<Known>> = std::sync::OnceLock::new();
     let known = KNOWN.get_or_init(Default::default);
-    if let Some(found) = known.lock().ok().and_then(|k| k.get(program).cloned()) {
+    // No version, no cache: the list is asked for again rather than kept under a guess.
+    let key = version.map(|version| (program.to_path_buf(), version.to_string()));
+    if let Some(found) = key
+        .as_ref()
+        .and_then(|key| known.lock().ok().and_then(|k| k.get(key).cloned()))
+    {
         return Ok(found);
     }
     // An unavailable probe must not silently leave the person's plugins, apps or browser enabled.
@@ -142,8 +157,8 @@ fn features(program: &Path, probe_home: &Path) -> Result<HashSet<String>, AppErr
     // inspect defaults in the private run folder, never the person's settings or project.
     let output = quick_in_home(program, &["features", "list"], Some(probe_home));
     let found = checked_features(output.as_deref())?;
-    if let Ok(mut k) = known.lock() {
-        k.insert(program.to_path_buf(), found.clone());
+    if let (Some(key), Ok(mut k)) = (key, known.lock()) {
+        k.insert(key, found.clone());
     }
     Ok(found)
 }
@@ -759,6 +774,7 @@ mod tests {
         args(
             &RunSpec {
                 program: Path::new("/bin/codex"),
+                version: Some("0.163.0"),
                 work_dir: Path::new("/work"),
                 mcp_config: Path::new("/run/mcp.json"),
                 server: Path::new("/App/draft-canvas-mcp"),
@@ -787,11 +803,56 @@ mod tests {
         )
         .unwrap();
         std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
-        assert!(features(&program, &home).is_err());
+        assert!(features(&program, Some("0.163.0"), &home).is_err());
         std::fs::write(&program, "#!/bin/sh\ntest -f \"$CODEX_HOME/mcp.json\" || exit 1\ntest -f ./mcp.json || exit 1\nprintf 'shell_tool stable true\\napps experimental true\\n'\n").unwrap();
-        let found = features(&program, &home).unwrap();
+        let found = features(&program, Some("0.163.0"), &home).unwrap();
         assert!(found.contains("apps"));
         assert!(found.contains("shell_tool"));
+    }
+
+    /// A stand-in Codex whose `features list` prints `lines`: a batch file on Windows, a shell
+    /// script elsewhere.
+    fn listing_cli(dir: &Path, lines: &[&str]) -> std::path::PathBuf {
+        #[cfg(windows)]
+        {
+            let program = dir.join("codex-features.cmd");
+            let body: String = lines.iter().map(|l| format!("echo {l}\r\n")).collect();
+            std::fs::write(&program, format!("@echo off\r\n{body}")).unwrap();
+            program
+        }
+        #[cfg(not(windows))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let program = dir.join("codex-features");
+            let body: String = lines.iter().map(|l| format!("echo '{l}'\n")).collect();
+            std::fs::write(&program, format!("#!/bin/sh\n{body}")).unwrap();
+            std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+            program
+        }
+    }
+
+    #[test]
+    fn features_are_kept_per_version_and_asked_again_for_another() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("run");
+        std::fs::create_dir(&home).unwrap();
+        let program = listing_cli(
+            dir.path(),
+            &["shell_tool stable true", "apps experimental true"],
+        );
+        assert!(features(&program, Some("1.0.0"), &home)
+            .unwrap()
+            .contains("apps"));
+        // Updated in place, as npm does: the same version is answered from what was learned…
+        listing_cli(dir.path(), &["shell_tool stable true"]);
+        assert!(features(&program, Some("1.0.0"), &home)
+            .unwrap()
+            .contains("apps"));
+        // …while a new version, or none read, is asked again.
+        assert!(!features(&program, Some("1.0.1"), &home)
+            .unwrap()
+            .contains("apps"));
+        assert!(!features(&program, None, &home).unwrap().contains("apps"));
     }
 
     #[test]

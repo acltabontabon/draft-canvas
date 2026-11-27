@@ -408,6 +408,33 @@ fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
     result
 }
 
+/// Where a new copy is staged and an old one set aside: beside the skills folder, not in it (an agent
+/// scanning skills mid-install must never find a second, half-written draft-canvas), and beside the
+/// folder it really is, so the swap is one rename. `~/.claude/skills` is often a link to dotfiles on
+/// another drive; staged beside the link, the swap was a rename across volumes, and every install and
+/// every launch-time refresh failed.
+fn staging_parent(root: &Path) -> PathBuf {
+    let real = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    match real.parent() {
+        Some(parent) => parent.to_path_buf(),
+        None => root.parent().unwrap_or(root).to_path_buf(),
+    }
+}
+
+/// Swaps the staged copy in: one rename, where the two share a volume. Where nothing beside the
+/// skills folder shares its volume (a drive's root, a mount point), the copy is copied in instead: an
+/// agent could catch it half done, but it installs.
+fn swap_in(staging: &Path, dir: &Path) -> std::io::Result<()> {
+    match std::fs::rename(staging, dir) {
+        Err(error) if error.kind() == IoErrorKind::CrossesDevices => {
+            copy_dir(staging, dir)?;
+            let _ = std::fs::remove_dir_all(staging);
+            Ok(())
+        }
+        result => result,
+    }
+}
+
 /// Puts this app's skill in `root/draft-canvas`, replacing what is there. A copy that isn't one
 /// Draft Canvas wrote unchanged is first moved into `backups` (never into the skills folder, where an
 /// agent would load it as a second skill), and that place is returned.
@@ -420,9 +447,7 @@ pub fn install_into(root: &Path, backups: &Path) -> Result<Option<PathBuf>, AppE
         ))
     };
     std::fs::create_dir_all(root).map_err(|e| fail("install", e))?;
-    // Staged beside the skills folder, not in it: an agent scanning skills mid-install must never
-    // find a second, half-written draft-canvas.
-    let parent = root.parent().unwrap_or(root);
+    let parent = staging_parent(root);
     let staging = parent.join(format!(".{SKILL_NAME}-skill-{}", unique_suffix()));
     if let Err(e) = write_skill(&staging) {
         let _ = std::fs::remove_dir_all(&staging);
@@ -453,7 +478,7 @@ pub fn install_into(root: &Path, backups: &Path) -> Result<Option<PathBuf>, AppE
             retired = Some(aside);
         }
     }
-    if let Err(e) = std::fs::rename(&staging, &dir) {
+    if let Err(e) = swap_in(&staging, &dir) {
         // Put back what was there, so a failed update leaves the old skill working.
         if let Some(previous) = backup.as_ref().or(retired.as_ref()) {
             let _ = move_dir(previous, &dir);
@@ -698,6 +723,14 @@ mod tests {
         (
             "33",
             "b02cfccd04c7e8f46c26daf49f1174407c57d1c915712fbe9b7ad9352aa21e35",
+        ),
+        (
+            "34",
+            "da3b8649f41910b0fcb7d527e2574352e4289051f7066e000ba4013dfadf191c",
+        ),
+        (
+            "35",
+            "d20ef8732e53d452b6115c264b676287f507d6444532a4956c933e294897a5ef",
         ),
     ];
 
@@ -1005,5 +1038,90 @@ mod tests {
         let kept = remove_from(&root, &backups).unwrap().expect("kept");
         assert!(kept.join("notes.md").is_file());
         assert!(!installed(&root).exists());
+    }
+
+    /// Makes `link` lead to the folder `target`: a junction on Windows, where a symbolic link needs
+    /// a privilege the tests may not have.
+    fn link_folder(target: &Path, link: &Path) {
+        #[cfg(windows)]
+        {
+            let made = std::process::Command::new("cmd")
+                .args(["/C", "mklink", "/J"])
+                .args([link, target])
+                .output()
+                .unwrap();
+            assert!(
+                made.status.success(),
+                "{}",
+                String::from_utf8_lossy(&made.stderr)
+            );
+        }
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target, link).unwrap();
+    }
+
+    fn names(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// `~/.claude/skills` linked to dotfiles on another drive: staged beside the link, the copy sat on
+    /// the link's drive, and the rename into the skills folder failed on every install. One drive
+    /// can't show that failure, so where the copy is staged is checked itself.
+    #[test]
+    fn a_linked_skills_folder_is_staged_beside_the_folder_it_leads_to() {
+        let home = tempfile::tempdir().unwrap();
+        let dotfiles = tempfile::tempdir().unwrap();
+        let real = dotfiles.path().join("skills");
+        std::fs::create_dir(&real).unwrap();
+        let root = home.path().join("skills");
+        link_folder(&real, &root);
+        let beside = dunce::canonicalize(dotfiles.path()).unwrap();
+        assert_eq!(staging_parent(&root), beside);
+        assert_eq!(staging_parent(&real), beside);
+    }
+
+    #[test]
+    fn a_linked_skills_folder_is_installed_and_updated_through_the_link() {
+        let home = tempfile::tempdir().unwrap();
+        let dotfiles = tempfile::tempdir().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let backups = elsewhere.path().join("backups");
+        let real = dotfiles.path().join("skills");
+        std::fs::create_dir(&real).unwrap();
+        let root = home.path().join("skills");
+        link_folder(&real, &root);
+        // Where folders can be locked, nothing can be written beside the link: only a copy staged
+        // beside the real folder installs.
+        #[cfg(unix)]
+        struct Unlock<'a>(&'a Path);
+        #[cfg(unix)]
+        impl Drop for Unlock<'_> {
+            fn drop(&mut self) {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(self.0, std::fs::Permissions::from_mode(0o755));
+            }
+        }
+        #[cfg(unix)]
+        let _unlock = {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(home.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
+            Unlock(home.path())
+        };
+
+        assert_eq!(install_into(&root, &backups).unwrap(), None);
+        assert_eq!(state_of(&real.join(SKILL_NAME)).0, SkillState::Ready);
+        pretend_older(&installed(&root), "0.5");
+        assert_eq!(install_into(&root, &backups).unwrap(), None);
+        assert_eq!(state_of(&real.join(SKILL_NAME)).0, SkillState::Ready);
+        // Nothing staged or set aside is left on either side of the link.
+        assert_eq!(names(home.path()), ["skills"]);
+        assert_eq!(names(dotfiles.path()), ["skills"]);
+        assert_eq!(names(&real), [SKILL_NAME]);
+        assert!(!backups.exists());
     }
 }

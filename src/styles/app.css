@@ -1720,13 +1720,22 @@ kbd {
   padding: 0 7px 0 9px;
 }
 
+/* Words, where every other tool is a drawing, so held to 4.5:1 rather than a drawing's 3:1: at the
+   drawings' 62% it read at 4.2:1 on the Paper palette and under 4.5:1 on every light canvas. A hand
+   on the button, or its picker open, still takes it to the full text colour with them. */
 .dc-tool-shapes-word {
+  color: color-mix(in srgb, var(--dc-text) 65%, transparent);
   font-family: var(--dc-mono);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
+  transition: color 120ms var(--dc-ease-out);
+}
+
+.dc-create-rail .dc-tool-shapes:is(:hover, [data-open]) .dc-tool-shapes-word {
+  color: inherit;
 }
 
 .dc-tool-caret {
@@ -3020,10 +3029,12 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 /* Presentation's chapter marks: one per step, filled once told, the current one in the accent and
-   a little longer. Each is a real button naming its step, so the row is also direct navigation. */
+   a little longer. Each is a real button naming its step, so the row is also direct navigation.
+   Each button is at least 24px square (WCAG 2.5.8), the mark drawn in its middle, the space between
+   two marks part of their buttons: at 14 × 18px with 4px apart, a jump to a step was easy to miss.
+   A touch screen makes them 40px (`pointer: coarse`, below). */
 .dc-present-timeline {
   display: flex;
-  gap: 4px;
   align-items: center;
   margin: 0;
   padding: 0 4px;
@@ -3031,9 +3042,11 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 .dc-present-tick {
-  display: block;
-  width: 14px;
-  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 0;
   background: none;
@@ -3043,8 +3056,8 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 .dc-present-tick::before {
   content: '';
   display: block;
+  width: 18px;
   height: 4px;
-  margin-top: 7px;
   border-radius: 2px;
   background: var(--dc-border-strong);
   transition: background-color 160ms ease, transform 160ms var(--dc-ease-out);
@@ -7511,6 +7524,12 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
   }
 
   .dc-save-conflict .dc-button {
+    height: 40px;
+  }
+
+  /* Presentation's step marks: the strip scrolls sideways if a dozen no longer fit. */
+  .dc-present-tick {
+    width: 40px;
     height: 40px;
   }
 }

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
+import { LIMITS } from '../src/document/limits';
+import { normalizeSequence } from '../src/document/validateSequence';
 import { addEdges, addNodes, moveNodes, updateNode } from '../src/document/operations';
 import { hasDrifted, isPartOfDiagram, participantFromNode, syncLinks } from '../src/document/sequenceLinks';
 import { updateParticipant, updateSequence } from '../src/document/sequenceOps';
@@ -76,6 +78,26 @@ describe('a participant that stands for a shape', () => {
     expect(hasDrifted(participant(doc, 'n_seq', 'n_api'), shape(doc, 'n_api'))).toBe(false);
     expect(hasDrifted({ ...participant(doc, 'n_seq', 'n_api'), name: 'Old name' }, shape(doc, 'n_api'))).toBe(true);
     expect(hasDrifted(participant(doc, 'n_seq', 'n_api'), undefined)).toBe(false);
+  });
+
+  it('settles on a shape named longer than a participant holds', () => {
+    // The participant was held to 120 characters and the shape's identity was not, so the two were
+    // "drifted" for good and "Update from shape" changed nothing.
+    const long = `Order fulfilment service that reserves stock and books the courier ${'x'.repeat(150)}`;
+    const named = createNode({ id: 'n_api', type: 'service', x: 0, y: 0, text: long }) as DraftNode & { type: 'service' };
+    const linked = participantFromNode(named, 'p');
+    expect(linked.name).toHaveLength(LIMITS.maxSequenceNameLength);
+    expect(normalizeSequence({ participants: [linked], items: [] }).sequence.participants[0]).toEqual(linked);
+    expect(hasDrifted(linked, named)).toBe(false);
+    expect(updateParticipant({ participants: [linked], items: [] }, 'p', participantFromNode(named, 'p')).participants[0]).toBe(linked);
+
+    // Renamed on the canvas, the participant takes what it can hold; recoloured, the shape keeps its whole name.
+    const before = linkedDoc();
+    const { doc } = syncLinks(before, updateNode(before, 'n_api', { text: long }));
+    expect(participant(doc, 'n_seq', 'n_api').name).toHaveLength(LIMITS.maxSequenceNameLength);
+    expect(hasDrifted(participant(doc, 'n_seq', 'n_api'), shape(doc, 'n_api'))).toBe(false);
+    const recoloured = updateSequence(doc, 'n_seq', (sequence) => updateParticipant(sequence, 'sp_n_api', { accent: 'blue' }));
+    expect(shape(syncLinks(doc, recoloured).doc, 'n_api')).toMatchObject({ text: long, accent: 'blue' });
   });
 
   it('costs nothing where no sequence links to anything', () => {

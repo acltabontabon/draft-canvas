@@ -2,8 +2,10 @@ import { useCallback, useMemo } from 'react';
 import type { CommandContext } from '../../commands/types';
 import { OPEN_POINT_LABELS } from '../../document/openPoints';
 import { count } from '../../lib/plural';
+import { focusCanvas } from '../../canvas/canvasFocus';
 import { OpenPointGlyph } from '../../canvas/OpenPointGlyph';
 import { usePopoverPresence } from '../../canvas/usePopoverPresence';
+import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import { openPointsOverview, unresolvedTargetsIn, type OpenPointRow } from '../../openPoints/collect';
 import { fileOf, useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
@@ -32,6 +34,12 @@ export function OpenPointsPanel({ buildCommandContext }: { buildCommandContext: 
   const showPanel = open && !presenting;
   const { mounted, closing } = usePopoverPresence(showPanel, EXIT_MS);
   if (!mounted) return null;
+  // Closed from inside, focus goes back to the canvas, as it does from the Outline and Appearance:
+  // the panel's own controls going away dropped it to <body>.
+  const close = () => {
+    useUiStore.getState().setOpenPointsPanelOpen(false);
+    focusCanvas();
+  };
   return (
     <div
       className="dc-points dc-open-points"
@@ -40,10 +48,17 @@ export function OpenPointsPanel({ buildCommandContext }: { buildCommandContext: 
       data-dc-keyboard-region=""
       role="complementary"
       aria-label="Open points"
+      // A keyboard region stands the editor's own keys down, Escape included, so the panel answers
+      // Escape itself; outside the panel, the editor's Escape closes it first (`EditorScreen`).
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || event.defaultPrevented || isImeKeyEvent(event)) return;
+        event.stopPropagation();
+        close();
+      }}
     >
       <div className="dc-points-header">
         <strong className="dc-points-title">Open points</strong>
-        <Button variant="quiet" icon="close" aria-label="Close open points" onClick={() => useUiStore.getState().setOpenPointsPanelOpen(false)} />
+        <Button variant="quiet" icon="close" aria-label="Close open points" onClick={close} />
       </div>
       <OpenPointsBody buildCommandContext={buildCommandContext} />
     </div>

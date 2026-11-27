@@ -248,10 +248,13 @@ export function transformed(segments: readonly Segment[], matrix: Matrix): Segme
   });
 }
 
-/** The stored form: a command letter, then its numbers a space apart, to two decimals, held to `[min, max]`. */
-export function written(segments: readonly Segment[], min: number, max: number): string {
-  const n = (value: number) => String(Math.round(Math.min(max, Math.max(min, value)) * 100) / 100 || 0);
+/**
+ * The stored form: a command letter, then its numbers a space apart, to two decimals, each held to
+ * `[min, max]` of its own axis: `x` across, `y` down.
+ */
+export function written(segments: readonly Segment[], x: readonly [number, number], y: readonly [number, number] = x): string {
+  const n = (value: number, [min, max]: readonly [number, number]) => String(Math.round(Math.min(max, Math.max(min, value)) * 100) / 100 || 0);
   let out = '';
-  for (const segment of segments) out += segment.c === 'Z' ? 'Z' : `${segment.c}${segment.p.map(n).join(' ')}`;
+  for (const segment of segments) out += segment.c === 'Z' ? 'Z' : `${segment.c}${segment.p.map((value, index) => n(value, index % 2 === 0 ? x : y)).join(' ')}`;
   return out;
 }

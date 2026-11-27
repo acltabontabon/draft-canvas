@@ -35,8 +35,14 @@ export interface Theme {
   /** A connector's words: its label, relationship caption and reply. Stronger than `textFaint` on
    *  the dark canvas, where small text at overview zoom was the first thing to stop being readable. */
   edgeText: string;
+  /** What is chosen, where words are written in it or on it (a tool's name, a solid button). */
   selection: string;
   selectionSoft: string;
+  /** What is chosen, as a mark on the canvas: the ring round a selected shape, a selected connector.
+   *  The selection itself in the built-in themes; on a style's canvas it is held to a graphic's floor
+   *  rather than words', so it keeps its hue where words would leave only black or white
+   *  (`render/style/scheme.ts`). */
+  selectionMark: string;
   edge: string;
   edgeLabelBg: string;
   codeBg: string;
@@ -47,6 +53,9 @@ export interface Theme {
    *  removed-connector marker (`Markers.tsx`) is generated once as static SVG markup keyed by exact
    *  colour string, so a `var(--dc-danger)` string would mint an arrowhead nothing ever registers. */
   danger: string;
+  /** What would be removed, as a mark: a shape or connector crossed out in a preview. `danger` in the
+   *  built-in themes, held like `selectionMark` on a style's canvas. */
+  dangerMark: string;
   accents: Record<Accent, AccentPalette>;
 }
 
@@ -64,12 +73,14 @@ export const DARK: Theme = {
   edgeText: '#a0a8b6',
   selection: '#6cb3aa',
   selectionSoft: 'rgba(108, 179, 170, 0.16)',
+  selectionMark: '#6cb3aa',
   edge: '#6d7885',
   edgeLabelBg: '#12151a',
   codeBg: '#12151a',
   codeBorder: '#2c333d',
   shadow: 'rgba(0, 0, 0, 0.45)',
   danger: '#ea7087',
+  dangerMark: '#ea7087',
   accents: {
     // Not a chrome-token alias: a shape with no explicit accent should read as
     // an intentional slate surface sitting *on* the canvas, not flush with it —
@@ -109,12 +120,14 @@ export const LIGHT: Theme = {
   edgeText: '#6a7280',
   selection: '#2c6f68',
   selectionSoft: 'rgba(44, 111, 104, 0.12)',
+  selectionMark: '#2c6f68',
   edge: '#7c8492',
   edgeLabelBg: '#ffffff',
   codeBg: '#f7f8fa',
   codeBorder: '#e2e6eb',
   shadow: 'rgba(19, 24, 32, 0.13)',
   danger: '#b0334d',
+  dangerMark: '#b0334d',
   accents: {
     // Same reasoning as DARK.neutral, tuned independently rather than inverted:
     // a hair warmer than pure white, and a line/chip with a touch more presence
@@ -171,10 +184,16 @@ export function applyThemeVariables(theme: Theme, root: HTMLElement): void {
   set('edge-text', theme.edgeText);
   set('selection', theme.selection);
   set('selection-soft', theme.selectionSoft);
+  // Read with `--dc-selection` as the fallback, so a page painted before this runs looks the same.
+  set('selection-mark', theme.selectionMark);
   set('edge', theme.edge);
   set('edge-label-bg', theme.edgeLabelBg);
   set('code-bg', theme.codeBg);
   set('shadow', theme.shadow);
+  // A style's canvas can move it (`render/style/scheme.ts`): the stylesheets' danger has to be the
+  // same colour as the canvas's, and so does the mark a removed item is drawn in (`theme.dangerMark`).
+  set('danger', theme.danger);
+  set('danger-mark', theme.dangerMark);
   for (const [name, palette] of Object.entries(theme.accents)) {
     // No `-line`: nothing in CSS draws with an accent's line colour (connectors get it from the theme
     // object, in the display list).

@@ -186,7 +186,7 @@ describe('untrusted frames', () => {
   });
 
   it('gives up on a message that is not finished within 15 s, and leaves no timer behind', () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
     const { reassembler, messages, drops } = collector();
     reassembler.push(frame(1, 0, 2));
     vi.advanceTimersByTime(REASSEMBLY_TIMEOUT_MS / 2);
@@ -207,7 +207,7 @@ describe('untrusted frames', () => {
   });
 
   it('times a message out only when it stalls: a slow one still arriving is never dropped', () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
     const { reassembler, messages, drops } = collector();
     const count = 6;
     // A chunk every 2/3 of the timeout: the whole message takes far longer than the timeout.
@@ -220,8 +220,35 @@ describe('untrusted frames', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  // Timers and `performance` run on while `Date` is stepped: time sync, a VM resuming, a change by hand.
+  it('keeps a message still arriving when the wall clock is stepped forward', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance', 'Date'] });
+    const { reassembler, messages, drops } = collector();
+    reassembler.push(frame(1, 0, 3, [0x61]));
+    vi.advanceTimersByTime(REASSEMBLY_TIMEOUT_MS - 1_000);
+    reassembler.push(frame(1, 1, 3, [0x62]));
+    vi.setSystemTime(Date.now() + 60_000);
+    // It was dropped as stalled for 15 s, two seconds after its last chunk.
+    vi.advanceTimersByTime(2_000);
+    reassembler.push(frame(1, 2, 3, [0x63]));
+    expect(drops).toEqual([]);
+    expect(messages).toEqual([['abc', 'message']]);
+  });
+
+  it('still gives up on a stalled message after 15 s when the wall clock is stepped back', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance', 'Date'] });
+    const { reassembler, drops } = collector();
+    reassembler.push(frame(1, 0, 2));
+    vi.setSystemTime(Date.now() - 3_600_000);
+    // It was held, with what it had brought, for as long as the step.
+    vi.advanceTimersByTime(REASSEMBLY_TIMEOUT_MS);
+    expect(drops.map(([reason]) => reason)).toEqual(['timeout']);
+    expect(reassembler.pendingBytes).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('stops expiring partials after the first timeout disposes the transport', () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
     const onDrop = vi.fn(() => reassembler.dispose());
     const reassembler = new Reassembler({ onMessage: vi.fn(), onDrop });
     reassembler.push(frame(1, 0, 2));

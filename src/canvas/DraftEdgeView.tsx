@@ -1,6 +1,7 @@
 import { playbackFlowOf } from '../document/sequenceFlow';
 import { CONNECTOR_STYLE, connectorStrokePath, styledConnectorPath } from '../render/connectorStyle';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { returnFocusToCanvas } from './canvasFocus';
 import { LIMITS } from '../document/limits';
 import { reconnectProblem } from '../document/reconnect';
 import { anchorOnShape } from '../document/queueGeometry';
@@ -33,7 +34,7 @@ import {
 import { routingPlan } from '../edges/bundles';
 import { labelGroupPlan, labelLeader, pointAlong } from '../edges/labelGroups';
 import { replyLabelPlan } from '../edges/replyLabels';
-import { CAPTION_PADDING_X, CAPTION_PADDING_Y, LABEL_PADDING_X, LABEL_PADDING_Y, fittedConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from '../edges/labelLayout';
+import { CAPTION_PADDING_X, CAPTION_PADDING_Y, LABEL_PADDING_X, LABEL_PADDING_Y, fittedConnectorCaption, labelChipSize, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { compensationLabelParts } from '../edges/compensationMarker';
 import { compensationDisplayLabel } from '../document/compensation';
@@ -66,7 +67,7 @@ import { pointInBox } from '../lib/math';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { EdgeBendHandles, type BendPreview } from './EdgeBendHandles';
 import { translateWaypoints } from '../edges/waypoints';
-import { computeEdgeRoutes, edgeRoutes, routedCaption, searchAllowed, type EdgeRouteInputs, type EdgeRoutes } from '../edges/edgeRoutes';
+import { computeEdgeRoutes, edgeRoutes, routedCaption, routedLabel, searchAllowed, type EdgeRouteInputs, type EdgeRoutes } from '../edges/edgeRoutes';
 import { endpointPlan } from '../edges/endpoints';
 import { sequenceAnchorRect } from '../edges/sequenceAnchors';
 import { separationPlan } from '../edges/separation';
@@ -424,13 +425,30 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const sourceNode = useInternalNode(edge?.source ?? '');
   const targetNode = useInternalNode(edge?.target ?? '');
 
+  // Enter or Escape finishes an edit with its field still focused, and the field unmounts: focus fell
+  // to <body>, where a screen reader lost its place and the next Tab skipped the canvas. It goes back
+  // to the canvas, as a shape's name edit does (`DraftNodeView`), only once the field has gone:
+  // focused while it is still there, its blur would commit what Escape is reverting. A blur (a click
+  // or Tab elsewhere) has already put focus where it was going, and is left alone.
+  const returnFocus = useRef(false);
   const [editing, setEditing] = useState(false);
-  const stopEditing = useCallback(() => setEditing(false), []);
+  const stopEditing = useCallback((byKey = false) => {
+    returnFocus.current = byKey;
+    setEditing(false);
+  }, []);
   // The condition chip is editable in place exactly like the label chip: anything a diagram shows
   // on a connector, the person looking at it can double-click and change — a route rule shouldn't
   // send them hunting for the inspector's own Condition field.
   const [editingCondition, setEditingCondition] = useState(false);
-  const stopEditingCondition = useCallback(() => setEditingCondition(false), []);
+  const stopEditingCondition = useCallback((byKey = false) => {
+    returnFocus.current = byKey;
+    setEditingCondition(false);
+  }, []);
+  useLayoutEffect(() => {
+    if (editing || editingCondition || !returnFocus.current) return;
+    returnFocus.current = false;
+    returnFocusToCanvas(null);
+  }, [editing, editingCondition]);
   const editRequested = useUiStore((state) => state.editRequestId === id);
   const compensating = Boolean(edge?.compensationFor);
   const isPortal = Boolean(edge?.portal);
@@ -637,7 +655,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     source: sequenceAnchorRect(committedSource, effectiveSourceRect, dragOverride?.endpoint === 'source' ? undefined : edge.sourceAnchor),
     target: sequenceAnchorRect(committedTarget, effectiveTargetRect, dragOverride?.endpoint === 'target' ? undefined : edge.targetAnchor),
     routing: edge.routing,
-    label: displayLabel,
+    // The words its chip shows — a named recovery action's name — as every other reader routes them.
+    label: routedLabel(edge),
     // Its caption is placed with its size in view too, as every other renderer routes it.
     ...(routedCaptionText ? { caption: routedCaptionText } : {}),
     // A dragged end's persisted anchor is set aside (see `effectiveSourceRect` above).
@@ -725,9 +744,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // `filter`, never set inline — can safely live there). The active step
   // wears its flow's own accent when it has one (`presentationAccent`,
   // already folded into `color`); with no accent set, it falls back to the
-  // plain selection colour exactly as it always has.
+  // plain selection colour exactly as it always has. A mark, not words:
+  // `selectionMark`, which keeps its hue on a style's canvas.
   const strokeColor =
-    selected || attachTarget || spliceTarget ? theme.selection : isActiveStep ? (presentationAccent ?? theme.selection) : color;
+    selected || attachTarget || spliceTarget ? theme.selectionMark : isActiveStep ? (presentationAccent ?? theme.selectionMark) : color;
   // Condition and cadence share one chip, worded once for the canvas and the export (`edgeMetaText`).
   const conditionText = edgeMetaText(edge);
 
@@ -747,10 +767,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // same box `edges/describe.ts` measures for the export.
   const ownWords = ((): OccupiedRect | undefined => {
     if (hasLabel && !hidesOwnLabel && labelLayout && !sharedLabel) {
-      // `.dc-edge-label`: 3px 6px padding, and — for a numbered step — a 16px badge plus a 6px gap.
-      const stepWidth = hasStep ? 16 + 6 : 0;
-      const w = (recoveryLayout?.width ?? labelLayout.width) + stepWidth + LABEL_PADDING_X * 2;
-      const h = Math.max(recoveryLayout?.height ?? labelLayout.height, hasStep ? 16 : 0) + LABEL_PADDING_Y * 2;
+      // `.dc-edge-label`: its padding, and — for a numbered step — its badge and gap.
+      const { width: w, height: h } = labelChipSize({ width: recoveryLayout?.width ?? labelLayout.width, height: recoveryLayout?.height ?? labelLayout.height }, hasStep);
       const { left, top } = labelChipRect(chipSide, chipX, chipY, w, h);
       return { left, top, width: w, height: h };
     }
@@ -916,7 +934,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           one a click takes" reads without looking selected. Mounted only while hovered — canvas
           chrome, never exported (`edges/describe.ts` has no counterpart, deliberately). */}
       {hoverShown && (
-        <path className="dc-edge-hover" d={drawnPath} fill="none" pointerEvents="none" stroke={theme.selection} strokeLinecap="round" />
+        <path className="dc-edge-hover" d={drawnPath} fill="none" pointerEvents="none" stroke={theme.selectionMark} strokeLinecap="round" />
       )}
       <RouteMorph id={id} line={lineRef} styledPath={styledPath} still={transient || usesHandDrawnArrow || arriving || Boolean(portal)} />
       <path
@@ -1037,8 +1055,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           unmount as soon as the pointer leaves, a gesture starts or presentation takes over. */}
       {hoverShown && !routeUnsettled && outageReading === null && (
         <>
-          <path className="dc-edge-trace" d={drawnPath} pathLength={1} fill="none" stroke={theme.selection} strokeWidth={2} pointerEvents="none" />
-          {responseDrawnPath && <path className="dc-edge-trace dc-edge-trace-reply" d={responseDrawnPath} pathLength={1} fill="none" stroke={theme.selection} strokeWidth={1.6} pointerEvents="none" />}
+          <path className="dc-edge-trace" d={drawnPath} pathLength={1} fill="none" stroke={theme.selectionMark} strokeWidth={2} pointerEvents="none" />
+          {responseDrawnPath && <path className="dc-edge-trace dc-edge-trace-reply" d={responseDrawnPath} pathLength={1} fill="none" stroke={theme.selectionMark} strokeWidth={1.6} pointerEvents="none" />}
         </>
       )}
 
@@ -1083,7 +1101,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           cx={labelX}
           cy={labelY}
           r={3.5}
-          fill={theme.selection}
+          fill={theme.selectionMark}
           // Punched out of the line rather than drawn on top of it — the dot sits on a connector
           // already tinted with the selection colour, and without this it reads as a thickening of
           // the stroke instead of as a point on it.
@@ -1260,9 +1278,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
                   if (isImeKeyEvent(event)) return;
                   if (event.key === 'Enter') {
                     useEditorStore.getState().updateEdgeLabel(edge.id, event.currentTarget.value.trim());
-                    stopEditing();
+                    stopEditing(true);
                   }
-                  if (event.key === 'Escape') stopEditing();
+                  if (event.key === 'Escape') stopEditing(true);
                 }}
               />
             ) : (
@@ -1358,9 +1376,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
                     if (isImeKeyEvent(event)) return;
                     if (event.key === 'Enter') {
                       useEditorStore.getState().setEdgeCondition(edge.id, event.currentTarget.value.trim());
-                      stopEditingCondition();
+                      stopEditingCondition(true);
                     }
-                    if (event.key === 'Escape') stopEditingCondition();
+                    if (event.key === 'Escape') stopEditingCondition(true);
                   }}
                 />
               ) : (

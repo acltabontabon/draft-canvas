@@ -37,15 +37,28 @@ export async function backUpLibrary(repository: DraftRepository, notify: Notify)
   }
 }
 
+/** Said when a file handed to Restore or Import can't be read as an archive at all. */
+export const NOT_A_BACKUP = 'That file isn’t a Draft Canvas backup, or it’s damaged. Nothing was restored.';
+
 /** Reads a backup ZIP into the repository; the caller refreshes the Library afterwards. */
 export async function restoreLibrary(repository: DraftRepository, file: File, notify: Notify): Promise<RestoreResult | null> {
   try {
     const { describeRestore, restoreBackup } = await import('../../storage/backup');
-    const result = await restoreBackup(repository, new Uint8Array(await file.arrayBuffer()));
+    let result: RestoreResult;
+    try {
+      result = await restoreBackup(repository, new Uint8Array(await file.arrayBuffer()));
+    } catch {
+      // Only reading the archive itself throws (each entry's own trouble is counted, not thrown), and
+      // nothing is written before it has been read. What the reader says ("the end-of-central-
+      // directory record is missing") was shown as it was: true, and no help to the person holding
+      // the file, at the moment something has already gone wrong.
+      notify(NOT_A_BACKUP, 'error');
+      return null;
+    }
     notify(describeRestore(result), result.restored === 0 && result.skipped.length > 0 ? 'error' : 'info');
     return result;
   } catch (error) {
-    notify(error instanceof Error ? error.message : 'That file is not a Draft Canvas backup.', 'error');
+    notify(error instanceof Error ? error.message : NOT_A_BACKUP, 'error');
     return null;
   }
 }

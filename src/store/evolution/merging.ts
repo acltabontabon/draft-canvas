@@ -26,7 +26,7 @@ import { historyService, historySignature } from './bridge';
 import { historyCompute } from './client';
 import { useEvolutionStore, type MergeSession } from './evolutionStore';
 import { closeLens, loadTimeline, snapshotOf } from './historyView';
-import type { Outcome } from './operations';
+import { unrecordedRefusal, type Outcome } from './operations';
 
 const SESSION = 'merge-session';
 
@@ -92,6 +92,9 @@ export async function startMerge(source: string | null, resume?: { opId: string;
 
     const live = fileOf(useEditorStore.getState());
     const compute = historyCompute();
+    // The merge, or a fast-forward, replaces what is on screen: it must be what `ours` holds.
+    const oursBlob = (await compute.prepare(live)).blobId;
+    if (oursBlob !== context.tipBlob) return unrecordedRefusal('bringing that in');
     if (await store.isAncestor(ours, theirs)) return fastForward(theirs, sourceName(source, remote));
 
     const bases = await store.mergeBases(ours, theirs);
@@ -113,7 +116,6 @@ export async function startMerge(source: string | null, resume?: { opId: string;
     const [oursFile, theirsFile] = await Promise.all([snapshotOf(ours), snapshotOf(theirs)]);
     const choices = resume?.choices ?? {};
     const result = await compute.merge(base, oursFile, theirsFile, Object.entries(choices));
-    const oursBlob = (await compute.prepare(live)).blobId;
     const opId = resume?.opId ?? randomId('m');
     const session: MergeSession = {
       opId,

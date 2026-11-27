@@ -1,13 +1,14 @@
 # Performance
 
-Reproducible Chromium benchmarks against the production build.
+How to measure Draft Canvas's speed and memory, and the budgets a release must meet. Every benchmark
+runs in Chromium against the production build.
 
 | Command | Measures |
 | --- | --- |
-| `npm run perf` | Load time, JS heap and a 40-step drag on real starter-based diagrams |
+| `npm run perf` / `perf:stress` | Load time, JS heap and a 40-step drag on real starter-based diagrams; `perf:stress` adds a larger workload |
 | `npm run perf:interaction` | Frame times and input latency while panning, zooming, dragging and connecting |
 | `npm run perf:lifecycle` | Opening, exporting, a 100-diagram Library, and memory over long sessions |
-| `npm run perf:check` | The release gate; see [Performance acceptance](reliability.md#performance-acceptance) |
+| `npm run perf:check` | The release gate; see [Performance acceptance](#performance-acceptance) |
 
 ## Latest results
 
@@ -57,42 +58,36 @@ How long a diagram takes to appear after you choose it, the longest stretch the 
 
 <!-- performance-results:end -->
 
+## Performance acceptance
+
+The supported workload is 200 shapes and 300 connectors, with nested boundaries, rooms, notes and
+attachments. It is a regression target, not an import limit or a 60 Hz promise; larger diagrams work
+but may lag.
+
+`npm run perf:check` takes medians of three iterations after warmup. It fails on any limit in
+[`benchmark/budgets.ts`](../../benchmark/budgets.ts), on an idle frame floor over 25 ms, and on any
+missing, invalid or broken measurement. Tighten limits only from repeatable evidence.
+
+The [Performance](../../.github/workflows/performance.yml) workflow runs the gate on tag pushes only,
+on `ubuntu-24.04-arm` (the x64 pool varied between CPU generations), and keeps the interaction and
+lifecycle reports for 14 days. Manual runs can add larger workloads and long sessions.
+
 ## Load and memory
 
 ```bash
-npm run perf          # Typical and Large, about 1–3 minutes
-npm run perf:stress   # adds the Stress workload
+npm run perf                 # Typical and Large, about 1–3 minutes
+npm run perf:stress          # adds the Stress workload
+npm run perf:save-baseline   # later runs print differences against benchmark/baseline.json
 ```
 
-Both build, serve and measure in headless Chromium, print a summary, and overwrite
-`benchmark/results/latest.json`. With two or more workloads they also write
-`benchmark/memory-chart.svg`.
-
-Workloads are tiled from five real starters (microservices, event-driven, CQRS, hexagonal, saga),
-frozen as they were when starters moved to the gallery (`tests/fixtures/starters-v1/`), in
-`benchmark/workloads/fixtures/`. Regenerate them with `npm run perf:regen-fixtures` when those
-change.
-
-| Workload | Nodes / edges |
-| --- | --- |
-| Typical | 90 / 73 |
-| Large | 225 / 182 |
-| Stress (`perf:stress` only) | 500 / 398 |
-
-- **Load:** import to render, until the node count matches and two idle frames pass.
-- **JS heap:** `JSHeapUsedSize` after a forced GC. JS heap only, not process memory.
-- **Drag:** one 40-step drag of the first node, one step per frame, undone after each run. About
-  670 ms is the gesture's length at 60 Hz, not lag.
-- Each value is the median of 3 runs after 1 warmup. The JSON also keeps `minMs` and `maxMs`.
-
-### Baseline
-
-```bash
-npm run perf:save-baseline
-```
-
-Saves `benchmark/baseline.json` (committed deliberately). Later `perf` and `perf:stress` runs print
-percentage differences against it. Informational only; a laptop baseline does not compare with CI.
+- Workloads (`benchmark/workloads/fixtures/`) are tiled from five starters in the frozen old catalog
+  (`tests/fixtures/starters-v1/`). Regenerate them with `npm run perf:regen-fixtures` when those
+  change.
+- JS heap is `JSHeapUsedSize` after a forced GC: the JS heap only, not process memory.
+- The drag's ~670 ms is the gesture's length at 60 Hz, not lag.
+- `benchmark/baseline.json` and `benchmark/memory-chart.svg` (redrawn when a run measures two or more
+  workloads) are committed on purpose. The baseline is informational: a laptop baseline does not
+  compare with CI.
 
 ## Interaction
 
@@ -101,59 +96,26 @@ npm run perf:interaction                                          # all sizes an
 npm run perf:interaction -- --sizes medium --scenarios drag-single,zoom-wheel
 ```
 
-Drives the production build with real mouse and keyboard input, one pointer event per frame.
-Fixtures come from a seeded generator in `benchmark/workloads/scale.ts`, so each size is identical
-every run. They include boundaries three deep, crossing connectors, notes and code, and rooms.
-
-| Size | Shapes / connectors | Rooms |
-| --- | --- | --- |
-| Small | 50 / 75 | 1 |
-| Medium | 200 / 300 | 3 |
-| Large | 500 / 800 | 6 |
-| Stress | 1,000 / 1,500 | 10 |
-
-These are investigation sizes, not capacity claims.
-
-Scenarios (`benchmark/interaction/scenarios.ts`): `pan-drag`, `pan-wheel`, `zoom-wheel`,
-`drag-single`, `drag-commit`, `drag-multi`, `drag-boundary`, `drag-note`, `connect`, `hover-sweep`,
-`select-clicks`, `type-label`, `panels`, `depth-enter`, `depth-exit`. Each has an unmeasured prepare,
-a measured run, and a tail that captures debounced work such as autosave.
-
-`drag-commit` drops one shape and reports the worst frame and longest long task after the pointer is
-released, which is when a drop plans every connector again; the drag's own percentiles never include
-it. It prints on its own line under the table, and `--compare` and `--against` runs show before and
-after.
-
-Reported (`benchmark/interaction/stats.ts`): frame-time p50/p95/p99/max, share of frames over 20 ms
-and 33 ms, frames over 50 ms, input latency, long tasks and Long Animation Frames, main-thread busy
-share, script/layout/style time, and page errors.
-
-### Looking inside and back out
-
-```bash
-npm run perf:interaction -- --sizes small,medium,large --scenarios depth-enter,depth-exit
-```
-
-The depth scenarios use a parent and an inside room with the same shape and connector counts as the
-selected size (`benchmark/workloads/depth.ts`), and time each direction from the keyboard shortcut
-until the transition is gone. Look at maximum frame time and key-to-next-frame latency as well as p95,
-since a room swap can stall once before an otherwise smooth animation. Use `--against` to compare
-builds in one run; results are comparable only within this harness version.
-
-Reading results:
+Fixtures come from a seeded generator (`benchmark/workloads/scale.ts`), so each size is identical
+every run. The sizes are for investigation, not capacity claims. Scenarios are listed in
+`benchmark/interaction/scenarios.ts`.
 
 - 16.7 ms is the 60 Hz vsync floor, not headroom. Read it with the busy share.
-- Compare runs of this harness only with each other.
+- Compare runs of this harness only with each other. For a before/after comparison, use `--against`
+  to measure both builds interleaved.
 - Each result records the idle frame floor and flags anything over 20 ms. A laptop on low battery
   caps Chromium at 30 fps; use `--uncap-frames` when that cannot be avoided.
+- `drag-commit` reports the worst frame and longest long task after the drop, when every connector is
+  planned again; the drag's own percentiles never include it.
+- For `depth-enter` and `depth-exit`, look at maximum frame time and key-to-next-frame latency as well
+  as p95: a room swap can stall once before an otherwise smooth animation.
 
 | Flag | Use |
 | --- | --- |
 | `--dist <dir>` | Measure a build made elsewhere |
-| `--against <dist> --against-label <name>` | Measure another build interleaved, scenario by scenario. Use this for any before/after comparison |
+| `--against <dist> --against-label <name>` | Measure another build interleaved, scenario by scenario |
 | `--compare a.json b.json` | Print two saved results side by side |
-| `--profile <dir>` | CPU-profile the first measured iteration. Build with `vite build --minify false` for readable names |
-| `--iterations`, `--warmup`, `--out`, `--skip-build`, `--headed` | Run control |
+| `--profile <dir>` | CPU-profile the first measured iteration; build with `vite build --minify false` for readable names |
 
 ## Lifecycle
 
@@ -162,36 +124,16 @@ npm run perf:lifecycle                                    # load, export, librar
 npm run perf:lifecycle -- --only load,library --sizes medium
 ```
 
-`benchmark/lifecycle-cli.ts` measures:
+Memory is judged by slope, not a snapshot: after each soak cycle the harness forces GC, samples JS
+heap, DOM nodes and listeners, and fits a line. A filled cache flattens; a leak keeps climbing. The
+soaks exist to catch leaks such as memoized plans that keep scratch data through closures
+([AGENTS.md](../../AGENTS.md), "Canvas and performance").
 
-- Cold **load** of each size, with its longest task.
-- **SVG and PNG export** through the real dialog.
-- The **Library with 100 diagrams**: time until every row and fingerprint shows.
-- Two **soaks**: open, edit and switch diagrams 25 times; drag a shape out and back 150 times, which
-  fills undo history and then trims it.
-
-Memory is judged by slope, not a snapshot. After each cycle the soak forces GC and samples JS heap,
-DOM nodes and listeners, then fits a line. A filled cache flattens; a leak keeps climbing.
-
-The soaks exist to catch leaks, such as memoized plans that retain scratch data through closures
-(AGENTS.md, "Canvas and performance"). Use Playwright locators rather than `page.waitForSelector` when
-waiting; its handle pins canvases and looks like a DOM leak.
+When waiting, use Playwright locators, not `page.waitForSelector`: its handle pins canvases and looks
+like a DOM leak.
 
 ## Publishing results
 
-```bash
-npm run perf:publish
-```
-
-Run `npm run perf` first. `benchmark/publish-results.ts` rewrites only the region between
-`<!-- performance-results:start -->` and `<!-- performance-results:end -->`, from
-`benchmark/results/latest.json`. It adds "While you work" when `benchmark/results/interaction.json`
-exists and "Opening one, and working for a long time" when `benchmark/results/lifecycle.json`
-exists. It fails if the markers are missing.
-
-## CI
-
-The [Performance](../../.github/workflows/performance.yml) workflow runs the `perf:check` steps on
-tag pushes and keeps the interaction and lifecycle reports for 14 days. Pull requests and `main`
-pushes skip it. Manual runs can add larger workloads and long sessions. See
-[Performance acceptance](reliability.md#performance-acceptance).
+Run `npm run perf`, plus `perf:interaction` and `perf:lifecycle` for their sections, then
+`npm run perf:publish`. It rewrites only the region between the `performance-results` markers and
+fails if they are missing.

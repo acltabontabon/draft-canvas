@@ -6,8 +6,8 @@
  */
 import { categoryOf, defaultsToResponse, inferRelationship, type NodeCategory } from '../document/connectorSemantics';
 import { relationLabel } from '../document/edgeSemantics';
-import { itemsAt, messagesOf, slotOf, type SeqSlot } from '../document/sequenceModel';
-import type { DraftEdge, DraftSequence, SeqItem, SeqMessage, SeqMessageKind, SeqParticipant } from '../document/types';
+import { itemsAt, messagesOf, saidBefore, slotOf, type SeqSlot } from '../document/sequenceModel';
+import type { DraftEdge, DraftSequence, SeqMessage, SeqMessageKind, SeqParticipant } from '../document/types';
 import { executionsOf } from './executions';
 
 const participantOf = (sequence: DraftSequence, id: string): SeqParticipant | undefined => sequence.participants.find((participant) => participant.id === id);
@@ -85,39 +85,6 @@ export function labelSuggestions(
     if (other.id !== message.id && other.from === message.from && other.to === message.to) add(other.label);
   }
   return out.slice(0, 5);
-}
-
-/**
- * Everything said by the time a slot is reached, in order, the way the sequence runs: what comes
- * before it in its own list and in each list around it. The other branches of a frame it is inside
- * are left out — "declined" is not something that has happened in "approved".
- */
-function saidBefore(sequence: DraftSequence, slot: SeqSlot): SeqMessage[] {
-  interface Step {
-    items: readonly SeqItem[];
-    upTo: number;
-  }
-  const find = (items: readonly SeqItem[], operandId: string | null): Step[] | null => {
-    if (operandId === slot.operandId) return [{ items, upTo: slot.index }];
-    for (let at = 0; at < items.length; at += 1) {
-      const item = items[at]!;
-      if (item.t !== 'fragment') continue;
-      for (const branch of item.operands) {
-        const below = find(branch.items, branch.id);
-        if (below) return [{ items, upTo: at }, ...below];
-      }
-    }
-    return null;
-  };
-  const out: SeqMessage[] = [];
-  const all = (items: readonly SeqItem[]) => {
-    for (const item of items) {
-      if (item.t === 'message') out.push(item);
-      else if (item.t === 'fragment') for (const branch of item.operands) all(branch.items);
-    }
-  };
-  for (const step of find(sequence.items, null) ?? []) all(step.items.slice(0, step.upTo));
-  return out;
 }
 
 /**

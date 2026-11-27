@@ -1,6 +1,6 @@
 import { openGallery } from './library';
 import { expect, test, type Page } from '@playwright/test';
-import { cameraAtRest, create, newCanvas, nextFrames } from './canvas';
+import { cameraAtRest, create, newCanvas, nextFrames, presentButton } from './canvas';
 
 async function command(page: Page, name: string) {
   await page.keyboard.press('ControlOrMeta+k');
@@ -106,7 +106,7 @@ test('Appearance opens beside the canvas from the status bar and the right-click
   await expect(page.locator('.dc-status')).toBeHidden();
   await expect(page.locator('.dc-toolbar-lead')).toBeVisible();
   // Done brings it all back.
-  await panel.getByRole('button', { name: 'Close appearance', exact: true }).click();
+  await panel.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(panel).toBeHidden();
   await expect(page.getByRole('button', { name: 'Share', exact: true })).toBeVisible();
   await expect(button).toHaveAttribute('aria-pressed', 'false');
@@ -255,7 +255,7 @@ test('long presentation details remain scrollable within the camera footprint', 
     state.addEdgeToFlow(nextFlow, returnEdge.id, text);
     state.setSelectedFlowId(flow);
   }, { text: caption, title, nextTitle });
-  await page.getByRole('button', { name: 'Present', exact: true }).click();
+  await presentButton(page).click();
   await page.keyboard.press('ArrowRight');
   const details = page.getByRole('region', { name: 'Step details' });
   await expect(page.locator('.dc-explain-flow-title')).toHaveText(title);

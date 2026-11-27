@@ -54,6 +54,8 @@ export function useMakeRoom(paneRef: RefObject<HTMLDivElement | null>): void {
       if (was?.axis) {
         if (keep) useEditorStore.getState().endInteraction('Make room');
         else useEditorStore.getState().abandonInteraction();
+        // Only what this drag took: the flag is shared with every other gesture.
+        useUiStore.getState().setInteractionActive(false);
       }
       if (was && pane.hasPointerCapture(was.pointerId)) pane.releasePointerCapture(was.pointerId);
       useUiStore.getState().setMakeRoom(null);
@@ -81,6 +83,13 @@ export function useMakeRoom(paneRef: RefObject<HTMLDivElement | null>): void {
         active.axis = dx >= dy ? 'x' : 'y';
         dragged = true;
         useEditorStore.getState().beginInteraction('Make room');
+        // The room as the drag's own step found it: a change that landed since the press (a
+        // collaborator's) would otherwise be pushed back out by every frame.
+        active.base = useEditorStore.getState().document;
+        // A gesture in flight, as every drag says: the keyboard, paste and shape keys stand down
+        // (`interactionActive`). Without it a Delete or shape key mid-drag was applied, then lost at the
+        // next frame, which rebuilds the room from where the drag began, with no undo step.
+        useUiStore.getState().setInteractionActive(true);
       }
       if (frame === 0) frame = requestAnimationFrame(push);
     };
@@ -128,7 +137,10 @@ export function useMakeRoom(paneRef: RefObject<HTMLDivElement | null>): void {
       window.removeEventListener('keydown', onKeyDown, true);
       // After the click that follows the releasing pointerup has been swallowed.
       window.setTimeout(() => pane.removeEventListener('click', onClick, true), 0);
-      if (active?.axis) useEditorStore.getState().endInteraction('Make room');
+      if (active?.axis) {
+        useEditorStore.getState().endInteraction('Make room');
+        useUiStore.getState().setInteractionActive(false);
+      }
       if (frame !== 0) cancelAnimationFrame(frame);
       active = null;
     };

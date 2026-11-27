@@ -153,15 +153,24 @@ export const CANVAS_SWATCHES: readonly { label: string; colour: string }[] = [
  * it, and each named colour is the built-in one for that side, leaned toward the canvas and
  * pushed until it clears the floors a style is held to. A canvas of one's own is one colour, so
  * the result is a single scheme: the diagram is drawn on it in light and in dark alike.
+ *
+ * Every colour has room for this. Pure black and pure white are at least 4.58:1 from any colour
+ * (their two contrasts with it multiply to 21), which clears every floor, so a colour a few steps
+ * leave short of its floor is the pure one. Once the side was judged by a near-black and the steps
+ * could stop short: a band of mid-tones (Fluent's and Bootstrap's blues among them) missed the
+ * floor for words by a hair, and the diagram was drawn on the built-in canvas instead.
  */
 export function schemesForCanvas(canvas: string): Schemes {
-  const dark = contrast('#ffffff', canvas) >= contrast('#0b0d10', canvas);
+  const dark = contrast('#ffffff', canvas) >= contrast('#000000', canvas);
+  // What words and lines lean toward on a light canvas keeps the cool of the built-in words.
   const ink = dark ? '#ffffff' : '#0b0d10';
+  const pure = dark ? '#ffffff' : '#000000';
   const base = dark ? DARK : LIGHT;
-  const reach = (colour: string, against: string, floor: number): string => {
+  /** `colour` pushed toward the ink until it clears `floor` by `margin`, and never left under `floor`. */
+  const reach = (colour: string, against: string, floor: number, margin: number): string => {
     let out = colour;
-    for (let step = 0; step < 8 && contrast(out, against) < floor; step += 1) out = mix(out, ink, 0.3);
-    return out;
+    for (let step = 0; step < 8 && contrast(out, against) < floor + margin; step += 1) out = mix(out, ink, 0.3);
+    return contrast(out, against) < floor ? pure : out;
   };
   const accents = {} as Record<Accent, AccentColours>;
   for (const accent of ACCENTS) {
@@ -169,19 +178,21 @@ export function schemesForCanvas(canvas: string): Schemes {
     const fill = mix(from.fill, canvas, 0.22);
     accents[accent] = {
       fill,
-      line: reach(from.line, canvas, CONTRAST.line + 0.4),
-      text: reach(from.text, fill, CONTRAST.label + 0.5),
-      chip: reach(from.chip, canvas, CONTRAST.line + 0.4),
+      line: reach(from.line, canvas, CONTRAST.line, 0.4),
+      text: reach(from.text, fill, CONTRAST.label, 0.5),
+      // Words, not only a mark: a Text in this colour is written in its chip, and a banner writes the
+      // canvas's colour on it. Held to the line floor alone, a banner read at 4.1:1 on Slate.
+      chip: reach(from.chip, canvas, CONTRAST.text, 0.3),
     };
   }
   const edgeLabelBg = mix(canvas, dark ? '#000000' : '#ffffff', 0.35);
   const scheme: StyleScheme = {
     canvas,
     grid: mix(canvas, ink, 0.13),
-    text: reach(mix(canvas, ink, 0.9), canvas, CONTRAST.text + 2),
-    textMuted: reach(mix(canvas, ink, 0.62), canvas, CONTRAST.muted + 1),
-    edge: reach(mix(canvas, ink, 0.5), canvas, CONTRAST.line + 0.6),
-    edgeText: reach(mix(canvas, ink, 0.68), edgeLabelBg, CONTRAST.muted + 1),
+    text: reach(mix(canvas, ink, 0.9), canvas, CONTRAST.text, 2),
+    textMuted: reach(mix(canvas, ink, 0.62), canvas, CONTRAST.muted, 1),
+    edge: reach(mix(canvas, ink, 0.5), canvas, CONTRAST.line, 0.6),
+    edgeText: reach(mix(canvas, ink, 0.68), edgeLabelBg, CONTRAST.muted, 1),
     edgeLabelBg,
     codeBg: mix(canvas, ink, 0.05),
     codeBorder: mix(canvas, ink, 0.14),

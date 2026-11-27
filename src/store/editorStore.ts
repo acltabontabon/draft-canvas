@@ -5,7 +5,7 @@ import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
 // UI feedback for document limits and rejected reconnects stays outside document operations.
 import type { ArrangePreset } from '../agent/layoutPlan';
 import type { Job, JobResult } from '../agent/jobs';
-import { PRESENTATION_AT_REST, useUiStore, type ArrangePreview, type TidyNothing, type TidyPreview } from './uiStore';
+import { editingLockedIn, PRESENTATION_AT_REST, useUiStore, type ArrangePreview, type TidyNothing, type TidyPreview } from './uiStore';
 import { edgeIndex, nodeIndex, selectSequenceMessage } from './selectors';
 import {
   createAttachment,
@@ -153,7 +153,7 @@ import { makeRoom as makeRoomOp, type RoomPush } from '../document/makeRoom';
 import { fixedIds } from '../document/held';
 import { replicasField, splitReplicaCount } from '../document/replicas';
 import { CONVERTIBLE_TYPE_NAMES, convertNodeType, isConvertibleType, type ConvertibleType } from '../document/convert';
-import { bridgeProblems, canSpliceInto, removeAndBridge, spliceNodeIntoEdge } from '../document/splice';
+import { bridgeThrough, canSpliceInto, removeAndBridge, spliceNodeIntoEdge } from '../document/splice';
 import type {
   Accent,
   AttachableType,
@@ -208,6 +208,7 @@ import {
   type Selection,
 } from '../history/HistoryStack';
 import type { SaveState } from '../storage/autosave';
+import { idsUnique, withinLimits } from '../collab/limits';
 import { changeKeys, revertKeys } from '../collab/selective';
 import { withLocalView } from '../collab/localView';
 import { isSharedEditing, useCollabStore } from './collabStore';
@@ -372,7 +373,8 @@ export interface EditorStore {
    * What the editor was looking at when the presentation started, so leaving one puts the
    * presenter back rather than wherever the last flow happened to end. Transient session state:
    * never saved, never in history, and dropped by `resetViewSession` so a different document can
-   * never be handed a selection from this one. `null` whenever nothing is being presented.
+   * never be handed a selection from this one (moving between rooms while presenting keeps it).
+   * `null` whenever nothing is being presented.
    *
    * The selection half is restored here — `setMode` is the one door every exit goes through. The
    * camera lives in React Flow rather than the store, so `EditorScreen` captures and restores that
@@ -1068,6 +1070,25 @@ function linksInStep(before: DraftDocument, after: DraftDocument): DraftDocument
   return synced.shapes.reduce((doc, id) => growArchitectureToFit(doc, id), synced.doc);
 }
 
+/**
+ * One selection at a time: what is chosen beside the selection is put down when the selection no
+ * longer leaves room for it. `setSelection` and every place the store installs a selection itself
+ * (an edit that names one, undo and redo, a gesture given up) go through here. Those used to skip
+ * it, and the next Delete or arrow key acted on a message inside a sequence that was no longer
+ * selected, or erased chosen strokes along with the shape just added. Writes the UI store, so it is
+ * called outside updaters.
+ */
+function settleSubSelections(selection: Selection): void {
+  const ui = useUiStore.getState();
+  // What is selected inside a sequence belongs to a selection of that sequence alone.
+  const inside = ui.sequenceFocus;
+  if (inside && !(selection.nodes.length === 1 && selection.edges.length === 0 && selection.nodes[0] === inside.nodeId)) {
+    useUiStore.setState({ sequenceFocus: null, sequenceEdit: null });
+  }
+  // Choosing shapes or connectors puts any chosen sketch strokes down.
+  if (selection.nodes.length > 0 || selection.edges.length > 0) ui.setInkSelection([]);
+}
+
 /** After an edit, an undo or someone else's change: what was selected inside a sequence may be gone. */
 function closeStaleSequenceFocus(doc: DraftDocument): void {
   const ui = useUiStore.getState();
@@ -1188,6 +1209,29 @@ export function fileOf(state: FileState): DraftDocument {
 /** The whole file as it should be saved or exported, camera included. */
 export function fileWithLiveViewport(state: FileState & Pick<EditorStore, 'liveViewport'>): DraftDocument {
   return fileOf({ ...state, document: documentWithLiveViewport(state) });
+}
+
+/**
+ * The room to show after an edit took its last shape, and the file it is part of; `null` for any
+ * other edit. A room exists only while it holds a shape (`depth/tree.ts`), so the room has just left
+ * the file with its sketches, flows and level. The edited view still carried them: the canvas kept
+ * drawing the sketches and the Flows panel listing the flows, every edit to them was an undo step
+ * that changed nothing, and they vanished on the next move or reload. Shown instead is the room as
+ * the file now has it, with that file as `outer`, so `fileOf` hands back the very file recorded.
+ */
+function emptiedRoom(state: FileState, next: DraftDocument): { view: DraftDocument; file: DraftDocument } | null {
+  if (state.path.length === 0 || next.nodes.length > 0) return null;
+  const file = fileOf({ ...state, document: next });
+  const view = viewOf(file, state.path);
+  return view ? { view, file } : null;
+}
+
+/** Says what went with a room's last shape (`emptiedRoom`); strokes chosen there are let go of. */
+function sayRoomEmptied(edited: DraftDocument): void {
+  const ui = useUiStore.getState();
+  if (ui.inkSelection.length > 0) ui.setInkSelection([]);
+  const gone = [inkOf(edited).length > 0 ? 'sketches' : '', edited.flows.length > 0 ? 'flows' : ''].filter(Boolean);
+  if (gone.length > 0) ui.notify(`A room goes with its last shape, so its ${gone.join(' and ')} went too. Undo brings them back.`);
 }
 
 /**
@@ -1428,13 +1472,13 @@ function recorded(
 
 /**
  * Whether the diagram takes no edits just now: opened read-only from a share link, or showing a
- * flow being traced. What `apply` and the actions that write the file themselves all ask.
+ * flow being traced. What `apply` and the actions that write the file themselves all ask, and what
+ * chrome offering an edit asks too (`editingLockedIn`).
  */
 function editingLocked(): boolean {
-  const ui = useUiStore.getState();
   // The history lens shows a past revision over the live diagram: an edit made "on" it would land on
   // the hidden live diagram instead, so none is taken while it is open (one guard, not one per tool).
-  return Boolean(ui.readOnly || ui.flowTrace || ui.historyLens);
+  return editingLockedIn(useUiStore.getState());
 }
 
 /** The selection without anything `document` no longer holds — checked by id, not by count: a remote
@@ -1487,7 +1531,8 @@ function selectiveStep(set: SetEditorState, get: GetEditorState, direction: 'und
   const keys = entry.keys ?? changeKeys(entry.before, entry.after);
   const result = direction === 'undo' ? revertKeys(current, entry.after, entry.before, keys) : revertKeys(current, entry.before, entry.after, keys);
   const notify = useUiStore.getState().notify;
-  if (result.blocked) {
+  // What the step puts back meets an id somebody else has used since: it can't come back as it was.
+  if (result.blocked || (result.file !== current && !idsUnique(result.file))) {
     // Dropped rather than kept: left on the stack it would block every step behind it.
     const { past, future } = state.history;
     set({ history: direction === 'undo' ? { past: past.slice(0, -1), future } : { past, future: future.slice(1) } });
@@ -1499,6 +1544,14 @@ function selectiveStep(set: SetEditorState, get: GetEditorState, direction: 'und
     notify(`Nothing left to ${direction} in "${entry.label}" — someone else changed it since.`);
     return;
   }
+  // Alone, the step and what others added since each fit the file's limits; together they may not.
+  // Committed anyway, the file went to everyone past them: their copies refused it and resynced to a
+  // cut-down one, and it reopened with a repair. The same check `undoChangesOf` makes. Left on the
+  // stack, since it can be taken once there is room again.
+  if (!withinLimits(result.file)) {
+    notify(`Couldn’t ${direction} "${entry.label}" — that would make this diagram too large.`, 'error');
+    return;
+  }
   restoreSnapshot(set, get, {
     history: step.history,
     file: result.file,
@@ -1506,9 +1559,6 @@ function selectiveStep(set: SetEditorState, get: GetEditorState, direction: 'und
     selection: direction === 'undo' ? entry.selectionBefore : entry.selectionAfter,
     flowSession: direction === 'undo' ? entry.flowSessionBefore : entry.flowSessionAfter,
   });
-  const after = get();
-  const selection = selectionThatExists(after.document, after.selection);
-  if (selection !== after.selection) set({ selection });
   if (result.partial) notify(`Part of "${entry.label}" was changed by someone else since, and was left as they made it.`);
   quietIfOneConnector(get().selection);
 }
@@ -1566,11 +1616,15 @@ function restoreSnapshot(
     // room you land in is saved with a view from the one you were standing in.
     ...(moved ? { liveViewport: null } : {}),
     ...(cleared ?? reconcileSessionState(view, s)),
-    // After the reset: the entry's selection belongs to the room the entry was recorded in,
-    // which is the room we just moved to.
-    selection: restored.selection,
+    // After the reset: the entry's selection belongs to the room the entry was recorded in, which
+    // is the room we just moved to — as far as it is still there. Someone else may have removed part
+    // of it since (a selective step), and a file change that took away the room you stood in (an
+    // agent's) is recorded at the root with that room's selection: put back raw, it selected ids the
+    // root has not got, and ⌘D on them said the diagram was too large.
+    selection: selectionThatExists(view, restored.selection),
     ...(restored.flowSession ?? {}),
   }));
+  settleSubSelections(get().selection);
   closeStaleAttachmentDetail(get().document);
   pruneInkSelection(get().document);
 }
@@ -1595,6 +1649,10 @@ function navigateTo(set: SetEditorState, get: GetEditorState, path: DepthPath): 
   const cleared = resetViewSession();
   set((s) => ({
     ...cleared,
+    // Presenting is a way of looking at any room, and what to come back to when it ends goes along:
+    // `setMode` keeps only the part of it the room it ends in holds. Dropped here, a presenter who
+    // followed a Junction or looked inside a shape and came back lost the selection from before.
+    ...(s.mode === 'present' ? { editReturn: s.editReturn } : {}),
     document: view,
     path: inside ? resolved : ROOT_PATH,
     outer: inside ? file : null,
@@ -1637,6 +1695,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // The armed tool goes too — one armed on the canvas just closed would place a node on the
     // next one's first click.
     const cleared = resetViewSession();
+    // So do the tools that outlast a move between rooms on purpose (Make room, the Pencil, a linked
+    // Junction's counterpart in hand) and the Appearance panel: they are about the canvas being
+    // closed. Left, the next diagram's first drag pushed its shapes apart or drew a stroke, and it
+    // opened under the panel. A reload of the same canvas (`keepPath`) keeps them.
+    if (!options?.keepPath) useUiStore.setState({ makeRoom: null, pencil: null, junctionPlacing: null, stylePanelOpen: false });
     set((state) => {
       // A reload of the same file — the desktop shell posts one on every outside edit — should leave you
       // standing where you were, as long as the shape you were inside is still there.
@@ -1673,14 +1736,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Structural sharing means an operation that changed nothing returns the
     // same object, so no-op commands never create a dead undo step.
     if (next === before || shallowEqualDocument(next, before)) return;
+    const emptied = emptiedRoom(state, next);
+    const shown = emptied?.view ?? next;
 
     if (interaction) {
       set((s) => ({
-        document: next,
+        document: shown,
+        ...(emptied ? { outer: emptied.file } : {}),
         selection: options?.selection ?? selectionIn(next, before, s.selection),
         revision: s.revision + 1,
-        ...focusThatSurvives(next, s),
+        ...focusThatSurvives(shown, s),
       }));
+      settleSubSelections(get().selection);
+      if (emptied) sayRoomEmptied(next);
       return;
     }
 
@@ -1688,7 +1756,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // History spans the whole file, not the room the edit happened in: undo has to be able to put
     // back a shape you deleted two rooms ago, and it carries the path so it can take you there.
     const fileBefore = fileOf(state);
-    const fileAfter = fileOf({ ...state, document: next });
+    const fileAfter = emptied?.file ?? fileOf({ ...state, document: next });
     const entry = recorded(label, fileBefore, fileAfter, state.path, state.selection, selectionAfter, {
       coalesceKey: options?.coalesceKey,
       amendKey: options?.amendKey,
@@ -1696,13 +1764,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       flowSessionAfter: options?.flowSessionAfter,
     });
     set((s) => ({
-      document: next,
+      document: shown,
+      ...(emptied ? { outer: emptied.file } : {}),
       selection: selectionAfter,
       revision: s.revision + 1,
-      ...focusThatSurvives(next, s),
+      ...focusThatSurvives(shown, s),
       history: pushEntry(s.history, entry),
     }));
-    closeStaleAttachmentDetail(next);
+    settleSubSelections(selectionAfter);
+    closeStaleAttachmentDetail(shown);
+    if (emptied) sayRoomEmptied(next);
   },
 
   applyToFile(label, recipe, expectedRevision) {
@@ -1821,8 +1892,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!active) return;
     // Only in the room it began in; anywhere else the baseline is no longer ours to put back.
     if (get().document === active.document || !samePath(active.path, get().path)) return;
-    set((s) => ({ document: active.document, selection: active.selection, revision: s.revision + 1 }));
-    closeStaleAttachmentDetail(active.document);
+    // Stamped like any change to what is stored, as `restoreSnapshot` does: the baseline's own stamp
+    // is older than one autosave may have written mid-gesture, and the Library's edited time ran
+    // backwards (a reload's stash comparison misjudged which copy was newer, too).
+    const restored = touch(active.document);
+    set((s) => ({ document: restored, selection: active.selection, revision: s.revision + 1 }));
+    settleSubSelections(active.selection);
+    closeStaleAttachmentDetail(restored);
   },
 
   addNode(input) {
@@ -1877,7 +1953,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!current) return;
     const label = `Draw ${INK_CHOICE_LABEL[choice]}`;
     const top = state.history.past[state.history.past.length - 1];
-    if (top?.amendKey === inkAmendKey(nodeId) && samePath(top.path, state.path)) {
+    // Only while the file is still exactly what the drawing's step left: a collaborator's edit lands
+    // without a step of its own, so that step stays on top, and making the choice again from its
+    // `before` threw their edit away (at the root, every room, open point and the title with it) and
+    // sent the loss to everyone as this person's edit. `finishTextEdit` asks the same.
+    if (top?.amendKey === inkAmendKey(nodeId) && samePath(top.path, state.path) && !top.crossed && top.after === fileOf(state)) {
       // The drawing's own step is still the last one: make the drawing into the new choice from
       // scratch, revising that step — undo still takes it straight back to the strokes.
       const base = viewOf(top.before, state.path);
@@ -2273,7 +2353,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // Stamped like any other change, as `restoreSnapshot` does: the snapshot's own stamp is older
       // than the autosaved "Add text", so the Library's edited time ran backwards and a reload stash
       // of this state was judged stale, bringing the removed node back.
-      const restored = touch(top.before);
+      // And, as there, the camera stays where it is: the snapshot's is the one of its moment, and
+      // clearing the live one saved the camera the diagram was opened with.
+      const restored = touch(withCamerasOf(top.before, fileWithLiveViewport(state)));
       set({
         document: viewOf(restored, top.path) ?? restored,
         outer: state.path.length > 0 ? restored : null,
@@ -2281,8 +2363,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         history: { past: history.past.slice(0, -1), future: [] },
         selection: EMPTY_SELECTION,
         revision: revision + 1,
-        // The camera belongs to the document being replaced, not the one going back in.
-        liveViewport: null,
       });
       return;
     }
@@ -3105,9 +3185,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Connectors picked alongside the shapes go first: a connector the person chose to delete is
     // not one to join through.
     const withoutEdges = removeElements(document, [], selection.edges);
-    if (bridgeProblems(withoutEdges, selection.nodes).length > 0 || !removeAndBridge(withoutEdges, selection.nodes)) {
+    const attempt = bridgeThrough(withoutEdges, selection.nodes);
+    if ('problem' in attempt) {
+      const plain = `${plainShortcut('Backspace')} deletes without joining.`;
       useUiStore.getState().notify(
-        `${plainShortcut('Alt Backspace')} joins up shapes with one way in or one way out. ${plainShortcut('Backspace')} deletes without joining.`,
+        attempt.problem === 'attachments'
+          ? `A connector holds ${LIMITS.maxAttachmentsPerEdge} notes and code cards, so these lines can't be joined into one. ${plain}`
+          : `${plainShortcut('Alt Backspace')} joins up shapes with one way in or one way out. ${plain}`,
       );
       return;
     }
@@ -3412,11 +3496,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         let detached = doc;
         for (const child of children) detached = setParent(detached, [child.id], survivingParentOf(child.parentId));
         // Remove only the boundary; `removeElements` would take the contents too — but that also
-        // means skipping its cascade, so connectors drawn to the boundary itself and flow steps
-        // that spotlit it or walked those connectors are pruned here.
-        const edges = detached.edges.filter((e) => !boundaryIds.has(e.source) && !boundaryIds.has(e.target));
-        const kept = new Set(edges);
-        const removedEdgeIds = new Set(detached.edges.filter((e) => !kept.has(e)).map((e) => e.id));
+        // means skipping its cascade, so it is repeated here: connectors drawn to the boundary
+        // itself, the compensating actions linked to those (left behind, one was linked to nothing,
+        // drawn nowhere and out of reach, and came back unlinked on the next open), and flow steps
+        // that spotlit it or walked those connectors.
+        const removedEdgeIds = new Set(detached.edges.filter((e) => boundaryIds.has(e.source) || boundaryIds.has(e.target)).map((e) => e.id));
+        for (const edge of detached.edges) if (edge.compensationFor && removedEdgeIds.has(edge.compensationFor)) removedEdgeIds.add(edge.id);
+        const edges = detached.edges.filter((e) => !removedEdgeIds.has(e.id));
         // A point about the boundary itself was about its scope, not its members — it goes with the
         // boundary rather than being spread over the children; one about a member is untouched.
         return pruneOpenPoints(
@@ -3614,7 +3700,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   createFlow(title) {
-    if (totals(fileOf(get())).flows >= LIMITS.maxFlows) return null;
+    const state = get();
+    // A room exists only once it holds a shape, so an empty one has nowhere to keep a flow: it was
+    // listed and selected with an undo step, and was never in the file (as `setViewLevel` refuses).
+    if (state.path.length > 0 && state.document.nodes.length === 0) {
+      useUiStore.getState().notify('Draw something here first — then tell a flow through it.');
+      return null;
+    }
+    if (totals(fileOf(state)).flows >= LIMITS.maxFlows) return null;
     const flow = createFlowEntity({ title: title?.trim() || nextFlowTitle(get().document) });
     get().apply('Create flow', (doc) => addFlow(doc, flow));
     // `addFlow` silently refuses at the cap; without this check a caller would go on to select
@@ -3823,7 +3916,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // See `FlowSessionSnapshot`.
       flowSession: entry.flowSessionBefore,
     });
-    quietIfOneConnector(entry.selectionBefore);
+    quietIfOneConnector(get().selection);
   },
 
   redo() {
@@ -3840,7 +3933,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       selection: entry.selectionAfter,
       flowSession: entry.flowSessionAfter,
     });
-    quietIfOneConnector(entry.selectionAfter);
+    quietIfOneConnector(get().selection);
   },
 
   canUndo: () => canUndo(get().history),
@@ -3852,15 +3945,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (quiet !== null && !(selection.nodes.length === 0 && selection.edges.length === 1 && selection.edges[0] === quiet)) {
       useUiStore.getState().setQuietEdge(null);
     }
+    settleSubSelections(selection);
     // A tap on empty canvas with nothing selected, or a click on what is already selected, writes
     // nothing: every subscriber would otherwise run for a selection that did not change.
-    // What is selected inside a sequence belongs to a selection of that sequence alone.
-    const inside = useUiStore.getState().sequenceFocus;
-    if (inside && !(selection.nodes.length === 1 && selection.edges.length === 0 && selection.nodes[0] === inside.nodeId)) {
-      useUiStore.setState({ sequenceFocus: null, sequenceEdit: null });
-    }
-    // Choosing shapes or connectors puts any chosen sketch strokes down: one selection at a time.
-    if (selection.nodes.length > 0 || selection.edges.length > 0) useUiStore.getState().setInkSelection([]);
     const current = get().selection;
     if (sameIdList(current.nodes, selection.nodes) && sameIdList(current.edges, selection.edges)) return;
     set({ selection });

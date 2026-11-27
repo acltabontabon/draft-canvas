@@ -1,4 +1,4 @@
-import { createAttachment, createEdge } from '../../src/document/factory';
+import { createAttachment, createDocument, createEdge, createNode } from '../../src/document/factory';
 
 import Ajv from 'ajv';
 import { describe, expect, it } from 'vitest';
@@ -12,8 +12,10 @@ import { readSelectionContext } from '../../src/agent/selection';
 import { FULL_TOOLS as TOOLS } from '../../src/agent/schema';
 import { checkSequence } from '../../src/sequence/check';
 import { messagesOf, sequenceOf } from '../../src/document/sequenceModel';
+import { createFragment, createMessage, createNote, createReply, groupParticipants } from '../../src/document/sequenceOps';
+import { normalizeSequence } from '../../src/document/validateSequence';
 import { deserializeDocument } from '../../src/export/project';
-import type { DraftDocument, SeqFragment } from '../../src/document/types';
+import type { DraftDocument, DraftSequence, SeqFragment } from '../../src/document/types';
 
 /**
  * A sequence through MCP: sent as a Mermaid `sequenceDiagram`, drawn as the app's own sequence
@@ -209,6 +211,134 @@ describe('a sequence, read and changed', () => {
 
     const removed = update(added.file, [{ op: 'remove', ids: ['place-order'] }]).file;
     expect(removed.nodes.map((entry) => entry.id).sort()).toEqual(['orders-api', 'orders-db', 'shopper']);
+  });
+});
+
+describe('a sequence drawn in the editor, read and sent back', () => {
+  // Drawn by hand, nothing linked: what Mermaid has no words for is everywhere — a participant's
+  // kind, technology and colour, a group's colour, a reference to another interaction, blank labels.
+  const drawn = (): DraftDocument => {
+    const call = createMessage({ id: 'm1', from: 'web', to: 'api', label: 'POST /orders' });
+    const save = createMessage({ id: 'm2', from: 'api', to: 'db', label: 'INSERT order' });
+    let sequence: DraftSequence = normalizeSequence({
+      participants: [
+        { id: 'web', name: 'Shopper', type: 'actor', actorKind: 'human' },
+        { id: 'api', name: 'Orders API', type: 'service', serviceKind: 'generic', technology: 'Spring Boot', accent: 'blue' },
+        { id: 'db', name: 'Orders DB', type: 'database', databaseKind: 'sql', technology: 'PostgreSQL' },
+        { id: 'bus', name: 'Order events', type: 'queue', queueKind: 'topic', technology: 'Amazon SNS', kindOrigin: 'technology' },
+        { id: 'pay', name: 'Payments', type: 'service', serviceKind: 'external', technology: 'Stripe', kindOrigin: 'technology' },
+      ],
+      items: [
+        call,
+        save,
+        { ...createReply(save), id: 'm3' },
+        createMessage({ id: 'm4', from: 'api', to: 'api' }),
+        createMessage({ id: 'm5', from: 'api', to: 'bus', kind: 'async', label: 'OrderPlaced' }),
+        createFragment({ id: 'ref', operator: 'ref', label: 'Charge the card', covers: ['api', 'pay'] }),
+        createNote({ id: 'n1', over: ['api'], side: 'right', text: 'idempotent' }),
+        { ...createReply(call, '201 Created'), id: 'm6' },
+      ],
+    }).sequence;
+    sequence = groupParticipants(sequence, ['api', 'db'], { id: 'g', name: 'Ordering', accent: 'green' });
+    return { ...createDocument('Shop'), nodes: [{ ...createNode({ id: 'checkout', type: 'sequence', x: 0, y: 0, text: 'Checkout' }), sequence }] };
+  };
+  const textOf = (file: DraftDocument) => (read(file).sequences as { mermaid: string }[])[0]!.mermaid;
+
+  it('is the same sequence when the text comes back as it was read', () => {
+    const file = drawn();
+    const result = update(file, [{ op: 'update', id: 'checkout', set: { mermaid: textOf(file) } }]);
+    expect(sequenceOf(sequenceIn(result.file, 'checkout'))).toEqual(sequenceOf(sequenceIn(file, 'checkout')));
+    // Nothing changed, so nothing is committed.
+    expect(result.file).toBe(file);
+    expect(result.counts.updated).toBe(0);
+  });
+
+  it('takes an edit and keeps everything the text still says as it was read', () => {
+    const file = drawn();
+    const edited = textOf(file)
+      .replace('POST /orders', 'POST /orders/v2')
+      .replace(/\n$/, '\n    OrdersAPI-)Payments: Refund\n');
+    const after = sequenceOf(sequenceIn(update(file, [{ op: 'update', id: 'checkout', set: { mermaid: edited } }]).file, 'checkout'));
+    const before = sequenceOf(sequenceIn(file, 'checkout'));
+    expect(after.participants).toEqual(before.participants);
+    expect(after.groups).toEqual(before.groups);
+    expect(after.items.slice(1, -1)).toEqual(before.items.slice(1));
+    expect(after.items[0]).toEqual({ ...before.items[0], label: 'POST /orders/v2' });
+    expect(after.items.at(-1)).toMatchObject({ t: 'message', from: 'api', to: 'pay', kind: 'async', label: 'Refund' });
+  });
+
+  // A participant a create message makes is declared at that message in the text, so it reads back
+  // after the others and outside any box. Neither says anything the agent changed.
+  const created = (): DraftDocument => {
+    let sequence: DraftSequence = normalizeSequence({
+      participants: [
+        { id: 'web', name: 'Web', type: 'actor', actorKind: 'human' },
+        { id: 'job', name: 'Receipt job', type: 'service', serviceKind: 'worker', technology: 'AWS Lambda' },
+        { id: 'api', name: 'API', type: 'service', serviceKind: 'generic' },
+        { id: 'w1', name: 'Resize worker', type: 'service', serviceKind: 'worker' },
+        { id: 'w2', name: 'Thumb worker', type: 'service', serviceKind: 'worker' },
+      ],
+      items: [
+        createMessage({ id: 'c', from: 'web', to: 'api', label: 'Upload' }),
+        createMessage({ id: 'mk', from: 'api', to: 'job', kind: 'create', label: 'start' }),
+        createMessage({ id: 's1', from: 'api', to: 'w1', kind: 'create', label: 'spawn' }),
+        createMessage({ id: 's2', from: 'api', to: 'w2', kind: 'create', label: 'spawn' }),
+      ],
+    }).sequence;
+    sequence = groupParticipants(sequence, ['job', 'api'], { id: 'g', name: 'Backend', accent: 'green' });
+    sequence = groupParticipants(sequence, ['w1', 'w2'], { id: 'w', name: 'Workers', accent: 'violet' });
+    return { ...createDocument('Shop'), nodes: [{ ...createNode({ id: 'checkout', type: 'sequence', x: 0, y: 0, text: 'Upload' }), sequence }] };
+  };
+
+  it('is the same sequence when the text comes back, participants a message creates and their groups included', () => {
+    const file = created();
+    const result = update(file, [{ op: 'update', id: 'checkout', set: { mermaid: textOf(file) } }]);
+    expect(sequenceOf(sequenceIn(result.file, 'checkout'))).toEqual(sequenceOf(sequenceIn(file, 'checkout')));
+    expect(result.file).toBe(file);
+
+    // Edited, the lifelines keep their order and the groups their members, a new participant
+    // where the text puts it.
+    const edited = textOf(file).replace(/\n$/, '\n    API-)Audit: uploaded\n');
+    const after = sequenceOf(sequenceIn(update(file, [{ op: 'update', id: 'checkout', set: { mermaid: edited } }]).file, 'checkout'));
+    const before = sequenceOf(sequenceIn(file, 'checkout'));
+    expect(after.participants.map((participant) => participant.name)).toEqual(['Web', 'Receipt job', 'API', 'Resize worker', 'Thumb worker', 'Audit']);
+    expect(after.participants.slice(0, -1)).toEqual(before.participants);
+    expect(after.groups).toEqual(before.groups);
+  });
+
+  it('links a reply to the call the text now gives it once the one it answered is gone', () => {
+    // A reply that answers the first of two calls, not the latest: what the text can't say.
+    const reply = createMessage({ id: 'r', from: 'api', to: 'web', kind: 'reply', label: 'ok', replyTo: 'c1' });
+    delete reply.deactivate;
+    const sequence = normalizeSequence({
+      participants: [
+        { id: 'web', name: 'Web', type: 'actor', actorKind: 'human' },
+        { id: 'api', name: 'API', type: 'service', serviceKind: 'generic' },
+      ],
+      items: [createMessage({ id: 'c1', from: 'web', to: 'api', label: 'first' }), createMessage({ id: 'c2', from: 'web', to: 'api', label: 'second' }), reply],
+    }).sequence;
+    const file: DraftDocument = { ...createDocument('Shop'), nodes: [{ ...createNode({ id: 'checkout', type: 'sequence', x: 0, y: 0, text: 'Calls' }), sequence }] };
+    expect(update(file, [{ op: 'update', id: 'checkout', set: { mermaid: textOf(file) } }]).file).toBe(file);
+    const edited = textOf(file).replace(/\n\s*Web->>\+?API: first/, '');
+    const after = sequenceOf(sequenceIn(update(file, [{ op: 'update', id: 'checkout', set: { mermaid: edited } }]).file, 'checkout'));
+    expect(messagesOf(after).map((message) => [message.id, message.replyTo])).toEqual([['c2', undefined], ['r', 'c2']]);
+    expect(checkSequence(after)).toEqual([]);
+  });
+
+  it('says which words a read writes in place of nothing: only a blank participant’s or box’s name', () => {
+    const sequence = normalizeSequence({
+      participants: [{ id: 'a', name: '', type: 'service', serviceKind: 'generic' }, { id: 'b', name: 'B', type: 'service', serviceKind: 'generic' }],
+      groups: [{ id: 'g', name: '', participantIds: ['a'] }],
+      items: [createMessage({ id: 'm', from: 'a', to: 'b' })],
+    }).sequence;
+    const text = textOf({ ...createDocument('Shop'), nodes: [{ ...createNode({ id: 'checkout', type: 'sequence', x: 0, y: 0, text: 'Blank' }), sequence }] });
+    expect(text).toContain(' as Participant\n');
+    expect(text).toContain('box transparent Group\n');
+    expect(text).not.toContain('Message');
+    const said = (capabilities({ topics: ['sequences'] }).sequences as { edit: string }).edit;
+    expect(said).toContain('"Participant"');
+    expect(said).toContain('"Group"');
+    expect(said).not.toContain('"Message"');
   });
 });
 

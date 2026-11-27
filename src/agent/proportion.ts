@@ -2,6 +2,7 @@ import { categoryOf } from '../document/connectorSemantics';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { connectorCaptionText } from '../edges/captionText';
 import { connectorRoutes } from '../edges/connectorRoutes';
+import { routedLabel } from '../edges/edgeRoutes';
 import { labelGroupPlan } from '../edges/labelGroups';
 import { fittedConnectorCaption, layoutEdgeLabel } from '../edges/labelLayout';
 import { nameLineCount, type DescribeContext } from '../nodes/describe';
@@ -74,7 +75,9 @@ export function proportionFindings(
     const route = connectorRoutes(edge, view, 'transient', byId)?.request;
     // No room at all is a bundled member, whose caption is drawn once on the shared trunk.
     if (!route || route.labelRoom === 0) continue;
-    const label = edge.label?.trim();
+    // What its chip shows (`routedLabel`): a named recovery action's name is drawn as a label, on up
+    // to two lines, and was judged as a one-line caption and reported cut where the chip showed it whole.
+    const label = routedLabel(edge)?.trim();
     if (label) {
       if (layoutEdgeLabel(label, ctx.measurer, route.labelRoom).truncated) findings.push({ kind: 'hidden-caption', id: edge.id });
       continue;

@@ -71,7 +71,13 @@ function main(): void {
   const targets = ecosystem === 'npm' ? ['.', 'www', 'www/cloudflare'] : ['.'];
   for (const cwd of targets) {
     const result = spawnSync(ecosystem === 'npm' ? 'npm' : 'cargo', ecosystem === 'npm'
-      ? ['audit', '--json'] : ['audit', '--json', '--file', 'src-tauri/Cargo.lock'], { cwd, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+      ? ['audit', '--json'] : ['audit', '--json', '--file', 'src-tauri/Cargo.lock'], {
+        cwd,
+        encoding: 'utf8',
+        maxBuffer: 16 * 1024 * 1024,
+        // npm is npm.cmd on Windows, which Node starts only through a shell; the arguments are fixed words.
+        shell: process.platform === 'win32' && ecosystem === 'npm',
+      });
     if (result.error || result.signal || result.status === null || result.status > 1) throw new Error(`Audit tool failed: ${result.error?.message ?? result.stderr}`);
     const report: unknown = JSON.parse(result.stdout);
     writeFileSync(`audit-results/${ecosystem}-${cwd === '.' ? 'app' : cwd === 'www' ? 'site' : 'deploy'}.json`, result.stdout);

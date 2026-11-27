@@ -131,8 +131,35 @@ describe('replies', () => {
     expect(checkSequence(finding.fix!.apply(subject))).toEqual([]);
   });
 
+  it('a reply that answers nothing, below the call it could answer, is offered that call', () => {
+    const m1 = call('m1', 'a', 'b');
+    const { replyTo: _none, ...unlinked } = reply('r1', m1);
+    const subject = sequence([m1, unlinked]);
+    const finding = checkSequence(subject).find((entry) => entry.kind === 'reply-without-call')!;
+    expect(finding.fix?.label).toBe('Answer the call above');
+    expect(checkSequence(finding.fix!.apply(subject))).toEqual([]);
+    // With no call it could answer, there is nothing to offer.
+    const alone = checkSequence(sequence([unlinked, m1]))[0]!;
+    expect(alone.kind).toBe('reply-without-call');
+    expect(alone.fix).toBeUndefined();
+  });
+
   it('a call left unanswered is not a problem', () => {
     expect(checkSequence(sequence([call('m1', 'a', 'b'), call('m2', 'b', 'c')]))).toEqual([]);
+  });
+});
+
+describe('a critical section’s options', () => {
+  it('are other ways the same moment goes: a call answered in each is answered once', () => {
+    const post = call('post', 'a', 'b');
+    let subject = sequence([post, reply('ok', post)]);
+    subject = wrapItems(subject, ['ok'], { id: 'crit', operator: 'critical' });
+    subject = addOperand(subject, 'crit', { id: 'timeout' });
+    subject = insertItem(subject, reply('late', post), { operandId: 'timeout', index: 0 });
+    expect(subject.items[1]).toMatchObject({ operands: [{ items: [{ id: 'ok' }] }, { id: 'timeout', items: [{ id: 'late' }] }] });
+    expect(checkSequence(subject)).toEqual([]);
+    // The work the call started ends in either option, not twice.
+    expect(executionsOf(subject).unmatched).toEqual([]);
   });
 });
 

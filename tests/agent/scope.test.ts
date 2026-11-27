@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { compose } from '../../src/agent/compile';
 import { AgentError } from '../../src/agent/errors';
 import { applyUpdate } from '../../src/agent/patch';
+import { readDiagram } from '../../src/agent/read';
 import { deserializeDocument } from '../../src/export/project';
 import type { DraftDocument } from '../../src/document/types';
 
@@ -148,6 +149,58 @@ describe('update_diagram scope enforcement', () => {
   });
 });
 
+describe('update_diagram scope and what a change carries along', () => {
+  const junctions = () =>
+    build({
+      nodes: [
+        { id: 'web', type: 'service', label: 'Web' },
+        { id: 'out', type: 'junction', label: 'A', link: 'handoff' },
+        { id: 'back', type: 'junction', label: 'A', link: 'handoff' },
+        {
+          id: 'api', type: 'service', label: 'API',
+          inside: { nodes: [{ id: 'in', type: 'junction', label: 'A', link: 'handoff' }, { id: 'ctl', type: 'component', label: 'Controller' }], relationships: [{ id: 'r2', from: 'in', to: 'ctl' }] },
+        },
+      ],
+      relationships: [{ id: 'r1', from: 'web', to: 'out' }, { id: 'r3', from: 'back', to: 'api' }],
+    });
+
+  it('refuses a linked-junction rename that reaches junctions outside the scope, in this view and another', () => {
+    const error = refusal(() => applyUpdate(junctions(), [], [{ op: 'update', id: 'out', set: { label: 'Payments' } }], undefined, { nodes: ['out'], edges: [] }));
+    expect(error.code).toBe('OUT_OF_SCOPE');
+    expect(error.message).toContain('"back"');
+    expect(JSON.stringify(error.details)).toContain('\\"in\\" (inside api)');
+    // A scope can't hold a junction drawn in another view, so only an unscoped change renames the group.
+    const free = applyUpdate(junctions(), [], [{ op: 'update', id: 'out', set: { label: 'Payments' } }], undefined).file;
+    expect(free.nodes.find((n) => n.id === 'back')?.text).toBe('Payments');
+  });
+
+  it('refuses a retype that re-infers a connector outside the scope, and takes one inside it', () => {
+    const file = build({ nodes: [{ id: 'a', type: 'service', label: 'A' }, { id: 'b', type: 'database', label: 'B' }], relationships: [{ id: 'w', from: 'a', to: 'b' }] });
+    const retype = [{ op: 'update', id: 'b', set: { type: 'cache' } }];
+    const error = refusal(() => applyUpdate(file, [], retype, undefined, { nodes: ['b'], edges: [] }));
+    expect(error.code).toBe('OUT_OF_SCOPE');
+    expect(error.message).toContain('"w"');
+    const { file: next } = applyUpdate(file, [], retype, undefined, { nodes: ['b'], edges: ['w'] });
+    expect(next.edges.find((e) => e.id === 'w')?.semantic).toBe('reads');
+  });
+
+  it('lets a boundary outside the scope grow to hold a shape moved into it: only where it is drawn changes', () => {
+    const file = base({ flow: false });
+    const { file: next } = applyUpdate(file, [], [{ op: 'update', id: 'user', set: { group: 'sys' } }], undefined, { nodes: ['user'], edges: [] });
+    const was = file.nodes.find((n) => n.id === 'sys')!;
+    const now = next.nodes.find((n) => n.id === 'sys')!;
+    expect(next.nodes.find((n) => n.id === 'user')?.parentId).toBe('sys');
+    expect(now.width * now.height).toBeGreaterThan(was.width * was.height);
+    expect({ ...now, x: 0, y: 0, width: 0, height: 0 }).toEqual({ ...was, x: 0, y: 0, width: 0, height: 0 });
+  });
+
+  it('still permits an add that attaches a note to a shape outside the scope', () => {
+    const file = base();
+    const { file: next } = applyUpdate(file, [], [{ op: 'add', notes: [{ id: 'why', text: 'Keeps every order.', about: 'db' }] }], undefined, { nodes: ['api'], edges: [] });
+    expect(next.nodes.find((n) => n.id === 'db')?.attachments?.map((a) => a.id)).toEqual(['why']);
+  });
+});
+
 describe('update_diagram and what the person set', () => {
   const held = (file: DraftDocument, id: string): DraftDocument => ({ ...file, nodes: file.nodes.map((n) => (n.id === id ? { ...n, held: true } : n)) });
   const at = (file: DraftDocument, id: string) => {
@@ -163,6 +216,21 @@ describe('update_diagram and what the person set', () => {
     expect(at(next, 'user')).toEqual(at(file, 'user'));
     const free = applyUpdate({ ...file, nodes: file.nodes.map((n) => ({ ...n, held: undefined })) }, [], [{ op: 'arrange' }], undefined).file;
     expect(at(free, 'user')).not.toEqual(at(file, 'user'));
+  });
+
+  it('says why an arrange moved nothing when what it would move is held, and reads say what is held', () => {
+    // A held shape inside a boundary holds that whole boundary.
+    const file = held(base({ flow: false }), 'api');
+    const scoped = applyUpdate(file, [], [{ op: 'arrange', scope: { group: 'sys' } }], undefined);
+    expect(scoped.file).toBe(file);
+    expect(scoped.advisories.join('\n')).toMatch(/Nothing was arranged: "api" is held in place by the person/);
+    const everything = { ...file, nodes: file.nodes.map((n) => ({ ...n, held: true })) };
+    const whole = applyUpdate(everything, [], [{ op: 'arrange' }], undefined);
+    expect(whole.file).toBe(everything);
+    expect(whole.advisories.join('\n')).toMatch(/Nothing was arranged: "sys", "api", "db", "user" are held in place/);
+    const read = readDiagram(file, {}, 'r1', 'd') as { elements: { id: string; held?: true }[]; groups: { id: string; held?: true }[] };
+    expect(read.elements.filter((element) => element.held).map((element) => element.id)).toEqual(['api']);
+    expect(read.groups.some((group) => group.held)).toBe(false);
   });
 
   it('keeps a kind the agent names when the technology changes afterwards', () => {

@@ -21,6 +21,10 @@ interface ObstacleGrid {
 const obstacleRects = new WeakMap<DraftNode, Rect>();
 /** Which node each cached obstacle rect stands for — see `withoutNodes`. */
 const obstacleNodeIds = new WeakMap<Rect, string>();
+/** The obstacle lists this module has handed out, which nothing changes afterwards — see `obstacleKey`. */
+const ownLists = new WeakSet<readonly Rect[]>([NO_RECTS]);
+const listKeys = new WeakMap<readonly Rect[], string>();
+const rectKeys = new WeakMap<Rect, string>();
 const obstacleGrids = new WeakMap<readonly DraftNode[], ObstacleGrid>();
 /** The canvas's most recent grid and the array it was built from — see `gridFor`. */
 let lastGrid: { nodes: readonly DraftNode[]; grid: ObstacleGrid } | null = null;
@@ -120,8 +124,39 @@ export function obstaclesForEdge(
     found.size === 0
       ? NO_RECTS
       : [...found].sort((a, b) => grid.order.get(a)! - grid.order.get(b)!).map(stableRectOf);
+  ownLists.add(result);
   bySource.set(targetId, result);
   return result;
+}
+
+/**
+ * A connector's obstacles as part of its route's cache key (`edgeRoutes.ts`): every rect's box and
+ * band, by value, so the same shapes in a new list still find the route already worked out.
+ *
+ * The key used to be the obstacle list serialised whole for every route asked for. A long connector's
+ * list grows with the diagram, so a plan of every connector spent time and memory in proportion to
+ * the connectors times the shapes: on 10,000 elements, 68 MiB of key text a pass and well over a
+ * third of a commit. A list this module handed out, and each rect in it, never changes afterwards, so
+ * its key is worked out once and kept with it; any other list is read afresh each time. Numbers
+ * never hold `,` or `;`, so no two different lists share a key.
+ */
+export function obstacleKey(obstacles: readonly Rect[]): string {
+  const known = listKeys.get(obstacles);
+  if (known !== undefined) return known;
+  let key = '';
+  for (let i = 0; i < obstacles.length; i += 1) key += (i ? ';' : '') + rectKey(obstacles[i]!);
+  if (ownLists.has(obstacles)) listKeys.set(obstacles, key);
+  return key;
+}
+
+function rectKey(rect: Rect): string {
+  const own = obstacleNodeIds.has(rect);
+  const known = own ? rectKeys.get(rect) : undefined;
+  if (known !== undefined) return known;
+  const band = rect.anchorBand;
+  const key = `${rect.x},${rect.y},${rect.width},${rect.height}${band ? `,${band.top},${band.bottom},${band.left ?? ''},${band.right ?? ''},${band.glyphTop ?? ''}` : ''}`;
+  if (own) rectKeys.set(rect, key);
+  return key;
 }
 
 /**
@@ -134,5 +169,9 @@ export function withoutNodes(obstacles: readonly Rect[], excludedIds: ReadonlySe
   // Most connectors are nowhere near what is moving: answer them without a copy to throw away.
   if (!obstacles.some((rect) => excludedIds.has(obstacleNodeIds.get(rect) ?? ''))) return obstacles;
   const kept = obstacles.filter((rect) => !excludedIds.has(obstacleNodeIds.get(rect) ?? ''));
-  return kept.length === obstacles.length ? obstacles : kept.length === 0 ? NO_RECTS : kept;
+  if (kept.length === obstacles.length) return obstacles;
+  if (kept.length === 0) return NO_RECTS;
+  // A new list, but only of rects already handed out, and changed by nothing after this.
+  if (ownLists.has(obstacles)) ownLists.add(kept);
+  return kept;
 }

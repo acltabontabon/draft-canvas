@@ -1,8 +1,12 @@
 # Keyboard shortcuts and the command palette
 
-`?` lists every shortcut and `⌘K` finds any command; both are also in the **?** help menu. On Windows
-and Linux, use `Ctrl` for `⌘` and `Alt` for `⌥`. Single keys work when the canvas has focus (`Tab`
-from the toolbar), not in text fields or dialogs.
+Draw, move around and edit from the keyboard, and find any command in the command palette.
+
+Shortcuts use Mac keys. On Windows and Linux, use `Ctrl` for `⌘` and `Alt` for `⌥`.
+
+In the app, `?` lists every shortcut and `⌘K` opens the command palette; both are also in the **?**
+help menu. Single keys work when the canvas has focus (`Tab` from the toolbar), not in text fields
+or dialogs.
 
 ## Add shapes
 
@@ -15,22 +19,15 @@ from the toolbar), not in text fields or dialogs.
 | `M` | Component | `J` | Junction |
 | `L` | [Sequence](sequence-diagrams.md) | | |
 
-The shape appears under the pointer, ready to name. **Connect to…** in `⌘K` connects it.
-Over a sequence, `S` `D` `Q` `A` `M` add a participant of that kind instead.
+The shape appears under the pointer, ready to name; **Connect to…** in `⌘K` connects it. Over a
+sequence, `S` `D` `Q` `A` `M` add a participant of that kind instead. For any other shape or a
+technology, press `Enter` on **Shapes** at the end of the toolbar, type its name (`kafka`), and
+press `Enter` to put it down.
 
-`Tab` accepts the faint next-shape suggestion, `Esc` waves it away, and `]` / `[` cycle through
-others, or pick the next shape when none shows. **Turn off next-shape suggestions** in `⌘K`, or use
-[Settings → Canvas](getting-started.md#make-it-yours), to stop them; the picker that opens when you
-drop a connector on empty canvas still lists them first.
-
-## Draw
-
-| Key | Action |
-| --- | --- |
-| `P` | Pick up the [Pencil](sketching.md); again to switch Sketch and Smart Ink |
-| `H` / `E` | Highlighter / eraser |
-| `Esc` | Put the Pencil down; mid-stroke, take back that stroke |
-| `←` `→` / `Enter` / `Esc` | Smart Ink: change what a drawing became / keep and name it / keep the sketch |
+`Tab` accepts the faint next-shape suggestion and `Esc` waves it away. `]` / `[` cycle through
+others, or pick the next shape when none shows. To stop suggestions, run **Turn off next-shape
+suggestions** from `⌘K`, or use the switch on the **Canvas** tab of
+[Appearance](shapes-and-connectors.md#appearance).
 
 ## Move around
 
@@ -43,7 +40,7 @@ drop a connector on empty canvas still lists them first.
 | Arrow / `Shift` + arrow | Nudge the selection 1 / 10 units |
 | Hold `⌥` while dragging or resizing | Turn off [snapping](shapes-and-connectors.md#line-things-up) |
 | Hold `Shift` and rest on a shape | Light up everything its data comes from and feeds |
-| `Shift+1` | Fit the diagram in view |
+| `⇧1` | Fit the diagram in view |
 | `⌘+` / `⌘−` / `⌘0` | Zoom in / out / to 100% |
 | `Space` + drag | Pan (scrolling also pans) |
 | `⌘↓` / `⌘↑` | [Look inside](depth.md) the selected shape / back out; `⌘↓` also steps into a selected sequence |
@@ -65,7 +62,7 @@ drop a connector on empty canvas still lists them first.
 | `⌘G` / `⌘⇧G` | Group into a boundary / ungroup |
 | `⌘B` / `⌘I` | Bold / italic on the selected Text |
 | `⌘⌥F` (`Ctrl+H`) | Find and replace across every room |
-| `Shift+F10` or Menu key | Context menu for the selection; with nothing selected, the canvas menu (Add here, Paste, Tidy up, Arrange) |
+| `Shift+F10` or Menu key | Context menu for the selection; with nothing selected, the canvas menu |
 | `F` | Flows panel |
 | `I` | Add an open point to the selection |
 | `⌘⇧E` or `⌘E` | Export |
@@ -76,60 +73,24 @@ drop a connector on empty canvas still lists them first.
 | A shape's name | `Shift+Enter` | `Enter` | Restores the old name |
 | Note, Text or Code | `Enter` | `⌘Enter` | Keeps your text |
 
-Text also has [Markdown and format shortcuts](shapes-and-connectors.md#write-rich-text);
-`⌘K` there inserts a link.
-
-## Inside a sequence
-
-With a participant, message or frame of a [sequence](sequence-diagrams.md) selected:
-
-| Key | Action |
-| --- | --- |
-| `⌥` + arrow / `⌥⇧` + arrow | Move the selection / extend it |
-| Arrow | Move the message up or down, or the participant left or right |
-| `Enter` or `F2` | Edit |
-| `Tab`, `]` / `[` | Add the offered next message; offer another |
-| `P` | Add a participant after the selected one |
-| `⌘D` | Duplicate |
-| `⌘G` / `⌘⇧G` | Wrap messages or group participants / unwrap or ungroup |
-| `Delete` | Delete; on a frame, remove the frame and keep its messages |
-| `Esc` | Back out to the sequence |
+Text also has [Markdown and format shortcuts](shapes-and-connectors.md#write-rich-text); `⌘K` there
+inserts a link.
 
 ## Command palette
 
-Press `⌘K`, type part of a command or name, then `Enter`.
+Press `⌘K`, type part of a command or name, then press `Enter`. It runs editor actions, jumps to
+named shapes, connectors and flows in any room, and inserts
+[starters](getting-started.md#start-from-a-starter) once the gallery is loaded. With shapes selected,
+it also aligns, distributes and matches sizes.
 
 ![The command palette finding Add Queue.](../media/guides/command-palette.png)
 
-It runs editor actions, inserts [starters](examples.md) once the gallery is loaded, jumps to named
-shapes, connectors and flows in any room, and tidies up. **Tidy up** previews a gentle cleanup
-before applying it; **Straighten connectors**, **Arrange diagram**, **Check layout**, **Tidy
-connectors**, **Auto attach all connectors** and **Fit shapes to text** each do one thing. With shapes
-selected it also aligns, distributes and matches sizes.
+## Keys in other guides
 
-## Timeline
-
-Open it with **Show the timeline** in `⌘K`. These keys work while focus is in it; see
-[Diagram history](history.md#the-timeline).
-
-| Key | Action |
+| Keys for | Guide |
 | --- | --- |
-| `←` / `→` | Older / newer revision; past the newest is Live |
-| `Home` / `End` | Oldest revision / Live |
-| `Space` | Play or pause |
-| `Esc` | Stop comparing, then return to Live, then close the timeline |
-
-## Presenting
-
-| Key | Action |
-| --- | --- |
-| `⌘Enter` | Start / stop presenting |
-| `→` or `Space` / `←` | Next / previous step |
-| `Home` / `End` / `1`–`9` | First / last / that step |
-| `Shift+→` / `Shift+←` / `Shift+F` | Next / previous / any flow |
-| `O` / `R` / `P` | Overview / re-centre / pointer |
-| `K` | Keep a walk as a flow |
-| `Esc` | Close a reveal, then stop presenting |
-
-Tracing keys are in [flows and presenting](flows-and-presentation.md); desktop file keys in the
-[desktop guide](desktop.md#keyboard).
+| The Pencil (`P`) and its tools | [Sketch and Smart Ink](sketching.md) |
+| Presenting (`⌘Enter`) | [Flows and presenting](flows-and-presentation.md#present) |
+| Sequences | [Sequence diagrams](sequence-diagrams.md#keyboard) |
+| The timeline | [Diagram history](history.md#the-timeline) |
+| Files and windows in the desktop app | [Desktop app](desktop.md#keyboard) |

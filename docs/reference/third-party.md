@@ -1,11 +1,12 @@
 # Third-party acknowledgements
 
-Thank you to the authors and maintainers of the open-source projects Draft Canvas builds on.
+The open-source projects Draft Canvas builds on, and how to keep their credits current. Thank you to
+their authors and maintainers.
 
-- Draft Canvas's own code is [Apache 2.0](../../LICENSE). Third-party components keep their own licenses.
-- [THIRD_PARTY_LICENSES.txt](../../THIRD_PARTY_LICENSES.txt) holds the generated notices for the web
-  editor, desktop front end and Rust crates. The apps link it from **About → Licences**.
-- [NOTICE](../../NOTICE) holds project notices and logo attributions.
+Draft Canvas's own code is [Apache 2.0](../../LICENSE); third-party components keep their own
+licenses. [THIRD_PARTY_LICENSES.txt](../../THIRD_PARTY_LICENSES.txt) holds the generated notices for
+the web editor, desktop front end and Rust crates, and the apps link it from **About → Licences**.
+[NOTICE](../../NOTICE) holds project notices and logo attributions.
 
 ## In the editor
 
@@ -63,37 +64,38 @@ Not bundled in the apps.
 | [tempfile](https://github.com/Stebalien/tempfile), [muda](https://github.com/tauri-apps/muda) and [tokio-tungstenite](https://github.com/snapview/tokio-tungstenite) | Rust tests: temp folders, menu shortcut parsing, relay client |
 | [Wrangler](https://github.com/cloudflare/workers-sdk) | Cloudflare deploys of the website and relay |
 
-Direct dependencies are in the [root](../../package.json), [website](../../www/package.json),
-[desktop](../../src-tauri/Cargo.toml) and [MCP](../../src-tauri/mcp/Cargo.toml) manifests. The
-notice generator covers the root production npm tree and Cargo metadata only; website and dev-only
-npm packages are outside it.
-
 ## Maintaining attributions
 
 Add credits and notices in the same change that adds or updates a dependency or asset.
 
-1. Add a row above: upstream repository and what Draft Canvas uses it for.
+1. Add a row above: the upstream repository and what Draft Canvas uses it for.
 2. For packages, run `npm run licenses` (needs installed npm dependencies and a working Cargo
    toolchain), review the output for missing license text, commit `THIRD_PARTY_LICENSES.txt`, then
-   run `npm run licenses:check`.
-3. For copied code, SVGs, fonts or other assets, record the upstream version or commit, source,
+   run `npm run licenses:check`. Never hand-edit that file; it is overwritten.
+3. If a build copies a development dependency's code into what ships (as with the Tauri API and
+   Workbox's service-worker runtime), add it to `BUNDLED_DEV` in
+   [`scripts/third-party-licenses.mjs`](../../scripts/third-party-licenses.mjs).
+4. For copied code, SVGs, fonts or other assets, record the upstream version or commit, source,
    license and modifications next to the files, and keep required notices with them. The generator
    does not find these.
-4. Keep required upstream NOTICE text. Do not hand-edit `THIRD_PARTY_LICENSES.txt`; it is overwritten.
+5. Keep required upstream NOTICE text.
+
+The generator covers the root production npm tree and Cargo metadata only; website and dev-only npm
+packages are outside it.
 
 ### Simple Icons and brand assets
 
 - The full [Simple Icons](https://github.com/simple-icons/simple-icons) catalog ships from the pinned
-  npm package as a small name index plus lazily loaded path groups.
-- [`scripts/technology-catalog.mjs`](../../scripts/technology-catalog.mjs) generates it;
-  [`src/nodes/technology.ts`](../../src/nodes/technology.ts) recognizes technologies. After changing
-  the pinned version, run `npm run icons:generate`; `npm run icons:check` and unit tests catch stale assets.
-- Builds prepend the asset credits and the generated
-  [per-icon source, guidelines and license index](../../src/nodes/technologyCatalog/NOTICE.txt) to the
-  licences shown in **About → Licences**.
+  npm package. After changing the pinned version, run `npm run icons:generate`
+  ([`scripts/technology-catalog.mjs`](../../scripts/technology-catalog.mjs)); `npm run icons:check`
+  and unit tests catch stale assets.
+- Builds add the asset credits and the generated
+  [per-icon source, guidelines and license index](../../src/nodes/technologyCatalog/NOTICE.txt) to
+  **About → Licences**.
 - Simple Icons is [CC0-1.0](https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md), but
   individual icons can have other licenses and brand guidelines; see the
   [upstream disclaimer](https://github.com/simple-icons/simple-icons/blob/develop/DISCLAIMER.md).
-  Keep each bundled logo's notices. Brand names and logos belong to their owners and imply no endorsement.
+  Keep each bundled logo's notices. Brand names and logos belong to their owners and imply no
+  endorsement.
 - The Apache Kafka logo is the Apache Software Foundation's, under Apache-2.0; see the
   [ASF logo guidance](https://apache.org/logos) and [NOTICE](../../NOTICE).

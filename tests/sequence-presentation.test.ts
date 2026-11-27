@@ -55,6 +55,13 @@ describe('a sequence told as a flow', () => {
     expect(sequenceFlow(node)).toBe(flow);
   });
 
+  it('names a critical section’s later branch an option, as its tab does', () => {
+    let sequence = wrapItems(checkout(), ['post'], { id: 'crit', operator: 'critical' });
+    sequence = addOperand(sequence, 'crit', { id: 'timeout' });
+    sequence = insertItem(sequence, createMessage({ id: 'retry', from: 'store', to: 'api', label: 'retry' }), { operandId: 'timeout', index: 0 });
+    expect(sequenceFlow(docWith(sequence).node).steps.slice(0, 2).map((step) => step.caption)).toEqual(['critical — POST /orders', '[option] — retry']);
+  });
+
   it('is found by its id and is never one of the document’s own flows', () => {
     const { doc, node } = docWith(checkout());
     expect(playbackFlowOf(doc, sequenceFlowId('n_seq'), 'n_seq')).toBe(sequenceFlow(node));

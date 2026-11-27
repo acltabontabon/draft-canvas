@@ -11,6 +11,7 @@ import { readPreference, writePreference } from '../../lib/preferences';
 import { hostKind } from '../../host/hostInfo';
 import { getDesktopController, useDesktopState } from '../../desktop/useDesktop';
 import type { DocsStatus, MarkdownFile } from '../../desktop/api';
+import type { DesktopDoc } from '../../desktop/store';
 
 const THEME_PREFERENCE = 'docs-theme';
 const SYNC_PREFERENCE = 'docs-sync';
@@ -37,6 +38,21 @@ function lastSibling(markdown: MarkdownFile, names: readonly string[]): { line: 
   }
   return found;
 }
+
+function useOpenDesktopDoc(): DesktopDoc | null {
+  return useDesktopState().doc;
+}
+
+function useNoDesktopDoc(): DesktopDoc | null {
+  return null;
+}
+
+/**
+ * What the desktop has open, or nothing on the web. Which of the two is settled when the app is
+ * built, so every render makes the same calls, and the web build is left without the desktop's
+ * store: read on every render, it shipped in the web editor.
+ */
+const useDesktopDoc = __DESKTOP__ ? useOpenDesktopDoc : useNoDesktopDoc;
 
 export type Preview = { svg: string; width: number; height: number } | 'missing' | null;
 
@@ -131,9 +147,9 @@ export function useDocsPublishing({
 }): DocsPublishing | null {
   const onDesktop = __DESKTOP__ && hostKind() === 'desktop';
   // Re-rendered by saves and file switches, so `dirty` and the file name stay true.
-  const desktop = useDesktopState();
+  const desktopDoc = useDesktopDoc();
   const controller = onDesktop ? getDesktopController() : null;
-  const desktopFile = controller && desktop.doc.kind === 'file' ? controller.docsFile() : null;
+  const desktopFile = controller && desktopDoc?.kind === 'file' ? controller.docsFile() : null;
   const handleKey = desktopFile?.handle ?? '';
 
   const [chosenView, setChosenView] = useState<string | null>(null);

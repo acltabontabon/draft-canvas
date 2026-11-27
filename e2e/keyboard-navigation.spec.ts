@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { armTool, newCanvas, nextFrames } from './canvas';
+import { armTool, clickEdge, connect as connectShapes, create, newCanvas, nextFrames } from './canvas';
 
 /**
  * Alt+Arrow (spatial navigation between nearby elements) and Alt+Shift+Left/Right (relationship
@@ -224,5 +224,313 @@ test.describe('relationship navigation (Alt+Shift+Left/Right)', () => {
     await page.keyboard.press('Meta+a');
     await page.keyboard.press('Alt+Shift+ArrowRight');
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
+  });
+});
+
+/**
+ * Where keyboard focus goes when the thing holding it closes, and which layer a key belongs to. The
+ * canvas (`.dc-canvas`) is the diagram's one Tab stop: a surface that unmounts with focus inside it
+ * hands focus back there, as the Outline and Appearance do, rather than dropping it on `<body>`,
+ * where a screen reader loses its place and the next Tab starts from wherever the removed control
+ * sat. And a key pressed in chrome reached from the keyboard is that control's, never the canvas's.
+ */
+test.describe('keyboard focus around the canvas', () => {
+  const canvas = (page: Page) => page.locator('.dc-canvas');
+  const selectedNodes = (page: Page) => page.locator('.dc-node[data-selected="true"]');
+  const depth = (page: Page) =>
+    page.evaluate(async () => (await import('/src/store/editorStore.ts')).useEditorStore.getState().path.length);
+
+  test('Backspace and Delete on chrome reached by keyboard leave the canvas selection alone', async ({ page }) => {
+    await newCanvas(page, 'Stray delete');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Queue', { x: 650, y: 300 });
+    await expect(selectedNodes(page)).toHaveCount(1);
+
+    // Back from the canvas onto the header's last control, the way a keyboard gets there.
+    await canvas(page).focus();
+    await page.keyboard.press('Shift+Tab');
+    await expect(page.getByRole('button', { name: 'Share', exact: true })).toBeFocused();
+    await page.keyboard.press('Backspace');
+    await page.keyboard.press('Delete');
+    await expect(page.locator('.dc-node')).toHaveCount(2);
+
+    // The History popover owns its keys too, however it was opened.
+    await page.locator('.dc-node').first().click();
+    await page.locator('.dc-history-chip').click();
+    const history = page.getByRole('dialog', { name: 'History' });
+    await expect(history).toBeVisible();
+    await expect.poll(() => history.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('s');
+    await expect(page.locator('.dc-node')).toHaveCount(2);
+  });
+
+  test('a control clicked with the mouse leaves Delete and the shape keys to the canvas', async ({ page, browserName }) => {
+    await newCanvas(page, 'Keys after a click');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Queue', { x: 650, y: 300 });
+    const nodes = page.locator('.dc-node');
+
+    // Chromium, and so the desktop app's WebView2, marks a clicked button `:focus-visible` as soon as
+    // a key goes down on it, before the page hears the key. A guard asking then took the button for
+    // one reached from the keyboard, and Delete did nothing.
+    await nodes.first().click();
+    const zoomIn = page.getByRole('button', { name: 'Zoom in', exact: true });
+    await zoomIn.click();
+    if (browserName === 'chromium') await expect(zoomIn).toBeFocused();
+    await page.keyboard.press('Delete');
+    await expect(nodes).toHaveCount(1);
+
+    // The same for a letter: click Service, press S over the canvas, and a Service arrives.
+    const service = page.getByRole('toolbar', { name: 'Create' }).getByRole('button', { name: 'Service', exact: true });
+    await service.click();
+    if (browserName === 'chromium') await expect(service).toBeFocused();
+    const pane = (await page.locator('.react-flow__pane').boundingBox())!;
+    await page.mouse.move(pane.x + 450, pane.y + 500);
+    await page.keyboard.press('s');
+    await expect(nodes).toHaveCount(2);
+  });
+
+  test('Escape in the History popover closes only the popover', async ({ page }) => {
+    await newCanvas(page, 'History escape');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await expect(selectedNodes(page)).toHaveCount(1);
+    const chip = page.locator('.dc-history-chip');
+    const history = page.getByRole('dialog', { name: 'History' });
+
+    await chip.click();
+    await expect(history).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(history).toBeHidden();
+    await expect(chip).toBeFocused();
+    await expect(selectedNodes(page)).toHaveCount(1);
+
+    // Inside a shape with nothing selected, the same Escape would otherwise back out of the room.
+    await page.keyboard.press('ControlOrMeta+ArrowDown');
+    await expect.poll(() => depth(page)).toBe(1);
+    await page.locator('.react-flow__pane').click({ position: { x: 600, y: 500 } });
+    await expect(selectedNodes(page)).toHaveCount(0);
+    await chip.click();
+    await expect(history).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(history).toBeHidden();
+    await page.waitForTimeout(400);
+    expect(await depth(page)).toBe(1);
+  });
+
+  test('finishing a name from the keyboard puts focus back on the canvas', async ({ page }) => {
+    await newCanvas(page, 'Name focus');
+    await create(page, 'Service', { x: 400, y: 300 });
+    await canvas(page).focus();
+    const editor = page.locator('.dc-node-editor');
+
+    await page.keyboard.press('Enter');
+    await expect(editor).toBeFocused();
+    await page.keyboard.type('Orders');
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    await expect(canvas(page)).toBeFocused();
+    // Escape still reverts a name: handing focus back must not commit what was typed.
+    await expect(page.locator('.dc-node').first()).not.toContainText('Orders');
+
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Orders API');
+    await page.keyboard.press('Enter');
+    await expect(editor).toHaveCount(0);
+    await expect(canvas(page)).toBeFocused();
+    await expect(page.locator('.dc-node').first()).toContainText('Orders API');
+    await expect(selectedNodes(page)).toHaveCount(1);
+  });
+
+  test('a shape toolbar closed from the keyboard puts focus back on the canvas', async ({ page }) => {
+    await newCanvas(page, 'Toolbar focus');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Queue', { x: 650, y: 300 });
+    const toolbar = page.getByRole('toolbar', { name: 'Element options' });
+    await expect(toolbar).toBeVisible();
+
+    // Escape inside the toolbar deselects, and the toolbar that held focus goes with the selection.
+    await canvas(page).focus();
+    await page.keyboard.press('Tab');
+    await expect(toolbar.getByRole('button', { name: 'Element colour' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(selectedNodes(page)).toHaveCount(0);
+    await expect(canvas(page)).toBeFocused();
+
+    // Its Delete button, pressed from the keyboard, removes the shape the toolbar was about.
+    await page.locator('.dc-node').first().click();
+    await expect(toolbar).toBeVisible();
+    const remove = toolbar.getByRole('button', { name: 'Delete', exact: true });
+    await canvas(page).focus();
+    for (let i = 0; i < 12 && !(await remove.evaluate((el) => el === document.activeElement)); i += 1) {
+      await page.keyboard.press('Tab');
+    }
+    await expect(remove).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.dc-node')).toHaveCount(1);
+    await expect(canvas(page)).toBeFocused();
+  });
+
+  /** A Service sending to a Queue, its connector's toolbar open: a connector whose caption chip is its
+   *  name (a request/response pairing shows its operation editor there instead). */
+  async function connectorToolbar(page: Page, title: string) {
+    await newCanvas(page, title);
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Queue', { x: 700, y: 300 });
+    await connectShapes(page, 0, 1);
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+    await clickEdge(page, page.locator('.dc-edge[data-selected="true"] .dc-edge-line'));
+    const toolbar = page.getByRole('toolbar', { name: 'Connector options' });
+    await expect(toolbar).toBeVisible();
+    return toolbar;
+  }
+
+  test('the connector toolbar’s label field hands focus back to the chip that opened it', async ({ page }) => {
+    const toolbar = await connectorToolbar(page, 'Connector label focus');
+    const caption = toolbar.locator('.dc-edge-inspector-caption');
+    await caption.focus();
+    await page.keyboard.press('Enter');
+    const field = toolbar.getByRole('textbox', { name: 'Connector label' });
+    await expect(field).toBeFocused();
+    await page.keyboard.type('pays');
+    await page.keyboard.press('Escape');
+    await expect(field).toHaveCount(0);
+    await expect(caption).toBeFocused();
+    await expect(caption).not.toHaveText('pays');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('pays');
+    await page.keyboard.press('Enter');
+    await expect(field).toHaveCount(0);
+    await expect(caption).toBeFocused();
+    await expect(caption).toHaveText('pays');
+  });
+
+  test('a connector label edited on the canvas from the keyboard hands focus back to the canvas', async ({ page }) => {
+    await newCanvas(page, 'Canvas label focus');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Queue', { x: 700, y: 300 });
+    await connectShapes(page, 0, 1);
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+    await canvas(page).focus();
+    await page.keyboard.press('Enter');
+    const field = page.locator('.dc-edge-label-input');
+    await expect(field).toBeFocused();
+    await page.keyboard.type('pays');
+    await page.keyboard.press('Escape');
+    await expect(field).toHaveCount(0);
+    await expect(canvas(page)).toBeFocused();
+    // Escape still reverts: handing focus back must not commit what was typed.
+    await expect(page.locator('.dc-edge-label-text')).toHaveCount(0);
+
+    await page.keyboard.press('Enter');
+    await expect(field).toBeFocused();
+    await page.keyboard.type('pays');
+    await page.keyboard.press('Enter');
+    await expect(field).toHaveCount(0);
+    await expect(canvas(page)).toBeFocused();
+    await expect(page.locator('.dc-edge-label-text')).toHaveText('pays');
+  });
+
+  test('Escape on the connector colour flyout closes the flyout alone', async ({ page }) => {
+    // As the shape toolbar's colour panel does: the connector stays selected, its toolbar open.
+    const toolbar = await connectorToolbar(page, 'Connector colour flyout');
+    const swatch = toolbar.getByRole('button', { name: 'Connector colour' });
+    await swatch.focus();
+    await page.keyboard.press('Enter');
+    const flyout = toolbar.locator('.dc-connector-palette-flyout');
+    await expect(flyout).toBeVisible();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Escape');
+    await expect(flyout).toHaveCount(0);
+    await expect(toolbar).toBeVisible();
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+    await expect(swatch).toBeFocused();
+    // A second Escape is the canvas's again: it deselects, and focus lands on the canvas.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(0);
+    await expect(canvas(page)).toBeFocused();
+  });
+
+  test('connectors are not Tab stops: the canvas is the one stop for the whole diagram', async ({ page }) => {
+    await newCanvas(page, 'Connector tab stops');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Service', { x: 700, y: 300 });
+    await connectShapes(page, 0, 1);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(0);
+    await expect(page.locator('.react-flow__edge')).toHaveCount(1);
+    await expect(page.locator('.react-flow__edge[tabindex]')).toHaveCount(0);
+    // Still named for a screen reader, as an image of the relationship it draws.
+    await expect(page.locator('.react-flow__edge')).toHaveAttribute('aria-label', /.+/);
+
+    await canvas(page).focus();
+    await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => document.activeElement?.closest('.react-flow__renderer') ?? null)).toBeNull();
+  });
+
+  test('the Open points panel closes on Escape from inside it, and hands focus back to the canvas', async ({ page }) => {
+    await newCanvas(page, 'Open points focus');
+    await create(page, 'Service', { x: 400, y: 300 });
+    const openPanel = () =>
+      page.evaluate(async () => (await import('/src/store/uiStore.ts')).useUiStore.getState().setOpenPointsPanelOpen(true));
+    const panel = page.getByRole('complementary', { name: 'Open points' });
+    const close = panel.getByRole('button', { name: 'Close open points' });
+
+    await openPanel();
+    await expect(panel).toBeVisible();
+    await close.focus();
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(canvas(page)).toBeFocused();
+    // The panel's Escape was the panel's: the shape stays selected.
+    await expect(selectedNodes(page)).toHaveCount(1);
+
+    await openPanel();
+    await expect(panel).toBeVisible();
+    await close.focus();
+    await page.keyboard.press('Enter');
+    await expect(panel).toBeHidden();
+    await expect(canvas(page)).toBeFocused();
+
+    // The Outline's own Close button, the same two ways.
+    const outline = page.getByRole('complementary', { name: 'Outline' });
+    const closeOutline = outline.getByRole('button', { name: 'Close outline' });
+    await page.keyboard.press('Alt+o');
+    await expect(outline).toBeVisible();
+    await closeOutline.focus();
+    await page.keyboard.press('Escape');
+    await expect(outline).toBeHidden();
+    await expect(canvas(page)).toBeFocused();
+    await page.keyboard.press('Alt+o');
+    await expect(outline).toBeVisible();
+    await closeOutline.focus();
+    await page.keyboard.press('Enter');
+    await expect(outline).toBeHidden();
+    await expect(canvas(page)).toBeFocused();
+  });
+
+  test('a shape chosen from All shapes with the keyboard is put down, ready to name', async ({ page }) => {
+    // A technology has no key of its own, and an armed tool waits for a click: "kafka" could be found
+    // from the keyboard but never placed.
+    await newCanvas(page, 'Keyboard shape');
+    await page.getByRole('button', { name: 'All shapes' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('combobox', { name: 'Search shapes' })).toBeFocused();
+    await page.keyboard.type('kafka');
+    await page.keyboard.press('Enter');
+
+    await expect(page.locator('.dc-node')).toHaveCount(1);
+    await expect(page.locator('.dc-node-editor')).toBeFocused();
+    const made = await page.evaluate(async () => {
+      const { useEditorStore } = await import('/src/store/editorStore.ts');
+      const { useUiStore } = await import('/src/store/uiStore.ts');
+      const [node] = useEditorStore.getState().document.nodes;
+      return { type: node?.type, technology: node?.technology, armed: useUiStore.getState().armed };
+    });
+    expect(made).toEqual({ type: 'queue', technology: 'Apache Kafka', armed: null });
+    await page.keyboard.type('Orders');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.dc-node').first()).toContainText('Orders');
+    await expect(canvas(page)).toBeFocused();
   });
 });

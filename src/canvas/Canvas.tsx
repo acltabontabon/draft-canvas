@@ -84,6 +84,7 @@ import { sameGuides, type Guide } from './snapping';
 import { NO_DRAG_SNAP, NO_GUIDES, snapChanges, snapResizeChanges, type DragLink, type DragSnapContext, type NodeLookup } from './dragSnap';
 import { CanvasLegend } from './CanvasLegend';
 import { useMakeRoom } from './useMakeRoom';
+import { makeRoomBand, viewAcross, type MakeRoomLine as MakeRoomBandLine } from './makeRoomBand';
 import { useHoverTrace } from './useHoverTrace';
 import { zoomBand } from './zoomBand';
 import { snapBypassed, trackSnapBypass } from './snapBypass';
@@ -281,6 +282,15 @@ const GuideLines = memo(function GuideLines({ guides }: { guides: readonly Guide
   );
 });
 
+/** Make room's band: the room made (or closed), drawn across the whole canvas through the press point. */
+const MakeRoomLine = memo(function MakeRoomLine({ line }: { line: MakeRoomBandLine }) {
+  // Centred across its axis on where the view is (a number that holds while the view holds still),
+  // so the band runs through the press point however far out the diagram is.
+  const across = useViewportStore((state) => viewAcross(line.axis, state.transform, state.width, state.height));
+  const style: CSSProperties = makeRoomBand(line, across);
+  return <div className="dc-make-room-band" data-axis={line.axis} data-closing={line.delta < 0 ? 'true' : undefined} style={style} />;
+});
+
 /** How long the zoom must hold still before `--dc-zoom` follows it. */
 const ZOOM_VARIABLE_SETTLE_MS = 140;
 
@@ -301,18 +311,6 @@ const ZOOM_VARIABLE_SETTLE_MS = 140;
  * layer is dropped for a zoom and comes back once it holds still. An attribute only restyles the one
  * element its selector names, unlike the inherited `--dc-zoom`.
  */
-/** How far past the diagram the Make room line runs: beyond any view, without a size no browser draws. */
-const ROOM_LINE_REACH = 200_000;
-
-const MakeRoomLine = memo(function MakeRoomLine({ line }: { line: { axis: 'x' | 'y'; at: number; delta: number } }) {
-  const from = Math.min(line.at, line.at + line.delta);
-  const span = Math.abs(line.delta);
-  const style: CSSProperties = line.axis === 'x'
-    ? { left: from, top: -ROOM_LINE_REACH, width: span, height: ROOM_LINE_REACH * 2 }
-    : { top: from, left: -ROOM_LINE_REACH, height: span, width: ROOM_LINE_REACH * 2 };
-  return <div className="dc-make-room-band" data-axis={line.axis} data-closing={line.delta < 0 ? 'true' : undefined} style={style} />;
-});
-
 function useZoomVariable() {
   const { optionsStore, viewportStore } = useReactFlowStoreApi();
   useEffect(() => {

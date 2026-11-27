@@ -107,6 +107,29 @@ describe('the agent skill', () => {
     expect([...languages.matchAll(/`([a-z]+)`/g)].map((m) => m[1]!).sort()).toEqual([...CODE_LANGUAGES].sort());
   });
 
+  // The refusal table is what an agent does when told no. Most UNSUPPORTED refusals are a request
+  // the app won't draw that way and says what to send instead (only an unreadable file is the
+  // person's to fix), and DUPLICATE_FLOW from an add means "update the flow that is there".
+  it('tells an agent what the app itself says to do for each refusal', () => {
+    const playbook = readFileSync(join(SKILL, 'references', 'mcp-playbook.md'), 'utf8');
+    const row = (code: string) => {
+      const found = playbook.split('\n').find((line) => line.startsWith(`| \`${code}\``));
+      if (!found) throw new Error(`no row for ${code}`);
+      const [, meaning, todo] = found.split(' | ');
+      return { meaning: meaning ?? '', todo: todo ?? '' };
+    };
+    const unsupported = row('UNSUPPORTED');
+    expect(unsupported.meaning).toMatch(/relationship|pairing|self-loop/);
+    expect(unsupported.todo).toMatch(/resend|send/i);
+    // What the add's own refusal says: "change it with {op:"update", id, set:{steps}} instead".
+    const errors = readFileSync(join(__dirname, '..', 'src', 'agent', 'patch.ts'), 'utf8');
+    expect(errors).toContain('change it with {op:"update", id:"${same.id}", set:{steps}} instead');
+    expect(row('DUPLICATE_FLOW').todo).toContain('{op: "update", id, set: {steps}}');
+    const notFound = row('NOT_FOUND');
+    expect(notFound.meaning).toMatch(/previewId/);
+    expect(notFound.meaning).toMatch(/starter/);
+  });
+
   it('teaches technologies the app shows as logos', () => {
     // Agents copy the example and the vocabulary's examples, so neither may draw the advisory below.
     const technologies: string[] = [];

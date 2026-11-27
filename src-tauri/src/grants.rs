@@ -95,6 +95,22 @@ impl Grants {
             .ok_or_else(AppError::invalid_handle)
     }
 
+    /// Forgets a file's handle once the file has moved on (a rename or a move gives it a new one). Kept,
+    /// it went on naming the old path: a late save through it would have put a second copy back under
+    /// the old name, and a new file later made at that name would have been handed the old handle —
+    /// which recovery reads as "the same open document".
+    pub fn revoke_file(&mut self, handle: &str) {
+        if let Some(grant) = self.files.remove(handle) {
+            if self
+                .file_handles
+                .get(&grant.path)
+                .is_some_and(|h| h == handle)
+            {
+                self.file_handles.remove(&grant.path);
+            }
+        }
+    }
+
     pub fn file(&self, handle: &str) -> Result<FileGrant, AppError> {
         self.files
             .get(handle)

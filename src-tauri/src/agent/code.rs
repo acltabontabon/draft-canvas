@@ -113,22 +113,49 @@ struct Folder {
     ignored: Vec<Ignore>,
 }
 
-/// One `.gitignore` pattern, matched against a path relative to the folder with `glob_matches`.
+/// Git on Windows and macOS matches `.gitignore` without regard to case (`core.ignorecase`), as their
+/// file systems name files: there `bin/` hides `Bin` too, and `[Bb]in/` hides `BIN`.
+const FOLD_CASE: bool = cfg!(any(windows, target_os = "macos"));
+
+/// One `.gitignore` pattern, matched against a path relative to the folder.
 struct Ignore {
-    /// Relative to the folder; `**` segments stand for any number of folders. A pattern written
-    /// with no slash but a trailing one matches a name at any depth, so it is kept as `**/name`.
-    pattern: String,
+    /// Its names between slashes, from the folder down; `None` is a `**`, any number of folders. A
+    /// pattern written with no slash but a trailing one matches a name at any depth, so it starts
+    /// with a `**`.
+    parts: Vec<Option<Vec<Token>>>,
     /// Written with a trailing slash: directories only.
     directories: bool,
 }
 
+/// A piece of one name in a pattern, as Git's wildmatch reads it.
+enum Token {
+    /// Itself: any character but `*`, `?` and `[`, or any one escaped with `\`.
+    Char(char),
+    /// `?`: any one character.
+    One,
+    /// `*`: any run of characters, or none.
+    Any,
+    /// `[…]`: one character in the set, or with `!` or `^` first, one not in it.
+    Class { negated: bool, members: Vec<Member> },
+}
+
+enum Member {
+    /// `a-z`, from the first to the last; a lone character is a range of one.
+    Range(char, char),
+    /// `[:digit:]` and the other POSIX classes.
+    Named(fn(&char) -> bool),
+}
+
 impl Ignore {
-    /// The supported subset: `*` and `**` wildcards, anchored and nested paths. A line using what
-    /// isn't supported (negation, `?`, character classes, escapes) is skipped. Skipping a negation
-    /// can only hide more than git would, never less.
+    /// A line as Git reads it: `*`, `**` and `?`, classes (`[Bb]in/`, `*.py[cod]`, ranges, `!` or `^`
+    /// to negate, POSIX names such as `[:digit:]`) and `\` escapes, anchored and nested paths. A line
+    /// that matches nothing in Git either (a class nothing closes, a `\` at the end) is skipped.
+    ///
+    /// So is a negation, `!pattern`: honouring one would show a file an earlier line hid, and
+    /// skipping it can only hide more than git would, never less.
     fn parse(line: &str) -> Option<Self> {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with(['#', '!']) || line.contains(['?', '[', ']', '\\']) {
+        let line = pattern_text(line);
+        if line.is_empty() || line.starts_with(['#', '!']) {
             return None;
         }
         let mut directories = line.ends_with('/');
@@ -144,26 +171,194 @@ impl Ignore {
         if line.is_empty() || line.split('/').any(|part| part.is_empty() || part == "..") {
             return None;
         }
-        Some(Self {
-            pattern: if anchored {
-                line.to_string()
+        let mut parts = if anchored { Vec::new() } else { vec![None] };
+        for part in line.split('/') {
+            parts.push(if part == "**" {
+                None
             } else {
-                format!("**/{line}")
-            },
-            directories,
-        })
+                Some(tokens(part)?)
+            });
+        }
+        Some(Self { parts, directories })
     }
 
-    fn matches(&self, relative: &str, directory: bool) -> bool {
-        // `glob_matches` compares a pattern without a slash with the last name only; here such a
-        // pattern is anchored (`/generated`), so it must match the whole path.
-        (directory || !self.directories)
-            && if self.pattern.contains('/') {
-                glob_matches(&self.pattern, relative)
-            } else {
-                !relative.contains('/') && star_matches(&self.pattern, relative)
+    /// Whether the path made of `names`, from the folder down, is ignored.
+    fn matches(&self, names: &[Vec<char>], directory: bool) -> bool {
+        if self.directories && !directory {
+            return false;
+        }
+        // Which leading names the parts so far account for: a `**` any number of them.
+        let mut matched = vec![false; names.len() + 1];
+        matched[0] = true;
+        for part in &self.parts {
+            let mut next = vec![false; names.len() + 1];
+            for i in 0..=names.len() {
+                next[i] = match part {
+                    None => matched[i] || i > 0 && next[i - 1],
+                    Some(tokens) => i > 0 && matched[i - 1] && name_matches(tokens, &names[i - 1]),
+                };
             }
+            matched = next;
+        }
+        matched[names.len()]
     }
+}
+
+/// A line's pattern, from its first character to its last: Git drops the spaces at the end unless the
+/// last is escaped (`name\ `).
+fn pattern_text(line: &str) -> &str {
+    let line = line.trim_start();
+    let kept = line.trim_end();
+    let escapes = kept.len() - kept.trim_end_matches('\\').len();
+    if escapes % 2 == 1 && line[kept.len()..].starts_with(' ') {
+        &line[..=kept.len()]
+    } else {
+        kept
+    }
+}
+
+/// One name of a pattern, in pieces; `None` where Git matches nothing with it: a `\` that escapes
+/// nothing, or a class that nothing closes.
+fn tokens(name: &str) -> Option<Vec<Token>> {
+    let chars: Vec<char> = name.chars().collect();
+    let mut tokens = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let token = match chars[i] {
+            '\\' => {
+                i += 1;
+                Token::Char(*chars.get(i)?)
+            }
+            '?' => Token::One,
+            '*' if matches!(tokens.last(), Some(Token::Any)) => {
+                i += 1;
+                continue;
+            }
+            '*' => Token::Any,
+            '[' => {
+                let (class, close) = class(&chars, i + 1)?;
+                i = close;
+                class
+            }
+            c => Token::Char(c),
+        };
+        tokens.push(token);
+        i += 1;
+    }
+    Some(tokens)
+}
+
+/// A class, read from just inside its `[` as Git reads one: `!` or `^` first negates it, a `]` first
+/// is a member, `a-z` is a range unless its `-` comes first or last, `\` escapes, and `[:name:]` is a
+/// POSIX class. With it, where its `]` is; `None` when nothing closes it or the POSIX name is unknown.
+fn class(chars: &[char], mut i: usize) -> Option<(Token, usize)> {
+    let negated = matches!(chars.get(i), Some('!' | '^'));
+    if negated {
+        i += 1;
+    }
+    let first = i;
+    let mut members = Vec::new();
+    loop {
+        let mut c = *chars.get(i)?;
+        if c == ']' && i > first {
+            return Some((Token::Class { negated, members }, i));
+        }
+        if c == '[' && chars.get(i + 1) == Some(&':') {
+            // Up to the first `]`; without a `:` just before it, the `[` is only a member.
+            let close = i + 2 + chars[i + 2..].iter().position(|c| *c == ']')?;
+            if close > i + 2 && chars[close - 1] == ':' {
+                let name: String = chars[i + 2..close - 1].iter().collect();
+                members.push(Member::Named(posix_class(&name)?));
+                i = close + 1;
+                continue;
+            }
+        }
+        if c == '\\' {
+            i += 1;
+            c = *chars.get(i)?;
+        }
+        if chars.get(i + 1) == Some(&'-') && chars.get(i + 2).is_some_and(|next| *next != ']') {
+            i += 2;
+            let mut last = chars[i];
+            if last == '\\' {
+                i += 1;
+                last = *chars.get(i)?;
+            }
+            members.push(Member::Range(c, last));
+        } else {
+            members.push(Member::Range(c, c));
+        }
+        i += 1;
+    }
+}
+
+fn posix_class(name: &str) -> Option<fn(&char) -> bool> {
+    let test: fn(&char) -> bool = match name {
+        "alnum" => char::is_ascii_alphanumeric,
+        "alpha" => char::is_ascii_alphabetic,
+        "blank" => |c| matches!(c, ' ' | '\t'),
+        "cntrl" => char::is_ascii_control,
+        "digit" => char::is_ascii_digit,
+        "graph" => char::is_ascii_graphic,
+        "lower" => char::is_ascii_lowercase,
+        "print" => |c| c.is_ascii_graphic() || *c == ' ',
+        "punct" => char::is_ascii_punctuation,
+        "space" => |c| c.is_ascii_whitespace() || *c == '\x0b',
+        "upper" => char::is_ascii_uppercase,
+        "xdigit" => char::is_ascii_hexdigit,
+        _ => return None,
+    };
+    Some(test)
+}
+
+impl Token {
+    /// Whether this piece takes the one character `c`: in either case where Git ignores case. (Git
+    /// lowercases only the name there, so its `[B]` takes neither `B` nor `b`; here it takes both,
+    /// which can only hide more.)
+    fn takes(&self, c: char) -> bool {
+        match self {
+            Token::Char(own) => *own == c || FOLD_CASE && own.eq_ignore_ascii_case(&c),
+            Token::One | Token::Any => true,
+            Token::Class { negated, members } => {
+                let has = |c: char| {
+                    members.iter().any(|member| match member {
+                        Member::Range(first, last) => (*first..=*last).contains(&c),
+                        Member::Named(test) => test(&c),
+                    })
+                };
+                let found = has(c)
+                    || FOLD_CASE && (has(c.to_ascii_lowercase()) || has(c.to_ascii_uppercase()));
+                found != *negated
+            }
+        }
+    }
+}
+
+/// Whether a name matches one name of a pattern: each piece takes one character, a `*` any run.
+fn name_matches(tokens: &[Token], name: &[char]) -> bool {
+    let (mut p, mut t, mut star, mut retry) = (0, 0, None, 0);
+    while t < name.len() {
+        match tokens.get(p) {
+            Some(Token::Any) => {
+                star = Some(p);
+                p += 1;
+                retry = t;
+            }
+            Some(token) if token.takes(name[t]) => {
+                p += 1;
+                t += 1;
+            }
+            _ => match star {
+                Some(at) => {
+                    retry += 1;
+                    t = retry;
+                    p = at + 1;
+                }
+                None => return false,
+            },
+        }
+    }
+    tokens[p..].iter().all(|token| matches!(token, Token::Any))
 }
 
 impl Folder {
@@ -176,9 +371,8 @@ impl Folder {
             root,
             ignored: Vec::new(),
         };
-        // Only the root .gitignore, and only the subset `Ignore::parse` describes. A symlinked
-        // .gitignore must never be a way to read a second folder, even though its contents aren't
-        // returned.
+        // Only the root .gitignore, read as `Ignore::parse` describes. A symlinked .gitignore must
+        // never be a way to read a second folder, even though its contents aren't returned.
         let ignore = folder.root.join(".gitignore");
         if fs::symlink_metadata(&ignore).is_ok_and(|m| m.is_file()) {
             if let Ok(file) = File::open(ignore) {
@@ -198,7 +392,7 @@ impl Folder {
     fn check_names(&self, path: &Path) -> Result<(), ToolError> {
         let relative = path.strip_prefix(&self.root).map_err(|_| outside())?;
         let mut current = self.root.clone();
-        let mut walked = String::new();
+        let mut walked: Vec<Vec<char>> = Vec::new();
         let mut parent = "";
         for part in relative.iter() {
             let name = part.to_str().ok_or_else(unreadable)?;
@@ -206,10 +400,7 @@ impl Folder {
             if is_secret(name) || is_secret_in(parent, name) {
                 return Err(secret());
             }
-            if !walked.is_empty() {
-                walked.push('/');
-            }
-            walked.push_str(name);
+            walked.push(name.chars().collect());
             parent = name;
             let directory = current.is_dir();
             if directory && SKIP_DIRS.contains(&name.to_ascii_lowercase().as_str())
@@ -896,6 +1087,95 @@ mod tests {
                 read_code(dir.path(), &json!({"path": path})).is_ok(),
                 "{path}"
             );
+        }
+    }
+
+    /// Lines using `?`, a class or an escape were skipped, so Visual Studio's `[Bb]in/` and Python's
+    /// `*.py[cod]` hid nothing from Nodi.
+    #[test]
+    fn gitignore_classes_and_single_characters_are_respected() {
+        let dir = TempDir::new().unwrap();
+        write(
+            dir.path(),
+            ".gitignore",
+            "[Bb]in/\nsecret?.txt\n*.py[cod]\n*.[Cc]ache\n",
+        );
+        for path in [
+            "bin/x.txt",
+            "Bin/x.txt",
+            "nested/bin/x.txt",
+            "secret1.txt",
+            "app.pyc",
+            "app.pyo",
+            "a.Cache",
+        ] {
+            write(dir.path(), path, "needle");
+            error(dir.path(), json!({"path": path}), "EXCLUDED_PATH");
+        }
+        for path in ["bins/x.txt", "secret12.txt", "secret.txt", "app.py"] {
+            write(dir.path(), path, "needle");
+            assert!(
+                read_code(dir.path(), &json!({"path": path})).is_ok(),
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn gitignore_negated_classes_ranges_and_escapes_are_respected() {
+        let dir = TempDir::new().unwrap();
+        // A trailing `\` and a class nothing closes match nothing in Git, so they hide nothing here.
+        write(
+            dir.path(),
+            ".gitignore",
+            "v[!a-c]x.txt\nw[^a]x.txt\nlog[0-9].txt\nbuild[[:digit:]].txt\n[]]x.txt\n\\#notes\n\\!keep\nliteral\\[1\\].txt\nlast\\\n[unclosed\n",
+        );
+        for path in [
+            "vdx.txt",
+            "wbx.txt",
+            "log7.txt",
+            "build5.txt",
+            "]x.txt",
+            "#notes",
+            "!keep",
+            "literal[1].txt",
+        ] {
+            write(dir.path(), path, "needle");
+            error(dir.path(), json!({"path": path}), "EXCLUDED_PATH");
+        }
+        for path in [
+            "vax.txt",
+            "vcx.txt",
+            "wax.txt",
+            "logx.txt",
+            "buildx.txt",
+            "notes",
+            "keep",
+            "literal1.txt",
+            "last",
+            "[unclosed",
+        ] {
+            write(dir.path(), path, "needle");
+            assert!(
+                read_code(dir.path(), &json!({"path": path})).is_ok(),
+                "{path}"
+            );
+        }
+    }
+
+    /// Git on Windows and macOS ignores case (`core.ignorecase`); so does this, there.
+    #[cfg(any(windows, target_os = "macos"))]
+    #[test]
+    fn gitignore_ignores_case_where_git_does() {
+        let dir = TempDir::new().unwrap();
+        write(
+            dir.path(),
+            ".gitignore",
+            "bin/\n*.log\nDebug/\n[a-c]ache/\n",
+        );
+        for path in ["BIN/x.txt", "build.LOG", "debug/x.txt", "Cache/x.txt"] {
+            write(dir.path(), path, "needle");
+            error(dir.path(), json!({"path": path}), "EXCLUDED_PATH");
         }
     }
 

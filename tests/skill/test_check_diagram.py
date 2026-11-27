@@ -116,6 +116,31 @@ class Refuses(unittest.TestCase):
         self.assertIn('relationship r1.to: must be an id (a string)', errors)
         self.assertIn('flow main.spotlight: must be a list of ids (strings)', errors)
 
+    def test_a_list_or_an_object_where_a_word_belongs_is_an_error_not_a_crash(self) -> None:
+        # Each of these raised TypeError (unhashable) and printed nothing, not even with --json.
+        requests = {
+            'color': minimal(),
+            'kind': minimal(),
+            'level': minimal(level=['container']),
+            'type': minimal(),
+            'note kind': minimal(notes=[{'id': 'n', 'kind': {'k': 'note'}, 'text': 'Why.', 'about': 'api'}]),
+            'links': minimal(sequences=[{'id': 's', 'mermaid': 'sequenceDiagram\n api->>db: x', 'links': {'api': ['api']}}]),
+            'inside level': minimal(),
+            'group kind': minimal(groups=[{'id': 'g', 'label': 'G', 'kind': ['system'], 'color': {'c': 'blue'}}]),
+        }
+        requests['color']['nodes'][1]['color'] = ['blue']
+        requests['kind']['relationships'][0]['kind'] = ['sync']
+        requests['type']['nodes'][1]['type'] = ['service']
+        requests['inside level']['nodes'][1]['inside'] = {'level': ['component'], 'nodes': [{'id': 'c', 'type': 'component', 'label': 'C'}]}
+        for what, request in requests.items():
+            with self.subTest(what):
+                self.assertTrue(report(request).errors)
+
+    def test_an_id_ending_in_a_line_break_is_refused_as_the_app_refuses_it(self) -> None:
+        request = minimal()
+        request['nodes'][0]['id'] = 'user\n'
+        self.assertIn("id 'user\\n' must start with a letter", '\n'.join(report(request).errors))
+
     def test_linked_junctions_read_as_one_point(self) -> None:
         request = minimal()
         inside = {'nodes': [{'id': 'j_in', 'type': 'junction', 'label': 'A', 'link': 'handoff'}]}
@@ -374,6 +399,19 @@ class CommandLine(unittest.TestCase):
                 self.assertEqual(result['valid'], status == 0)
                 self.assertEqual(bool(result['errors']), status != 0)
                 self.assertIsInstance(result['warnings'], list)
+
+    def test_a_check_that_fails_still_answers_in_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'request.json'
+            path.write_text(json.dumps(minimal()), encoding='utf-8')
+            out = io.StringIO()
+            argv = ['check_diagram.py', str(path), '--json']
+            with patch.object(checker, 'check', side_effect=RuntimeError('boom')), patch('sys.argv', argv), patch('sys.stdout', out):
+                status = checker.main()
+            self.assertEqual(status, 1)
+            result = json.loads(out.getvalue())
+            self.assertFalse(result['valid'])
+            self.assertIn('RuntimeError', result['errors'][0])
 
     def test_exit_codes_and_a_fresh_request_id(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

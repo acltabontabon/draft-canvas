@@ -192,6 +192,40 @@ describe('create rail and shape picker', () => {
     expect(screen.getByRole('button', { name: 'Apache Kafka — all shapes' })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('puts a shape opened and chosen from the keyboard down at once, rather than arming it', async () => {
+    // A technology has no key of its own, and an armed tool waits for a click on the canvas: from
+    // the keyboard, "kafka" could be found and never put down.
+    const user = userEvent.setup();
+    const placed: unknown[] = [];
+    render(<Toolbar title="Untitled canvas" onTitleChange={() => {}} onBack={() => {}} onPresent={() => {}} onExport={() => {}} onPlaceShape={(preset) => placed.push(preset)} />);
+    const trigger = screen.getByRole('button', { name: 'All shapes' });
+    trigger.focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('combobox', { name: 'Search shapes' })).toHaveFocus();
+    await user.keyboard('kafka{Enter}');
+
+    expect(placed).toEqual([expect.objectContaining({ type: 'queue', technology: 'Apache Kafka' })]);
+    expect(useUiStore.getState().armed).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'All shapes' })).not.toBeInTheDocument();
+  });
+
+  it('still arms a shape picked by pointer, or from a picker opened with a click', async () => {
+    const user = userEvent.setup();
+    const placed: unknown[] = [];
+    render(<Toolbar title="Untitled canvas" onTitleChange={() => {}} onBack={() => {}} onPresent={() => {}} onExport={() => {}} onPlaceShape={(preset) => placed.push(preset)} />);
+    await user.click(screen.getByRole('button', { name: 'All shapes' }));
+    await user.keyboard('kafka{Enter}');
+    expect(useUiStore.getState().armed).toMatchObject({ type: 'queue', technology: 'Apache Kafka' });
+
+    // Opened from the keyboard, then picked with the pointer: the click on the canvas is still coming.
+    const trigger = screen.getByRole('button', { name: 'Apache Kafka — all shapes' });
+    trigger.focus();
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('option', { name: /Junction/ }));
+    expect(useUiStore.getState().armed?.id).toBe('ellipse');
+    expect(placed).toEqual([]);
+  });
+
   it('moves through the list with the arrow keys', async () => {
     const user = userEvent.setup();
     renderToolbar();

@@ -46,7 +46,7 @@ export function diffFile(prev: DraftDocument, next: DraftDocument, options: Diff
   diffElements(before, after, 'edge', out, implied);
   diffElements(before, after, 'flow', out, implied);
   diffElements(before, after, 'ink', out, implied);
-  diffRooms(before, after, out);
+  diffRooms(before, after, out, implied);
   diffPoints(prev, next, out);
   return out;
 }
@@ -91,7 +91,7 @@ function changeOf(kind: ElementKind, id: string, room: RoomId, value: { id: stri
 
 const ROOM_COLLECTIONS = ['nodes', 'edges', 'flows', 'ink'] as const;
 
-function diffRooms(before: FileIndex, after: FileIndex, out: Change[]): void {
+function diffRooms(before: FileIndex, after: FileIndex, out: Change[], implied: boolean): void {
   for (const [room, { graph }] of after.rooms) {
     const old = before.rooms.get(room)?.graph;
     if ((old?.level ?? null) !== (graph.level ?? null)) out.push({ kind: 'level', room, value: graph.level ?? null });
@@ -102,6 +102,14 @@ function diffRooms(before: FileIndex, after: FileIndex, out: Change[]): void {
       const expected = expectedOrder(old ? itemsOf(old, collection) : [], ids, room, located, collection === 'nodes');
       if (!sameIds(expected, ids)) out.push({ kind: 'order', room, collection, ids: ids.map((item) => item.id) });
     }
+  }
+  // A room that is gone (emptied, or its shape deleted) takes its level along on every copy, so
+  // applying needs nothing more. Asked what an edit touched, the level is part of it: unlisted, undo
+  // emptied a room someone else had given a level without a word, and undoing a deleted shape
+  // brought its inside back drawn at no level.
+  if (!implied) return;
+  for (const [room, { graph }] of before.rooms) {
+    if (graph.level !== undefined && !after.rooms.has(room)) out.push({ kind: 'level', room, value: null });
   }
 }
 

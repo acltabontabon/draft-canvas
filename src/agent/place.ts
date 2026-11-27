@@ -20,6 +20,7 @@ import { roomOf } from '../depth/tree';
 import { layoutGraph, LayoutError, type Direction, type LayoutEdge } from '../layout/layered';
 import { assignAnchors, MIN_LABELLED_FAN, type AnchorRect, type TitleSpan } from '../layout/anchors';
 import { compatibilityKey } from '../edges/bundles';
+import { routedLabel } from '../edges/edgeRoutes';
 import { boundaryHeaderTextBox, nameLineCount, naturalArchitectureSize, naturalCodeSize, naturalNoteHeight, naturalTextSize, type DescribeContext, sizingContext } from '../nodes/describe';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
@@ -375,9 +376,13 @@ export function connectorFor(spec: RelationshipSpec, source: DraftNode, target: 
   return edge;
 }
 
-/** The size a connector's words take on the canvas — its own label, or the relationship caption. */
+/**
+ * The size a connector's words take on the canvas: what its chip shows (`routedLabel`: a named
+ * recovery action's name, else its own label), or the relationship caption. Sized from the label
+ * alone, a named action with none was judged as its caption, a box no renderer draws.
+ */
 export function edgeLabelSize(edge: DraftEdge, source: DraftNode, target: DraftNode, ctx: DescribeContext): { width: number; height: number } {
-  const text = edge.label ?? (edge.semantic ? relationshipCaptionLabel(edge.semantic, { source: categoryOf(source), target: categoryOf(target) }) : '');
+  const text = routedLabel(edge) ?? (edge.semantic ? relationshipCaptionLabel(edge.semantic, { source: categoryOf(source), target: categoryOf(target) }) : '');
   if (!text) return { width: 0, height: 0 };
   const layout = layoutText(text, {
     font: FONTS.edgeLabel,
@@ -602,7 +607,9 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
   if (layout.fans !== 'unlabelled') {
     const fans = new Map<string, string[]>();
     for (const edge of edges) {
-      if (!edge.label) continue;
+      // Words of its own: what its chip shows (`routedLabel`), a named recovery action's name too. A
+      // fan of those was laid out with no room on its branches for the names they carry.
+      if (!routedLabel(edge)) continue;
       // The main path's own steps bundle only with each other (see `assignAnchors`).
       const main = primaryEdges.has(edge.id) ? '\u0000main' : '';
       for (const key of [`s\u0000${edge.source}\u0000${compatibilityKey(edge)}${main}`, `t\u0000${edge.target}\u0000${compatibilityKey(edge)}${main}`]) fans.set(key, [...(fans.get(key) ?? []), edge.id]);

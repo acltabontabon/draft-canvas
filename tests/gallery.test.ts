@@ -7,6 +7,7 @@ import { serializeDocument } from '../src/export/project';
 import { canvasFromStarter } from '../src/gallery/canvas';
 import { clearGalleryCache } from '../src/gallery/cache';
 import { matchesQuery, parseCatalog } from '../src/gallery/catalog';
+import { readGalleryFile } from '../src/gallery/remote';
 import { GALLERY_BASE } from '../src/gallery/source';
 import { GalleryRefreshError, loadGallery, markStarterSeen, refreshGallery, starterFile, stylePackFile } from '../src/gallery/sync';
 import { vendoredCatalog, vendoredCatalogText, vendoredFile, vendoredText } from './fixtures/gallery';
@@ -92,6 +93,30 @@ describe('refreshing', () => {
     fetch.mockClear();
     await refreshGallery();
     expect(fetch.mock.calls.map(([url]) => url)).toEqual([`${GALLERY_BASE}catalog.json`]);
+  });
+
+  it('stops reading a file as soon as it grows past its limit, whatever length it declares', async () => {
+    // A missing or compressed Content-Length says nothing about what arrives: the whole of it was
+    // once read into memory before its size was checked.
+    let pulled = 0;
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1;
+        if (pulled > 64) controller.close();
+        else controller.enqueue(new TextEncoder().encode('x'.repeat(1024)));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { headers: { 'content-length': '512' } })));
+    await expect(readGalleryFile('catalog.json', 4096)).rejects.toMatchObject({ reason: 'too-large' });
+    expect(cancelled).toBe(true);
+    expect(pulled).toBeLessThanOrEqual(6);
+    // What fits is read as text, as a whole response always was.
+    serve({ 'catalog.json': '﻿{"starters":[]} é' });
+    expect(await readGalleryFile('catalog.json', 4096)).toBe('{"starters":[]} é');
   });
 
   it('refuses a file that doesn’t match the catalog’s hash', async () => {

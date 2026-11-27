@@ -51,6 +51,7 @@ import { attachmentTabWidth, markerRail, RAIL_SIZE } from '../document/markerRai
 import { describeAttachmentTab } from '../edges/attachmentChips';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { count } from '../lib/plural';
+import { returnFocusToCanvas } from './canvasFocus';
 import { TechnologyDetails } from './TechnologyDetails';
 import { useTechnologyIcon, useTechnologyRevision } from './useTechnologyIcon';
 import { nodeTechnologyIcon } from '../nodes/technology';
@@ -227,7 +228,21 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
 
-  const stopEditing = useCallback(() => setEditing(false), []);
+  // Enter or Escape finishes an edit with the editor still focused, and the textarea holding focus
+  // unmounts: focus fell to <body>, where a screen reader lost its place and the next Tab skipped the
+  // canvas. It goes back to the canvas, as it does when the Outline closes. Only once the textarea
+  // has gone: focused while it is still there, its blur would commit a name Escape is reverting. A
+  // blur (a click or Tab elsewhere) has already put focus where it was going, and is left alone.
+  const returnFocus = useRef(false);
+  const stopEditing = useCallback(() => {
+    returnFocus.current = editorRef.current !== null && editorRef.current === window.document.activeElement;
+    setEditing(false);
+  }, []);
+  useLayoutEffect(() => {
+    if (editing || !returnFocus.current) return;
+    returnFocus.current = false;
+    returnFocusToCanvas(null);
+  }, [editing]);
 
   // A Text element's editor hands its textarea to the format bar (in the element's popover) and
   // tells the popover to show that bar, for exactly as long as it's open.
@@ -483,7 +498,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const insideCount = node.inside?.nodes.length ?? 0;
   // One row for every mark the shape carries above its corner, so none lands on another.
   const rail = markerRail(
-    { type: node.type, width: effectiveWidth },
+    // Its kind decides whether its technology mark stands in the rail or by its glyph.
+    { type: node.type, width: effectiveWidth, serviceKind: node.serviceKind, componentKind: node.componentKind },
     {
       technology: Boolean(liveNode && nodeTechnologyIcon(liveNode)),
       attachments: attachmentCount,

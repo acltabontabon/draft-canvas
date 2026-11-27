@@ -1,4 +1,6 @@
 import { inkAbsolutePoints, inkOf, translateInk } from './ink';
+import { LIMITS } from './limits';
+import { clamp } from '../lib/math';
 import type { DraftDocument, DraftNode } from './types';
 
 /**
@@ -25,6 +27,10 @@ const BOUNDARY_KEEPS = 48;
 const startOf = (node: DraftNode, axis: RoomAxis) => (axis === 'x' ? node.x : node.y);
 const sizeOf = (node: DraftNode, axis: RoomAxis) => (axis === 'x' ? node.width : node.height);
 
+/** No further than the edge of the canvas, as a load keeps a position: pushed past it, a shape or a
+ *  bend was moved back by the next open. */
+const onCanvas = (value: number) => clamp(value, -LIMITS.maxCoordinate, LIMITS.maxCoordinate);
+
 /**
  * How far room can be closed at this line before something would cross it: a distance, 0 or more.
  * Closing stops when the nearest shape past the line reaches it, so shapes never pile up or swap
@@ -49,19 +55,25 @@ export function makeRoom(doc: DraftDocument, push: RoomPush): DraftDocument {
   const nodes = doc.nodes.map((node) => {
     const start = startOf(node, axis);
     if (start >= at) {
+      const moved = onCanvas(start + delta);
+      if (moved === start) return node;
       changed = true;
-      return axis === 'x' ? { ...node, x: node.x + delta } : { ...node, y: node.y + delta };
+      return axis === 'x' ? { ...node, x: moved } : { ...node, y: moved };
     }
     if (node.type === 'group' && start + sizeOf(node, axis) > at) {
+      // Stretched no bigger than a shape can be, for the same reason.
+      const size = Math.min(sizeOf(node, axis) + delta, LIMITS.maxNodeSize);
+      if (size === sizeOf(node, axis)) return node;
       changed = true;
-      return axis === 'x' ? { ...node, width: node.width + delta } : { ...node, height: node.height + delta };
+      return axis === 'x' ? { ...node, width: size } : { ...node, height: size };
     }
     return node;
   });
+  const moves = (value: number) => value >= at && onCanvas(value + delta) !== value;
   const edges = doc.edges.map((edge) => {
-    if (!edge.waypoints?.some((point) => point[axis] >= at)) return edge;
+    if (!edge.waypoints?.some((point) => moves(point[axis]))) return edge;
     changed = true;
-    return { ...edge, waypoints: edge.waypoints.map((point) => (point[axis] >= at ? { ...point, [axis]: point[axis] + delta } : point)) };
+    return { ...edge, waypoints: edge.waypoints.map((point) => (point[axis] >= at ? { ...point, [axis]: onCanvas(point[axis] + delta) } : point)) };
   });
   // A sketch goes with what it was drawn beside: the strokes that lie wholly past the line.
   const strokes = inkOf(doc)

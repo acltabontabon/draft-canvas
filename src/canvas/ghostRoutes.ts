@@ -20,7 +20,7 @@ import { visibleEdges } from '../document/compensation';
 import { categoryOf } from '../document/connectorSemantics';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { routingPlan, type RoutingPlan } from '../edges/bundles';
-import { routedCaption, type EdgeRouteInputs } from '../edges/edgeRoutes';
+import { routedCaption, routedLabel, type EdgeRouteInputs } from '../edges/edgeRoutes';
 import { endpointPlan, type EdgeSpread, type EndpointPlan } from '../edges/endpoints';
 import { obstaclesForEdge } from '../edges/obstacles';
 import { laneIndex, rectOf, type EdgeSpine, type LaneAssignment, type Rect } from '../edges/routing';
@@ -95,7 +95,7 @@ export function ghostRouteInputs(edge: DraftEdge, route: GhostRoute): EdgeRouteI
     source: sequenceAnchorRect(route.source, rectOf(route.source), edge.sourceAnchor),
     target: sequenceAnchorRect(route.target, rectOf(route.target), edge.targetAnchor),
     routing: edge.routing,
-    label: edge.label,
+    label: routedLabel(edge),
     // Its caption is placed with its size in view too, as every other renderer routes it.
     ...(route.caption ? { caption: route.caption } : {}),
     sourceAnchor: edge.sourceAnchor,

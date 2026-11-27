@@ -248,6 +248,14 @@ impl Agent {
         }
     }
 
+    /// A planned companion run's model has answered: `Runs::end_model`, and its calls still in flight
+    /// are cancelled.
+    pub fn end_model_turn(&self, run: &str) {
+        for call in self.runs.end_model(run) {
+            call.cancel(self);
+        }
+    }
+
     pub fn set_active(&self, active: Option<ActiveDoc>) {
         *lock(&self.active) = active;
     }

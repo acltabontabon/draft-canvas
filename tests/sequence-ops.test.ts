@@ -34,6 +34,7 @@ import {
 import { createDocument, createNode } from '../src/document/factory';
 import { addNodes, countLabelMatches, removeElements, replaceLabels } from '../src/document/operations';
 import type { DraftSequence, SeqFragment, SeqItem, SeqMessage, SeqParticipant } from '../src/document/types';
+import { checkSequence } from '../src/sequence/check';
 
 const participant = (id: string, extra: Partial<SeqParticipant> = {}): SeqParticipant => ({
   id,
@@ -97,6 +98,17 @@ describe('participants', () => {
     const once = removeParticipant(withNote, 'db');
     expect(findItem(once, 'n1')!.item).toMatchObject({ over: ['api'] });
     expect(findItem(removeParticipant(once, 'api'), 'n1')).toBeNull();
+  });
+
+  it('a reference over two keeps the one that is left, and goes with its last', () => {
+    // With no one left to cover it was left covering no one in particular, which is everyone.
+    const withRef = insertItem(shop(), createFragment({ id: 'ref', operator: 'ref', label: 'Fraud check', covers: ['api', 'db'] }), { operandId: null, index: 0 });
+    const once = removeParticipant(withRef, 'db');
+    expect(findItem(once, 'ref')!.item).toMatchObject({ covers: ['api'], label: 'Fraud check' });
+    expect(findItem(removeParticipant(once, 'api'), 'ref')).toBeNull();
+    // One over everyone stays over everyone.
+    const overAll = insertItem(shop(), createFragment({ id: 'all', operator: 'ref', label: 'Sign in' }), { operandId: null, index: 0 });
+    expect(findItem(removeParticipant(overAll, 'db'), 'all')!.item).toEqual(findItem(overAll, 'all')!.item);
   });
 
   it('reorders by final position and keeps untouched items by identity', () => {
@@ -175,6 +187,20 @@ describe('messages', () => {
     const message = findItem(next, 'm2')!.item as SeqMessage;
     expect(message).toMatchObject({ kind: 'async', kindOrigin: 'explicit' });
     expect(message.activate).toBeUndefined();
+  });
+
+  it('made a reply, a message answers the call above it that came the other way', () => {
+    // It was left answering nothing, flagged "no matching call" with the call right above it.
+    const drawn: DraftSequence = { ...shop(), items: [call('m1', 'client', 'api', 'GET /orders'), call('ok', 'api', 'client', '200 OK')] };
+    const replied = setMessageKind(drawn, 'ok', 'reply');
+    expect(findItem(replied, 'ok')!.item).toMatchObject({ kind: 'reply', replyTo: 'm1', deactivate: true });
+    expect(checkSequence(replied)).toEqual([]);
+    // Nothing above waits on it the other way: it answers nothing in particular, as before.
+    const first = setMessageKind({ ...drawn, items: [...drawn.items].reverse() }, 'ok', 'reply');
+    expect((findItem(first, 'ok')!.item as SeqMessage).replyTo).toBeUndefined();
+    // A call already answered above is not answered again.
+    const answered = setMessageKind({ ...drawn, items: [...drawn.items.slice(0, 1), createReply(drawn.items[0] as SeqMessage), drawn.items[1]!] }, 'ok', 'reply');
+    expect((findItem(answered, 'ok')!.item as SeqMessage).replyTo).toBeUndefined();
   });
 
   it('turns a message round', () => {
@@ -262,6 +288,14 @@ describe('fragments', () => {
     expect((two.items[1] as SeqFragment).operands.map((branch) => branch.guard)).toEqual([undefined, 'else']);
     const loop = setFragmentOperator(alt, 'f1', 'loop');
     expect(addOperand(loop, 'f1', { id: 'o3' })).toBe(loop);
+  });
+
+  it('adds option branches to a critical section, and keeps them through a change of kind', () => {
+    const critical = wrapItems(shop(), ['m2'], { id: 'f1', operator: 'critical' });
+    const two = addOperand(critical, 'f1', { id: 'o2', guard: 'timeout' });
+    expect((findItem(two, 'f1')!.item as SeqFragment).operands.map((branch) => branch.guard)).toEqual([undefined, 'timeout']);
+    const alt = setFragmentOperator(two, 'f1', 'alt');
+    expect((findItem(setFragmentOperator(alt, 'f1', 'critical'), 'f1')!.item as SeqFragment).operands).toHaveLength(2);
   });
 
   it('removing a branch hands its messages to its neighbour', () => {

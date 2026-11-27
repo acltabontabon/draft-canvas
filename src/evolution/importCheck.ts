@@ -6,23 +6,26 @@
  * Every revision any accepted ref reaches must read as exactly one diagram (`readSnapshot` refuses
  * any other tree) that `validateText` accepts; milestones must tag revisions. Bounded by the
  * history limits, so a hostile bundle cannot make this walk forever.
+ *
+ * A milestone is found through its ref (`listTags`), so milestones are checked on a store that has
+ * their refs: the desktop's staging repository has none until it is committed. `seen` carries the
+ * revisions already checked from one call to the next, and its size is what is returned.
  */
 import { HISTORY_LIMITS, HistoryError, type Oid, type RefEntry, type VersionStore } from './contracts';
 import { MILESTONE_PREFIX } from './refs';
 
-export async function verifyImported(store: VersionStore, refs: RefEntry[], validateText: (text: string) => void): Promise<number> {
+export async function verifyImported(store: VersionStore, refs: RefEntry[], validateText: (text: string) => void, seen: Set<Oid> = new Set()): Promise<number> {
   const stack: Oid[] = [];
+  const tags = refs.some((entry) => entry.ref.startsWith(MILESTONE_PREFIX)) ? await store.listTags(MILESTONE_PREFIX) : [];
   for (const entry of refs) {
     if (entry.ref.startsWith(MILESTONE_PREFIX)) {
-      const tags = await store.listTags(MILESTONE_PREFIX);
-      const tag = tags.find((candidate) => candidate.ref === entry.ref);
+      const tag = tags.find((candidate) => candidate.ref === entry.ref && candidate.oid === entry.oid);
       if (!tag) throw new HistoryError('invalid', 'A milestone in this bundle is not a tagged revision.');
       stack.push(tag.target);
     } else {
       stack.push(entry.oid);
     }
   }
-  const seen = new Set<Oid>();
   const blobs = new Set<string>();
   while (stack.length > 0) {
     const oid = stack.pop()!;

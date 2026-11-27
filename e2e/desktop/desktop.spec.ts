@@ -1218,7 +1218,7 @@ test('Canvas settings are a page of Settings on Home, and beside the canvas with
     await expect(beside.getByRole('tab', { name: 'Canvas', exact: true })).toHaveAttribute('aria-selected', 'true');
     await expect(beside.getByRole('switch', { name: 'Suggest the next shape while drawing' })).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'Settings' })).toHaveCount(0);
-    await beside.getByRole('button', { name: 'Close appearance', exact: true }).click();
+    await beside.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(beside).toBeHidden();
   };
   // The menu bar's Canvas Settings… and ⌘K land on its Canvas page; the status bar's button opens it.

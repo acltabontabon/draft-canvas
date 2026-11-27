@@ -85,7 +85,8 @@ test.describe('Copy export', () => {
     const text = await clipboardText(page);
     expect(text).toContain('flowchart LR');
     expect(text).toContain('OrdersDB[("Orders DB")]');
-    expect(text.trimEnd()).toBe(preview!.trimEnd());
+    // The Windows clipboard hands text back with CRLF line endings; the source is the same.
+    expect(text.replace(/\r\n/g, '\n').trimEnd()).toBe(preview!.trimEnd());
   });
 
   test('"Copy as SVG" and "Copy source as…" from the command palette', async ({ page }) => {

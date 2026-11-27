@@ -200,6 +200,7 @@ fn move_file_now(
         move_atomic(&grant.path, &target)?;
     }
     let new_handle = state.grant_file(&target)?;
+    state.retire_file_handle(handle, &new_handle);
     let new_grant = state.file(&new_handle)?;
     // A Recent entry is best-effort. The caller still needs the new handle after a successful move.
     let _ = state
@@ -302,6 +303,23 @@ mod tests {
         );
     }
 
+    /// Renamed in Explorer or Finder by case only, a project's stored spelling no longer matched its
+    /// canonical path: opening it again listed it twice, and Remove from Home removed nothing.
+    #[cfg(any(windows, target_os = "macos"))]
+    #[test]
+    fn a_project_renamed_only_in_case_is_listed_once_and_can_be_removed() {
+        let (dir, state) = test_state();
+        let folder = dir.path().join("Payments");
+        fs::create_dir(&folder).unwrap();
+        open_project_at(&state, &folder).unwrap();
+        let renamed = dir.path().join("payments");
+        fs::rename(&folder, &renamed).unwrap();
+        let again = open_project_at(&state, &renamed).unwrap();
+        assert_eq!(state.settings.get().projects.len(), 1);
+        forget_project(&state, &again.handle).unwrap();
+        assert!(state.settings.get().projects.is_empty());
+    }
+
     #[test]
     fn several_projects_are_kept_and_one_can_be_let_go_without_touching_it() {
         let (dir, state) = test_state();
@@ -367,8 +385,15 @@ mod tests {
         assert_eq!(recents.len(), 1);
         assert_eq!(Path::new(&recents[0].path), target);
 
-        // Asked again, it is already there: nothing moves, nothing is renumbered.
+        // The handle the file had before the move names nothing now.
+        assert_eq!(
+            state.file(&handle).err().unwrap().kind,
+            ErrorKind::InvalidHandle
+        );
+
+        // Asked again, it is already there: nothing moves, nothing is renumbered, and it keeps its handle.
         let again = move_file_now(&state, &moved.handle, &project.handle, true).unwrap();
+        assert_eq!(again.handle, moved.handle);
         assert_eq!(state.file(&again.handle).unwrap().path, target);
     }
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { participantOptions } from '../src/canvas/sequence/participantOptions';
-import { stepSlot } from '../src/canvas/sequence/sequenceKeys';
+import { handleSequenceKey, stepSlot } from '../src/canvas/sequence/sequenceKeys';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { findItem, messagesOf } from '../src/document/sequenceModel';
 import { addOperand, createMessage, createReply, setMessageKind, wrapItems } from '../src/document/sequenceOps';
@@ -254,6 +254,49 @@ describe('in the editor', () => {
     const other = editor().addNode({ type: 'service', x: 900, y: 0 });
     editor().setSelection({ nodes: [other.id], edges: [] });
     expect(useUiStore.getState().sequenceFocus).toBeNull();
+  });
+
+  /**
+   * A shape key, a paste or an undo names its own selection without going through `setSelection`,
+   * and the message stayed selected inside a sequence nobody had selected any more: Delete, which
+   * the sequence's keys are asked about first, took the message instead of the shape on screen.
+   */
+  it('a selection the editor makes itself lets go of what was selected inside, as a click does', () => {
+    const [client, api] = ids();
+    const message = sequenceActions.addMessage(nodeId, { from: client!, to: api! }, { operandId: null, index: 0 }, false)!;
+    sequenceActions.edit(nodeId, null);
+    const messages = () => messagesOf(sequenceIn(nodeId)!).map((entry) => entry.id);
+    const pressDelete = () => handleSequenceKey(new KeyboardEvent('keydown', { key: 'Delete' }));
+
+    sequenceActions.select(nodeId, 'item', [message]);
+    const other = editor().addNode({ type: 'service', x: 900, y: 0 });
+    expect(useUiStore.getState().sequenceFocus).toBeNull();
+    expect(pressDelete()).toBe(false);
+
+    editor().copySelection();
+    sequenceActions.select(nodeId, 'item', [message]);
+    editor().paste({ x: 900, y: 400 });
+    expect(useUiStore.getState().sequenceFocus).toBeNull();
+
+    editor().setSelection({ nodes: [other.id], edges: [] });
+    editor().nudgeSelection(10, 0);
+    sequenceActions.select(nodeId, 'item', [message]);
+    editor().undo();
+    expect(editor().selection.nodes).toEqual([other.id]);
+    expect(useUiStore.getState().sequenceFocus).toBeNull();
+    expect(pressDelete()).toBe(false);
+    expect(messages()).toEqual([message]);
+  });
+
+  it('an edit inside the sequence keeps what is selected inside it', () => {
+    const [client, api] = ids();
+    const message = sequenceActions.addMessage(nodeId, { from: client!, to: api! }, { operandId: null, index: 0 }, false)!;
+    sequenceActions.edit(nodeId, null);
+    sequenceActions.select(nodeId, 'item', [message]);
+    sequenceActions.setLabel(nodeId, message, 'GET /cart');
+    expect(useUiStore.getState().sequenceFocus).toMatchObject({ nodeId, ids: [message] });
+    editor().undo();
+    expect(useUiStore.getState().sequenceFocus).toMatchObject({ nodeId, ids: [message] });
   });
 
   it('undoing the thing that was selected lets go of it too', () => {

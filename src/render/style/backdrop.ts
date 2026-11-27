@@ -38,8 +38,15 @@ export function backdropTile(style: ResolvedStyle, device: ThemeName): BackdropT
   const theme = style.theme(device);
   const width = Math.max(8, Math.round(backdrop.art.w * backdrop.scale));
   const height = Math.max(8, Math.round(backdrop.art.h * backdrop.scale));
-  const shapes = artShapes(backdrop.art, { x: 0, y: 0, w: width, h: height }, 'stretch', theme.accents.neutral, theme);
+  const drawn = artShapes(backdrop.art, { x: 0, y: 0, w: width, h: height }, 'stretch', theme.accents.neutral, theme);
+  // Fainter is the whole tile laid lighter; stronger is each part of it laid heavier, up to solid.
+  // A group can be no more than opaque: Strong was once clamped there and drew exactly Regular.
   const opacity = Math.min(1, backdrop.opacity);
+  const boost = backdrop.opacity / opacity;
+  const shapes =
+    boost === 1
+      ? drawn
+      : drawn.map((shape) => (shape.t === 'path' && shape.opacity !== undefined ? { ...shape, opacity: Math.min(1, Math.round(shape.opacity * boost * 1000) / 1000) } : shape));
   const markup = serialize(
     el('svg', { xmlns: 'http://www.w3.org/2000/svg', width, height, viewBox: `0 0 ${width} ${height}` }, [
       el('g', { opacity, 'stroke-linejoin': 'round' }, shapes.flatMap(emitShape)),

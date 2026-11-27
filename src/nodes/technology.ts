@@ -1,6 +1,6 @@
 import type { SimpleIcon } from 'simple-icons';
-import { artifactGlyphBounds, dataStoreGlyphBounds, isGlyphShape } from '../document/dataStoreGeometry';
-import { RAIL_SIZE, markerRail } from '../document/markerRail';
+import { artifactGlyphBounds, dataStoreGlyphBounds } from '../document/dataStoreGeometry';
+import { RAIL_SIZE, markerRail, technologyInRail } from '../document/markerRail';
 import { C4_TEXT_TYPES, type DraftNode } from '../document/types';
 import catalog from './technologyCatalog/index.json';
 import { TECHNOLOGY_PATH_LOADERS } from './technologyCatalog/loaders';
@@ -230,19 +230,17 @@ const GLYPH_MARK_OUT = 6;
 const GLYPH_MARK_UP = TECHNOLOGY_MARK_SIZE - 6;
 
 /** Node-local visual extent only. The mark never changes sizing, handles or routing obstacles.
- * Data stores attach to their compact glyph; every other architecture shape carries it at the
- * corner end of its marker rail, above the top-right corner (`document/markerRail.ts`). It used to
- * sit beside the right edge, on top of the label of any connector leaving that side. */
+ * Data Stores, Artifacts and the Services and Components drawn as a glyph attach it to their glyph;
+ * every other architecture shape carries it at the corner end of its marker rail, above the
+ * top-right corner (`document/markerRail.ts`). It used to sit beside the right edge, on top of the
+ * label of any connector leaving that side. */
 export function technologyMarkBounds(node: DraftNode, snapshot: TechnologyIconSnapshot = bySlug): { x: number; y: number; width: number; height: number } | undefined {
   if (!nodeTechnologyIcon(node, snapshot)) return undefined;
-  if (node.type === 'database' || isGlyphShape(node)) {
-    const glyph = dataStoreGlyphBounds({ ...node, x: 0, y: 0 });
-    return { x: glyph.right + GLYPH_MARK_OUT, y: glyph.top - GLYPH_MARK_UP, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
+  // The same test the rail makes, so a mark drawn here never leaves its slot there empty.
+  if (technologyInRail(node)) {
+    const at = markerRail(node, { technology: true }).technology!;
+    return { x: at.x, y: at.y, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
   }
-  if (node.type === 'artifact') {
-    const glyph = artifactGlyphBounds({ ...node, x: 0, y: 0 });
-    return { x: glyph.right + GLYPH_MARK_OUT, y: glyph.top - GLYPH_MARK_UP, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
-  }
-  const at = markerRail(node, { technology: true }).technology!;
-  return { x: at.x, y: at.y, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
+  const glyph = node.type === 'artifact' ? artifactGlyphBounds({ ...node, x: 0, y: 0 }) : dataStoreGlyphBounds({ ...node, x: 0, y: 0 });
+  return { x: glyph.right + GLYPH_MARK_OUT, y: glyph.top - GLYPH_MARK_UP, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
 }

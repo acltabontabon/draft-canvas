@@ -11,7 +11,7 @@ import { compose, type Composed } from './compile';
 import { applyUpdate, type PatchResult } from './patch';
 import { prepareProposal, type PreparedProposal } from './proposal';
 import { silent, type Report } from './progress';
-import { smallestArrange, type QualityReport } from './quality';
+import { elsewhereFix, smallestArrange, type QualityReport } from './quality';
 import { planArrange, planTidy, type ArrangePlanResult, type ArrangePreset, type TidyPlanResult } from './layoutPlan';
 import { withDeadline } from './route';
 import { legibilityOf, type Legibility } from './legibility';
@@ -42,6 +42,8 @@ export type JobResult =
       problems: string[];
       /** When there are problems: the smallest op that would make room (an `arrange` over a scope). */
       suggestedOp?: Record<string, unknown>;
+      /** When every problem is in another view, which no op of this request reaches: what to do instead. */
+      elsewhere?: string;
       /** Errors and warnings among what the request touched — see `PatchResult['quality']`. */
       quality: QualityReport;
       /** How the edited view reads as a whole (see `legibility.ts`) — absent when nothing changed. */
@@ -76,7 +78,9 @@ export function runJob(job: Job, deadline: number, report: Report = silent): Job
     // The edited view whole, as it would be committed: what the preview shows while it is checked.
     if (view && result.file !== job.file) report('routing', { nodes: view.nodes, edges: view.edges, flows: view.flows });
     const issues = result.quality.errors;
-    const suggestedOp = view && issues.length ? smallestArrange(view, issues) : undefined;
+    // An arrange added to this request lays out this view only: one for a problem elsewhere is no help.
+    const here = issues.filter((issue) => !issue.view);
+    const suggestedOp = view && here.length ? smallestArrange(view, here) : undefined;
     const legibility = view && result.file !== job.file ? legibilityOf(view.nodes, view.edges) : undefined;
     const proportion = view && legibility ? proportionFindings(view, measureContext()) : undefined;
     // Advised only about what the edit touched, and about a small overview only when the edit is what
@@ -97,6 +101,7 @@ export function runJob(job: Job, deadline: number, report: Report = silent): Job
       advisories: [...(view && legibility ? routingAdvice(view, legibility, result.touched) : []), ...(proportion ? proportionAdvice(proportion, mine, !wasSparse) : []), ...result.advisories],
       problems: issues.map((issue) => issue.message),
       ...(suggestedOp ? { suggestedOp } : {}),
+      ...(issues.length && !here.length ? { elsewhere: elsewhereFix(issues) } : {}),
       quality: result.quality,
       ...(legibility ? { legibility } : {}),
       ...(proportion ? { proportion } : {}),

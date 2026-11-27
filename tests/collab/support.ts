@@ -207,15 +207,16 @@ export function seededFile(rng: Rng, edits = 12): DraftDocument {
   return file;
 }
 
-/** What collaborators share of a file: everything but cameras and bookkeeping. */
+/** What collaborators share of a file: everything but cameras and bookkeeping — every room's sketches included. */
 export function sharedContent(file: DraftDocument): unknown {
-  const graph = (g: { nodes: DraftNode[]; edges: unknown[]; flows: unknown[]; level?: ViewLevel }): unknown => ({
+  const graph = (g: { nodes: DraftNode[]; edges: unknown[]; flows: unknown[]; ink?: unknown[]; level?: ViewLevel }): unknown => ({
     nodes: g.nodes.map((node) => {
       const { inside, ...own } = node;
       return inside ? { ...own, inside: graph(inside) } : own;
     }),
     edges: g.edges,
     flows: g.flows,
+    ink: g.ink ?? [],
     level: g.level ?? null,
   });
   return JSON.parse(JSON.stringify({

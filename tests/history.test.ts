@@ -1,9 +1,11 @@
 import { DEFAULTS, LIMITS } from '../src/document/limits';
 import { parseDocument } from '../src/document/validate';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDocument, createNode } from '../src/document/factory';
+import { addFlow, createFlow, deleteFlow } from '../src/document/flow';
 import { HISTORY_LIMIT } from '../src/history/HistoryStack';
 import { __resetClipboardSync, __resetInteraction, documentWithLiveViewport, fileOf, useEditorStore } from '../src/store/editorStore';
+import { useUiStore } from '../src/store/uiStore';
 
 const store = useEditorStore;
 
@@ -114,6 +116,28 @@ describe('undo and redo', () => {
     expect(store.getState().document.nodes[0]!.width).toBe(260);
     store.getState().undo();
     expect(store.getState().document.nodes[0]!.width).toBe(176);
+  });
+
+  /**
+   * Giving a gesture up put its baseline back with the baseline's own, older stamp: after an autosave
+   * mid-drag, the Library's edited time ran backwards and a reload misjudged which copy was newer.
+   */
+  it('a gesture given up is put back stamped as a change, never with its older stamp', () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    try {
+      const node = store.getState().addNode({ type: 'note', x: 0, y: 0 });
+      now.mockReturnValue(2_000);
+      store.getState().beginInteraction('Make room');
+      store.getState().pushRoom(store.getState().document, { axis: 'x', at: -10, delta: 50 });
+      expect(store.getState().document.nodes[0]!.x).toBe(node.x + 50);
+      now.mockReturnValue(3_000);
+      store.getState().abandonInteraction();
+      expect(store.getState().document.nodes[0]!.x).toBe(node.x);
+      expect(store.getState().document.metadata.updatedAt).toBe(3_000);
+      expect(store.getState().history.past).toHaveLength(1);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it('creates no entry for a click that moved nothing', () => {
@@ -600,5 +624,41 @@ describe('undo and redo', () => {
 
     store.getState().redo();
     expect(store.getState().document.metadata.title).toBe('Custom title');
+  });
+});
+
+describe('undo after someone else has edited', () => {
+  beforeEach(() => {
+    reset();
+    useUiStore.setState({ toasts: [], readOnly: null, flowTrace: null, historyLens: false });
+  });
+
+  /**
+   * Undo puts back what the step removed into a file others have added to since: each was within the
+   * limits alone, together they were not. The owner's file was committed past the limit anyway,
+   * collaborators refused it and resynced to a copy cut back to the limit (losing their own new
+   * flow), and the file reopened with "kept the first 50".
+   */
+  it('refuses a step that would take the file past a limit, and takes it back once there is room', () => {
+    let document = createDocument('Flows');
+    for (let index = 0; index < LIMITS.maxFlows; index += 1) document = addFlow(document, createFlow({ title: `Flow ${index}` }));
+    store.setState({ document });
+    store.getState().deleteFlow(document.flows[0]!.id);
+    const theirs = createFlow({ title: 'Theirs' });
+    expect(store.getState().applyRemote(addFlow(fileOf(store.getState()), theirs))).toBe(true);
+
+    store.getState().undo();
+    const file = fileOf(store.getState());
+    expect(file.flows).toHaveLength(LIMITS.maxFlows);
+    expect(file.flows.some((flow) => flow.id === theirs.id)).toBe(true);
+    expect(store.getState().history.past).toHaveLength(1);
+    expect(useUiStore.getState().toasts.some((toast) => /too large/.test(toast.message))).toBe(true);
+    const reopened = parseDocument(JSON.parse(JSON.stringify(file)));
+    expect(reopened.ok && reopened.repairs).toEqual([]);
+
+    expect(store.getState().applyRemote(deleteFlow(fileOf(store.getState()), theirs.id))).toBe(true);
+    store.getState().undo();
+    expect(fileOf(store.getState()).flows.map((flow) => flow.title)).toContain('Flow 0');
+    expect(store.getState().history.past).toHaveLength(0);
   });
 });

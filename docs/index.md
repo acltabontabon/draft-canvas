@@ -2,43 +2,46 @@
 
 # Documentation
 
-New here? Start with **[Getting started](guides/getting-started.md)**: draw, present and export your
-first diagram.
+New here? [Getting started](guides/getting-started.md) takes you from a blank canvas to a diagram you
+can present and share.
 
-## Draw and explore
+## Draw
 
 | Guide | Covers |
 | --- | --- |
-| [Shapes and connectors](guides/shapes-and-connectors.md) | Shapes, connectors, boundaries, tidy up and arrange |
-| [Sketch and Smart Ink](guides/sketching.md) | Draw over a diagram and turn rough drawings into shapes |
-| [Architecture examples](guides/examples.md) | Ready-to-edit diagrams in the starters gallery |
-| [System levels](guides/depth.md) | Move from system context to containers and components |
-| [Open points](guides/open-points.md) | Track unresolved questions |
-| [Outage](guides/outage.md) | Take a shape down and see what fails, what holds and what is left open |
+| [Shapes and connectors](guides/shapes-and-connectors.md) | Shapes, connectors, boundaries, junctions, open points, layout and appearance |
+| [System levels](guides/depth.md) | From system context to containers and components |
+| [Sketch and Smart Ink](guides/sketching.md) | Draw over a diagram and turn sketches into shapes |
+| [Sequence diagrams](guides/sequence-diagrams.md) | Who calls whom, in order, beside the architecture |
 | [Keyboard shortcuts](guides/keyboard-and-commands.md) | Shortcuts and the command palette |
-| [Accessibility](guides/accessibility.md) | Keyboard, screen reader and touch use |
+| [Accessibility](guides/accessibility.md) | Keyboard, screen reader, touch and pen use |
 
-## Present and share
+## Present and explore
 
 | Guide | Covers |
 | --- | --- |
 | [Flows and presenting](guides/flows-and-presentation.md) | Record a path and walk through it step by step |
-| [Sequence diagrams](guides/sequence-diagrams.md) | Who says what to whom, in order, beside your architecture |
-| [Saving and sharing](guides/saving-and-sharing.md) | Back up, import, export and share diagrams |
-| [Diagram history](guides/history.md) | How each diagram's history is kept, explored and exported |
-| [Diagrams in your docs](guides/diagrams-in-docs.md) | Put a diagram in a README and keep it updated |
-| [Collaborating live](guides/collaborating.md) | Edit a shared canvas in real time |
+| [Outage](guides/outage.md) | Take a shape down and see what fails, what holds and what's left open |
 
-## Set up and extend
+## Save and share
 
 | Guide | Covers |
 | --- | --- |
-| [Desktop app](guides/desktop.md) | Install, open projects, manage updates |
-| [Bring your own agent](guides/connect-an-ai-agent.md) | Connect a coding agent over MCP and review its edits |
-| [Self-hosting](guides/self-hosting.md) | Build and serve the web editor |
+| [Saving and sharing](guides/saving-and-sharing.md) | Back up, import, export and share links |
+| [Diagram history](guides/history.md) | Every version of a diagram, kept in Git on your device |
+| [Diagrams in your docs](guides/diagrams-in-docs.md) | Put a diagram in a README and keep it current |
+| [Collaborating live](guides/collaborating.md) | Edit one canvas together in real time |
+
+## Desktop and agents
+
+| Guide | Covers |
+| --- | --- |
+| [Desktop app](guides/desktop.md) | Install, open project folders, manage updates |
+| [Bring your own agent](guides/connect-an-ai-agent.md) | Connect a coding agent, review its changes, ask Nodi |
+| [Self-hosting](guides/self-hosting.md) | Build and serve the web app |
 
 ## Reference
 
 | Document | Covers |
 | --- | --- |
-| [Privacy and security](reference/privacy.md) | Local storage, data protection, vulnerability reporting |
+| [Privacy and security](reference/privacy.md) | What stays on your device and what leaves it |

@@ -41,6 +41,7 @@ import {
   LOOP_CLOSE_FRACTION,
   LOOP_CLOSE_PX,
   LOOP_TAIL_FRACTION,
+  MAX_RESAMPLED_POINTS,
   MIN_DIAGONAL_PX,
   OFFER_CONFIDENCE,
   RESAMPLE_STEP_PX,
@@ -83,6 +84,8 @@ interface Prepared {
   all: Pt[];
   box: Box;
   inkLength: number;
+  /** The resampling step: `RESAMPLE_STEP_PX`, or more for ink longer than `MAX_RESAMPLED_POINTS` of it. */
+  step: number;
 }
 
 export function recognize(strokes: readonly (readonly Pt[])[], options: { scale: number }): Recognition {
@@ -100,7 +103,7 @@ export function recognize(strokes: readonly (readonly Pt[])[], options: { scale:
   if (arrow) scores.arrow = arrow.score;
   // A closed outline is judged without the flicks it started and ended with.
   const outline = outlineOf(prepared);
-  const rectangle = rectangleReading(outline.points, outline.box);
+  const rectangle = rectangleReading(outline.points, outline.box, prepared.step);
   scores.rectangle = rectangle.score;
   scores.ellipse = ellipseScore(outline.points, outline.box);
   scores.cylinder = cylinderScore(prepared, 'vertical');
@@ -132,11 +135,13 @@ function nested(winner: InkGeometry, other: InkGeometry): boolean {
 }
 
 function prepare(strokes: readonly (readonly Pt[])[], scale: number): Prepared {
-  const resampled = strokes
-    .filter((stroke) => stroke.length > 0)
-    .map((stroke) => resample(stroke.map((p) => ({ x: p.x * scale, y: p.y * scale })), RESAMPLE_STEP_PX));
+  const onScreen = strokes.filter((stroke) => stroke.length > 0).map((stroke) => stroke.map((p) => ({ x: p.x * scale, y: p.y * scale })));
+  // Read at the hand's own precision up to `MAX_RESAMPLED_POINTS`, which no drawing round a shape
+  // reaches; longer ink is read more coarsely, so no drawing costs more than that many points.
+  const step = Math.max(RESAMPLE_STEP_PX, onScreen.reduce((sum, s) => sum + pathLength(s), 0) / MAX_RESAMPLED_POINTS);
+  const resampled = onScreen.map((stroke) => resample(stroke, step));
   const all = resampled.flat();
-  return { strokes: resampled, all, box: boxOf(all), inkLength: resampled.reduce((sum, s) => sum + pathLength(s), 0) };
+  return { strokes: resampled, all, box: boxOf(all), inkLength: resampled.reduce((sum, s) => sum + pathLength(s), 0), step };
 }
 
 /**
@@ -152,13 +157,23 @@ function loopOf(stroke: readonly Pt[], box: Box): Pt[] | null {
   let best = Infinity;
   let from = 0;
   let to = n - 1;
+  // Every pair of the two stretches is compared, so a squared distance rules out most of them
+  // cheaply. Its margin is far wider than rounding, so `dist` still decides every pair that could be
+  // nearer, and the pair found is the one `dist` alone finds.
+  let reach = Infinity;
   for (let i = 0; i <= search; i += 1) {
+    const a = stroke[i]!;
     for (let j = n - 1; j >= n - 1 - search; j -= 1) {
-      const d = dist(stroke[i]!, stroke[j]!);
+      const b = stroke[j]!;
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      if (dx * dx + dy * dy > reach) continue;
+      const d = dist(a, b);
       if (d < best) {
         best = d;
         from = i;
         to = j;
+        reach = d * d * (1 + 1e-9);
       }
     }
   }
@@ -348,7 +363,7 @@ const DEG = Math.PI / 180;
  * The box it answers with is upright, as every shape on the canvas is: the same centre, as wide and
  * as tall as its sides are long.
  */
-function quadReading(points: readonly Pt[], box: Box): { score: number; box: Box } | null {
+function quadReading(points: readonly Pt[], box: Box, step: number): { score: number; box: Box } | null {
   const short = Math.min(box.width, box.height);
   const long = Math.max(box.width, box.height);
   if (short < 14 || short / long < 0.08) return null;
@@ -421,8 +436,8 @@ function quadReading(points: readonly Pt[], box: Box): { score: number; box: Box
     ramp(Math.min(...coverage), 0.4, 0.75),
     ramp(coverage.reduce((a, b) => a + b, 0) / 4, 0.6, 0.88),
     // Ink several times the length of the outline is scribbled along it, not drawn round it. (Twice
-    // is a box gone over again; evenly resampled, the number of points is the length of the ink.)
-    ramp((points.length * RESAMPLE_STEP_PX) / (top + right + bottom + left), 3, 2.2),
+    // is a box gone over again; evenly resampled, the points times the step are the ink's length.)
+    ramp((points.length * step) / (top + right + bottom + left), 3, 2.2),
     ramp(skew, 48 * DEG, 30 * DEG),
     ramp(lean, 30 * DEG, 20 * DEG),
     ramp(Math.min(top, bottom) / Math.max(top, bottom), 0.45, 0.65),
@@ -440,9 +455,9 @@ function quadReading(points: readonly Pt[], box: Box): { score: number; box: Box
  * Wherever the corners are sure of themselves the box is theirs — a box turned a few degrees still
  * passes as upright, but its extent is larger than the box that was drawn.
  */
-function rectangleReading(points: readonly Pt[], box: Box): { score: number; box: Box } {
+function rectangleReading(points: readonly Pt[], box: Box, step: number): { score: number; box: Box } {
   const upright = uprightScore(points, box);
-  const quad = quadReading(points, box);
+  const quad = quadReading(points, box, step);
   if (!quad) return { score: upright, box };
   return { score: Math.max(upright, quad.score), box: quad.score > upright || quad.score >= CONVERT_CONFIDENCE ? quad.box : box };
 }

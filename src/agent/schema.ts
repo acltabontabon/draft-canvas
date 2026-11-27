@@ -367,7 +367,7 @@ const requestId = { type: 'string', minLength: 1, maxLength: 128, description: '
 const scope: Schema = {
   type: 'object',
   description: 'Ids from read_selection; update/remove outside them is refused (OUT_OF_SCOPE).',
-  properties: { nodes: { type: 'array', items: { type: 'string' }, maxItems: 300 }, edges: { type: 'array', items: { type: 'string' }, maxItems: 300 } },
+  properties: { nodes: { type: 'array', items: { type: 'string' }, maxItems: AGENT_LIMITS.scopeIds }, edges: { type: 'array', items: { type: 'string' }, maxItems: AGENT_LIMITS.scopeIds } },
   additionalProperties: false,
 };
 

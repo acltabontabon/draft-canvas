@@ -4,8 +4,8 @@
  * Draft Canvas owns the architectural meaning of history — what a revision is, which changes it
  * records, how two architectures merge. It does not own Git: the browser backend is isomorphic-git
  * in the history worker, the desktop backend is gix behind the desktop shell. Both implement
- * `VersionStore`, and `tests/evolution/contract.test.ts` plus the Rust tests hold both to the same
- * fixtures (docs/reference/evolution.md, ADR-1).
+ * `VersionStore`, and `tests/evolution/igit-store.test.ts` plus the Rust tests hold both to the same
+ * fixtures, `tests/fixtures/evolution/contract.json` (docs/reference/evolution.md, ADR-1).
  *
  * Everything here is plain data: it crosses a worker boundary and an IPC boundary unchanged.
  */
@@ -118,7 +118,10 @@ export interface RepoMeta {
   lineage?: { repoId: string; oid: Oid };
   /** Alternatives by stable id: their names are display only. */
   alternatives: AlternativeMeta[];
-  /** Capture is off for this history (the existing history is kept). */
+  /**
+   * Capture is off for every copy of this history. Only read: a pause is kept on the copy's
+   * `Binding` now, and resuming any copy lifts this one, written by earlier versions.
+   */
   paused?: boolean;
   remote?: RemoteMeta;
 }
@@ -152,7 +155,10 @@ export interface RemoteMeta {
 export interface VersionStore {
   readonly repoId: string;
   meta(): Promise<RepoMeta>;
-  /** Replaces `repo.json` atomically. Callers hold the repository's writer lock (`repo.ts`). */
+  /**
+   * Replaces `repo.json` atomically. A history another tab or window may have open is changed only
+   * through `HistoryService.changeMeta`, which reads it again under the repository's lock.
+   */
   writeMeta(meta: RepoMeta): Promise<void>;
   /** Blob, tree and commit, content-addressed: writing the same snapshot twice writes nothing new. */
   writeSnapshot(write: SnapshotWrite): Promise<Oid>;
@@ -189,6 +195,11 @@ export interface Binding {
   /** The ref value this copy last saw, to tell another copy moving the same history apart. */
   lastSeen: Oid | null;
   at: number;
+  /**
+   * Recording is paused for this copy (the history it has stays). Kept here, like `altId`, and not
+   * in the shared `repo.json`: two copies may continue one history, and pausing one paused both.
+   */
+  paused?: boolean;
 }
 
 /** Hard limits every backend enforces on untrusted history. */

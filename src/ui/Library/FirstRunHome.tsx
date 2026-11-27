@@ -101,7 +101,8 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
 
   return (
     <div className="dc-home dc-web-home" ref={rootRef}>
-      <div className="dc-home-inner">
+      {/* The page's main landmark, as the Library's own view has. */}
+      <main className="dc-home-inner">
         <header className="dc-home-head">
           <LibraryBrand />
           {hasDiagrams && <Button variant="quiet" icon="search" title="Find a diagram" onClick={() => onBrowse({ kind: 'all' }, true)} />}
@@ -149,8 +150,11 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
                 <span className="dc-home-draft-name">{project.name}</span><span className="dc-home-draft-meta">{diagrams.length ? `${diagrams.length} ${diagrams.length === 1 ? 'diagram' : 'diagrams'}` : 'No diagrams yet'}</span>
               </button>;
             }) : recent.slice(0, capacity).map((entry) => <div className="dc-home-card" key={entry.id}>
-              <button type="button" className="dc-home-draft" aria-label={`Open ${entry.title}`} onKeyDown={onTileKey} onClick={() => void session.openDocument(entry.id)}>
-                <DocumentPreview shape={entry.shape} paper /><span className="dc-home-draft-name">{entry.title}</span><span className="dc-home-draft-meta">{relativeTime(entry.updatedAt)}</span>
+              {/* Named by what it shows, as the Library's cards are: "Open …" left out the "2 days ago"
+                  under the name, which someone speaking what they see could not use (WCAG 2.5.3). The
+                  spaces keep the parts of that name apart however it is read; the column hides them. */}
+              <button type="button" className="dc-home-draft" onKeyDown={onTileKey} onClick={() => void session.openDocument(entry.id)}>
+                <DocumentPreview shape={entry.shape} paper />{' '}<span className="dc-home-draft-name">{entry.title}</span>{' '}<span className="dc-home-draft-meta">{relativeTime(entry.updatedAt)}</span>
               </button>
               {/* Tucked into the paper's corner: there on hover or focus, always there on touch. */}
               <div className="dc-home-card-actions">
@@ -167,7 +171,7 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
           </div>
         </section>
         {(!session.durable || hasDiagrams) && <div className={session.durable ? 'dc-home-status' : 'dc-home-warn'}><LocalNote durable={session.durable} repository={session.repository} backupWorthwhile={worthBackingUp(session.library)} /></div>}
-      </div>
+      </main>
       {creating && <ProjectNameDialog title="New project" submitLabel="Create" submitIcon="plus" initialValue="" onClose={() => setCreating(false)}
         onSubmit={(name) => { void session.createProject(name); setCreating(false); }} />}
       {renaming && <RenameDialog entry={renaming} onClose={() => setRenaming(null)}

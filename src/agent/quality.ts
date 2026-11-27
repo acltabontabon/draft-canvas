@@ -28,6 +28,8 @@ export interface QualityIssue {
   kind: 'overlap' | 'outside-group' | 'clipped-text' | 'through-node' | 'label-over-node' | 'label-collision' | 'label-crossed' | 'shared-run' | 'invalid-geometry' | 'jog';
   ids: string[];
   message: string;
+  /** Found in another view than the one an update changes (a linked junction renamed there): its path. */
+  view?: readonly string[];
 }
 
 export interface QualityReport {
@@ -184,6 +186,17 @@ const contains = (outer: Box, inner: Box) =>
  *  geometry are refused whoever asked for them. */
 const ROUTE_KINDS: ReadonlySet<QualityIssue['kind']> = new Set(['through-node', 'label-over-node', 'label-collision', 'label-crossed', 'shared-run']);
 
+/**
+ * Connectors as the canvas will draw them: each one a new object. A repair re-anchors connectors in
+ * place (`route.ts`'s `tryMove`), while the line memos in `edges/sides.ts` and `edges/endpoints.ts`
+ * are kept per connector object and compare only what it is drawn between: judged on the repaired
+ * objects, a layout could be read with a line from before a repair, and passed or refused on lines
+ * nobody will see. A request's final check judges copies, so its verdict is the drawing's.
+ */
+export function asDrawn(edges: readonly DraftEdge[]): DraftEdge[] {
+  return edges.map((edge) => ({ ...edge }));
+}
+
 export function checkQuality(
   nodes: readonly DraftNode[],
   edges: readonly DraftEdge[],
@@ -321,6 +334,20 @@ export function checkQuality(
   if (!explicit?.size) return { errors, warnings };
   const asked = (issue: QualityIssue) => ROUTE_KINDS.has(issue.kind) && issue.ids.some((id) => explicit.has(id));
   return { errors: errors.filter((issue) => !asked(issue)), warnings: [...warnings, ...errors.filter(asked)] };
+}
+
+/**
+ * What to say about problems only other views have, where no op of a request to this one reaches:
+ * each view, and the request that arranges it. Undefined when a problem is in this view.
+ */
+export function elsewhereFix(issues: readonly QualityIssue[]): string | undefined {
+  if (!issues.length || !issues.every((issue) => issue.view)) return undefined;
+  // Every view a problem is in, once each: naming only the first left the agent arranging one view
+  // and refused again over the other.
+  const views = [...new Map(issues.map((issue) => [JSON.stringify(issue.view), issue.view!])).values()];
+  const requests = views.map((view) => (view.length ? `a request with view: {inside: ${JSON.stringify(view)}}` : 'a request to the top view (no view)'));
+  const one = views.length === 1;
+  return `${one ? "That view isn't" : "Those views aren't"} the one this request changes, so no op here can make room there: arrange ${one ? 'it' : 'each'} first with {op:"arrange"} in ${requests.join(', and ')}, or shorten the text that grew there, then send this change again.`;
 }
 
 /**

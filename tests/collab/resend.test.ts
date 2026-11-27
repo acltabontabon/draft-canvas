@@ -378,6 +378,55 @@ describe('edits across a fresh copy', () => {
     expect(guest.state.file).toEqual(owner.file);
   });
 
+  it('takes nothing along, and sends nothing, from a canvas on screen that is not the shared copy', () => {
+    const clock = manualClock();
+    const { host, state: owner } = ownerOf(base(), clock);
+    const first = loopbackPair();
+    host.attach(first.a, { role: 'editor' });
+    // The bridge's editor: while the shared copy is still opening, the canvas on screen is whatever
+    // was there before — here, this person's own diagram.
+    let opening = false;
+    const own = addNodes(createDocument('Mine'), [createNode({ id: 'n_mine', type: 'note', text: 'Private', x: 0, y: 0 })]);
+    const state = { file: null as DraftDocument | null };
+    const session = new GuestSession(
+      {
+        readFile: () => (opening ? own : state.file!),
+        applyRemote: (file) => (opening ? false : ((state.file = file), true)),
+        isBusy: () => opening,
+        onCopy: () => !opening,
+        open: (file) => (state.file = file),
+        setAccess: () => {},
+        appVersion: PRODUCT.version,
+        name: 'Guest',
+      },
+      { status: () => {}, joined: () => {}, peers: () => {}, presence: () => {}, presenter: () => {}, rejected: () => {}, unconfirmed: () => {}, tooLarge: () => {} },
+      clock,
+    );
+    session.connect(first.b);
+    settle(first.pump);
+    first.drop();
+    // The owner forgets the place meanwhile, so they come back as someone new.
+    for (let i = 0; i < 11; i += 1) {
+      clock.advance(10);
+      const other = loopbackPair();
+      host.attach(other.a, { role: 'editor' });
+      guestOf(clock).session.connect(other.b);
+      settle(other.pump);
+      other.drop();
+    }
+    opening = true;
+    const back = loopbackPair();
+    host.attach(back.a, { role: 'editor' });
+    session.connect(back.b);
+    settle(back.pump);
+    session.localChanged();
+    settle(back.pump);
+
+    expect(back.sent.b.some((text) => text.includes('"t":"patch"'))).toBe(false);
+    expect(owner.file.nodes.map((node) => node.id)).toEqual(['n_a', 'n_b']);
+    expect(session.local).toEqual(owner.file);
+  });
+
   it('keeps every edit after rejoining as someone new, one made before the welcome included', () => {
     const clock = manualClock();
     const { host, state: owner } = ownerOf(base(), clock);

@@ -273,6 +273,7 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
         let server_env = companion::server_env(&request.run_id, agent.dir(), code.is_some());
         let command = match backend.command(&RunSpec {
             program: &program,
+            version: located.version.as_deref(),
             work_dir: &work_dir,
             mcp_config: &config,
             server: &sidecar,
@@ -289,6 +290,8 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
         };
         let final_agent = agent.inner().clone();
         let final_run = request.run_id.clone();
+        let done_agent = agent.inner().clone();
+        let done_run = request.run_id.clone();
         let finalizer = companion::decision::Finalizer {
             sidecar: sidecar.clone(),
             env: server_env.clone(),
@@ -296,6 +299,7 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
             authorize: Arc::new(move |tool, args| {
                 final_agent.runs.authorize(&final_run, tool, args)
             }),
+            model_done: Arc::new(move || done_agent.end_model_turn(&done_run)),
         };
         let started = companion.start_prepared(
             Launch {

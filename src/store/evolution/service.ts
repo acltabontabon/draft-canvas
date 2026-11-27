@@ -15,6 +15,7 @@ import type { HistoryBackend, ImportedHistory } from '../../evolution/backend';
 import { HistoryError, type Binding, type Oid, type RepoMeta, type Signature, type VersionStore } from '../../evolution/contracts';
 import { randomId } from '../../evolution/hash';
 import { decideIdentity, copyIdOf, type CopyKey, type KnownHistory } from '../../evolution/identity';
+import { processLocks, repoLock, type LockRunner } from '../../evolution/locks';
 import { branchOf } from '../../evolution/refs';
 import { IDLE_STATE, decide, isPending, step, type SchedulerConfig, type SchedulerEvent, type SchedulerState } from '../../evolution/scheduler';
 import { formatMessage, type Initiator } from '../../evolution/trailers';
@@ -78,6 +79,16 @@ export interface ServiceDeps {
   attribution?: (changedKeys: string[]) => Attribution;
   /** Whether this device has shown the first-use note. */
   firstUseSeen: () => boolean;
+  /**
+   * Whether a working copy is still on this device: a library diagram deleted since is not, though its
+   * binding is kept. Absent, or unsure, it is, so no history a diagram still uses is taken for unused.
+   */
+  copyExists?: (copyId: string) => Promise<boolean>;
+  /**
+   * Serialises changes to a history's `repo.json` across tabs and windows, under the repository's
+   * lock (Web Locks). Absent: within this page only.
+   */
+  lock?: LockRunner;
 }
 
 interface Session {
@@ -99,6 +110,8 @@ interface Session {
   readOnly: boolean;
   /** Recording is paused for this diagram; kept on the session so removing its history keeps it paused. */
   paused: boolean;
+  /** An interrupted switch waits for the person: until they answer, nothing is recorded on either alternative. */
+  held: boolean;
   initiator: Initiator;
   agents: Set<string>;
 }
@@ -111,11 +124,15 @@ const MAINTAIN_EVERY = 40;
 export class HistoryService {
   private session: Session | null = null;
   private recorded = 0;
+  /** The last binding write this service sent: the next one waits for it (`afterBindingWrites`). */
+  private bindingWrites: Promise<void> = Promise.resolve();
 
   private readonly deps: ServiceDeps;
+  private readonly lock: LockRunner;
 
   constructor(deps: ServiceDeps) {
     this.deps = deps;
+    this.lock = deps.lock ?? processLocks();
   }
 
   /** The current session's token: async work compares it to know it still belongs to the editor. */
@@ -164,6 +181,7 @@ export class HistoryService {
       question: null,
       readOnly: options.readOnly === true,
       paused: false,
+      held: false,
       initiator: 'auto',
       agents: new Set(),
     };
@@ -191,6 +209,8 @@ export class HistoryService {
       session.release = release;
       const backend = this.deps.backend();
       const working = await this.deps.compute.prepare(file);
+      // After this service's own writes: a pause still on its way when the diagram was reopened.
+      await this.bindingWrites;
       const binding = await backend.binding(copyId);
       if (this.session !== session) return;
       if (binding) {
@@ -205,12 +225,27 @@ export class HistoryService {
         }
       }
       if (this.session !== session) return;
-      const dirty = session.tipBlob !== working.blobId;
-      this.dispatch(session, { kind: 'reset', at: this.deps.clock.now(), generation: this.deps.editor.generation(), dirty });
-      this.setCapture(session, dirty ? { kind: 'pending', since: this.deps.clock.now() } : { kind: 'up-to-date' });
+      this.restart(session, session.tipBlob !== working.blobId);
     } catch (error) {
       this.setCapture(session, { kind: 'unavailable', message: messageOf(error) });
     }
+  }
+
+  /**
+   * The scheduler starts again from whether the working copy differs from the tip, and the status
+   * says where that leaves it. This once overwrote the pause `bind` had just shown, so a paused
+   * diagram reopened saying its changes would be added in a moment, and "Add to history now" did nothing.
+   */
+  private restart(session: Session, dirty: boolean): void {
+    const now = this.deps.clock.now();
+    this.dispatch(session, { kind: 'reset', at: now, generation: this.deps.editor.generation(), dirty });
+    this.setCapture(session, this.idle(session, dirty, now));
+  }
+
+  /** What the status says while no capture runs: paused wins, since nothing is recorded then. */
+  private idle(session: Session, pending: boolean, since: number): CaptureState {
+    if (session.paused) return { kind: 'off', reason: 'diagram' };
+    return pending ? { kind: 'pending', since } : { kind: 'up-to-date' };
   }
 
   private async knownHistories(backend: HistoryBackend): Promise<KnownHistory[]> {
@@ -230,7 +265,7 @@ export class HistoryService {
     const store = await backend.open(binding.repoId);
     if (!store) {
       // The history was removed: the copy simply starts afresh at its next capture.
-      await backend.deleteBinding(binding.copyId);
+      await this.writeBinding(binding.copyId, null);
       return;
     }
     const meta = await store.meta();
@@ -239,8 +274,8 @@ export class HistoryService {
     session.store = store;
     session.meta = meta;
     session.tip = tip;
-    session.paused = meta.paused === true;
-    if (meta.paused) this.setCapture(session, { kind: 'off', reason: 'diagram' });
+    session.paused = binding.paused === true || meta.paused === true;
+    if (session.paused) this.setCapture(session, { kind: 'off', reason: 'diagram' });
     if (tip) {
       const parsed = await this.deps.compute.parse(await store.readSnapshot(tip));
       session.tipBlob = parsed.blobId;
@@ -269,21 +304,19 @@ export class HistoryService {
             altId = randomId('a');
             const made = await store.updateRef({ ref: branchOf(altId), expected: null, next: tip });
             if (made.ok) {
-              const meta = await store.meta();
-              await store.writeMeta({ ...meta, alternatives: [...meta.alternatives, { altId, name: `Copy: ${this.deps.editor.file().metadata.title}`.slice(0, 80), createdAt: this.deps.clock.now(), from: tip }] });
+              const alternative = { altId, name: `Copy: ${this.deps.editor.file().metadata.title}`.slice(0, 80), createdAt: this.deps.clock.now(), from: tip };
+              await this.changeMeta(store, (meta) => ({ ...meta, alternatives: [...meta.alternatives, alternative] }));
             } else {
               altId = null;
             }
           }
         }
         const binding: Binding = { copyId: session.copyId, repoId: candidate.repoId, altId, documentId: session.documentId, lastSeen: null, at: this.deps.clock.now() };
-        await this.deps.backend().putBinding(binding);
+        await this.writeBinding(binding.copyId, binding);
         await this.bind(session, binding);
       }
       const working = await this.deps.compute.prepare(this.deps.editor.file());
-      const dirty = session.tipBlob !== working.blobId;
-      this.dispatch(session, { kind: 'reset', at: this.deps.clock.now(), generation: this.deps.editor.generation(), dirty });
-      this.setCapture(session, dirty ? { kind: 'pending', since: this.deps.clock.now() } : { kind: 'up-to-date' });
+      this.restart(session, session.tipBlob !== working.blobId);
     } catch (error) {
       this.setCapture(session, { kind: 'unavailable', message: messageOf(error) });
     }
@@ -357,7 +390,7 @@ export class HistoryService {
    * branch it began with, and touches no editor state.
    */
   private async capture(session: Session, initiator: Initiator): Promise<void> {
-    if (session.readOnly || session.question || session.meta?.paused || session.paused) return;
+    if (session.readOnly || session.question || session.held || session.meta?.paused || session.paused) return;
     if (!this.deps.enabled()) return;
     const generation = this.deps.editor.generation();
     const snapshot = this.deps.editor.file();
@@ -433,7 +466,7 @@ export class HistoryService {
       session.agents.clear();
       if (session.binding) {
         session.binding = { ...session.binding, lastSeen: oid, at };
-        await backend.putBinding(session.binding).catch(() => undefined);
+        await this.writeBinding(session.copyId, session.binding).catch(() => undefined);
       }
       if (this.session === session) useEvolutionStore.setState({ tipAt: at });
       this.publishTip(session, 1);
@@ -453,7 +486,7 @@ export class HistoryService {
 
   private finish(session: Session, _recorded: boolean): void {
     session.schedule = step(session.schedule, { kind: 'succeeded', at: this.deps.clock.now() });
-    this.setCapture(session, isPending(session.schedule) ? { kind: 'pending', since: session.schedule.dirtySince ?? this.deps.clock.now() } : { kind: 'up-to-date' });
+    this.setCapture(session, this.idle(session, isPending(session.schedule), session.schedule.dirtySince ?? this.deps.clock.now()));
     this.arm(session);
   }
 
@@ -463,39 +496,91 @@ export class HistoryService {
     const meta: RepoMeta = { repoId: randomId('r'), documentId: snapshot.metadata.id, title: snapshot.metadata.title, createdAt: at, alternatives: [] };
     const store = await backend.create(meta);
     const binding: Binding = { copyId: session.copyId, repoId: meta.repoId, altId: null, documentId: snapshot.metadata.id, lastSeen: null, at };
-    await backend.putBinding(binding);
+    await this.writeBinding(binding.copyId, binding);
     session.store = store;
     session.meta = meta;
     session.binding = binding;
     session.tip = null;
   }
 
-  /** Stops (or resumes) recording this diagram's history. What is already recorded stays. */
+  /**
+   * Stops (or resumes) recording this diagram's history. What is already recorded stays. Kept on
+   * this copy's binding: a copy that continued another diagram's history shares its `repo.json`, and
+   * a pause kept there paused the other diagram too.
+   *
+   * The session takes the pause before its write is sent, never once it is answered: a capture
+   * finishing in between wrote the binding it had read, without the pause, after it. The diagram
+   * said paused, and recorded again the next time it was opened.
+   */
   async setPaused(paused: boolean): Promise<void> {
     const session = this.session;
-    if (!session?.store || !session.meta) return;
-    const meta = { ...session.meta, paused: paused || undefined };
-    if (!paused) delete meta.paused;
-    await session.store.writeMeta(meta);
-    session.meta = meta;
+    if (!session?.store || !session.binding) return;
     session.paused = paused;
-    if (paused) {
-      this.setCapture(session, { kind: 'off', reason: 'diagram' });
-    } else {
-      const working = await this.deps.compute.prepare(this.deps.editor.file());
-      const dirty = working.blobId !== session.tipBlob;
-      this.dispatch(session, { kind: 'reset', at: this.deps.clock.now(), generation: this.deps.editor.generation(), dirty });
-      this.setCapture(session, dirty ? { kind: 'pending', since: this.deps.clock.now() } : { kind: 'up-to-date' });
+    session.binding = withPause(session.binding, paused);
+    if (paused) this.setCapture(session, { kind: 'off', reason: 'diagram' });
+    const backend = this.deps.backend();
+    const { copyId } = session;
+    await this.afterBindingWrites(async () => {
+      // The binding as stored when this write's turn comes, not as the session read it: a switch
+      // between alternatives may have moved the copy since, and adopts it only once it is done.
+      // Nothing stored is a history removed meanwhile, which a pause must not bring back.
+      const stored = await backend.binding(copyId);
+      if (stored) await backend.putBinding(withPause(stored, paused));
+    });
+    if (paused) return;
+    if (session.meta?.paused) {
+      // A pause an earlier version kept for the whole history: resuming this copy lifts it.
+      await this.changeMeta(session.store, (meta) => {
+        const next = { ...meta };
+        delete next.paused;
+        return next;
+      });
     }
+    const working = await this.deps.compute.prepare(this.deps.editor.file());
+    this.restart(session, working.blobId !== session.tipBlob);
+  }
+
+  /**
+   * Stores `binding` (or, given `null`, removes the copy's) after every binding write this service
+   * sent before it.
+   */
+  private writeBinding(copyId: string, binding: Binding | null): Promise<void> {
+    const backend = this.deps.backend();
+    return this.afterBindingWrites(() => (binding ? backend.putBinding(binding) : backend.deleteBinding(copyId)));
+  }
+
+  /**
+   * Runs `write` once every binding write before it is answered, so bindings are stored in the order
+   * this service changed them, whatever a backend does with requests in flight together (the history
+   * worker answers each as it finishes; the desktop shell runs them on threads of its own). Each
+   * change is made to the session's `binding` before its write is sent, so the last one to land holds
+   * them all.
+   */
+  private afterBindingWrites(write: () => Promise<void>): Promise<void> {
+    const done = this.bindingWrites.then(write);
+    this.bindingWrites = done.catch(() => undefined);
+    return done;
   }
 
   /** Replaces part of this history's `repo.json` (its remote settings, say). `null` when there is none to change. */
   async updateMeta(change: (meta: RepoMeta) => RepoMeta): Promise<RepoMeta | null> {
     const session = this.session;
     if (!session?.store || !session.meta || session.readOnly) return null;
-    const meta = change(session.meta);
-    await session.store.writeMeta(meta);
-    if (this.session === session) session.meta = meta;
+    return this.changeMeta(session.store, change);
+  }
+
+  /**
+   * Changes `store`'s `repo.json` from what it holds now, under the repository's lock. Another window
+   * recording a copy of the same history may have changed it since this session read it (its own
+   * "Copy: …" alternative, a publishing setting): writing the session's copy back once dropped that.
+   */
+  async changeMeta(store: VersionStore, change: (meta: RepoMeta) => RepoMeta): Promise<RepoMeta> {
+    const meta = await this.lock(repoLock(store.repoId), async () => {
+      const next = change(await store.meta());
+      await store.writeMeta(next);
+      return next;
+    });
+    if (this.session?.store?.repoId === store.repoId) this.session.meta = meta;
     return meta;
   }
 
@@ -524,16 +609,44 @@ export class HistoryService {
     return { bytes, title: session.meta.title };
   }
 
+  /** How many other working copies on this device record into this diagram's history (copies that continued it). */
+  async sharedWith(): Promise<number> {
+    const session = this.session;
+    if (!session?.store) return 0;
+    return this.othersOn(session, session.store.repoId);
+  }
+
+  /**
+   * The other working copies on this device that record into `repoId`, leaving out any deleted since.
+   * A deleted diagram's binding is kept, and counted here it once kept the history from being removed
+   * for nobody, while Settings spoke of "the other diagram", which was gone.
+   */
+  private async othersOn(session: Session, repoId: string): Promise<number> {
+    const others = (await this.deps.backend().bindings()).filter((binding) => binding.repoId === repoId && binding.copyId !== session.copyId);
+    const exists = this.deps.copyExists;
+    if (!exists) return others.length;
+    const live = await Promise.all(others.map((binding) => exists(binding.copyId).catch(() => true)));
+    return live.filter(Boolean).length;
+  }
+
   /**
    * Removes this diagram's history from this device, after the person confirmed. The diagram itself
    * is untouched, and copies already published or exported are not affected — the person is told so
    * before they confirm. Recording starts afresh with the next change unless history is paused.
+   *
+   * A history another copy continues is theirs too: removing it here once deleted the other
+   * diagram's revisions, alternatives and milestones, behind a warning about this diagram alone.
+   * Then this diagram only lets go of it, unless the person chose to remove it for `everywhere`.
    */
-  async removeHistory(): Promise<void> {
+  async removeHistory(options: { everywhere?: boolean } = {}): Promise<void> {
     const session = this.session;
     if (!session?.store) return;
     const repoId = session.store.repoId;
-    await this.deps.backend().remove(repoId);
+    const backend = this.deps.backend();
+    // After the binding writes already sent: one still on its way (a capture's) would put back the
+    // binding removed here.
+    if (!options.everywhere && (await this.othersOn(session, repoId)) > 0) await this.writeBinding(session.copyId, null);
+    else await this.afterBindingWrites(() => backend.remove(repoId));
     session.store = null;
     session.meta = null;
     session.binding = null;
@@ -567,17 +680,16 @@ export class HistoryService {
   async adoptHistory(repoId: string): Promise<void> {
     const session = this.session;
     if (!session) return;
-    const binding: Binding = { copyId: session.copyId, repoId, altId: null, documentId: session.documentId, lastSeen: null, at: this.deps.clock.now() };
-    await this.deps.backend().putBinding(binding);
+    // A pause is this diagram's, and stays with it into the history it now continues.
+    const binding: Binding = { copyId: session.copyId, repoId, altId: null, documentId: session.documentId, lastSeen: null, at: this.deps.clock.now(), ...(session.paused ? { paused: true } : {}) };
+    await this.writeBinding(binding.copyId, binding);
     session.store = null;
     session.tip = null;
     session.tipBlob = null;
     session.tipDocument = null;
     await this.bind(session, binding);
     const working = await this.deps.compute.prepare(this.deps.editor.file());
-    const dirty = working.blobId !== session.tipBlob;
-    this.dispatch(session, { kind: 'reset', at: this.deps.clock.now(), generation: this.deps.editor.generation(), dirty });
-    this.setCapture(session, dirty ? { kind: 'pending', since: this.deps.clock.now() } : { kind: 'up-to-date' });
+    this.restart(session, working.blobId !== session.tipBlob);
   }
 
   /** Bytes all histories take on this device. */
@@ -605,9 +717,25 @@ export class HistoryService {
     };
   }
 
-  /** Writes a working copy's binding (an operation moved it to another alternative). */
+  /**
+   * Writes a working copy's binding (an operation moved it to another alternative). The operation
+   * built it from the binding it read as it began, so the open copy's pause is the session's now.
+   */
   putBindingFor(binding: Binding): Promise<void> {
-    return this.deps.backend().putBinding(binding);
+    const session = this.session;
+    return this.writeBinding(binding.copyId, session?.copyId === binding.copyId ? withPause(binding, session.paused) : binding);
+  }
+
+  /**
+   * Holds recording while a switch a crash interrupted waits for the person (Resume or Keep
+   * current): the copy's binding may already name the alternative it was going to, while what is
+   * on screen is still the one it left, so a capture now would put it on the wrong one.
+   */
+  holdCapture(held: boolean): void {
+    const session = this.session;
+    if (!session) return;
+    session.held = held;
+    if (!held) this.arm(session);
   }
 
   /** Records what is pending now and waits for it, so an operation starts from a recorded state. */
@@ -619,6 +747,8 @@ export class HistoryService {
       for (let i = 0; i < 200 && session.schedule.inFlight !== null; i += 1) await new Promise((resolve) => setTimeout(resolve, 25));
     }
     if (!session.store || isPending(session.schedule)) await this.capture(session, 'auto');
+    // Its binding too, for whoever reads it next from storage (a draft saved to a file moves it).
+    await this.bindingWrites;
   }
 
   /**
@@ -629,7 +759,7 @@ export class HistoryService {
     const session = this.session;
     if (!session || session.token !== token) return;
     if (next.store) session.store = next.store;
-    if (next.binding) session.binding = next.binding;
+    if (next.binding) session.binding = withPause(next.binding, session.paused);
     if (next.meta) session.meta = next.meta;
     session.tip = next.tip;
     if (next.tip && session.store) {
@@ -642,9 +772,7 @@ export class HistoryService {
     }
     if (this.session !== session) return;
     const working = await this.deps.compute.prepare(this.deps.editor.file());
-    const dirty = working.blobId !== session.tipBlob;
-    this.dispatch(session, { kind: 'reset', at: this.deps.clock.now(), generation: this.deps.editor.generation(), dirty });
-    this.setCapture(session, dirty ? { kind: 'pending', since: this.deps.clock.now() } : { kind: 'up-to-date' });
+    this.restart(session, working.blobId !== session.tipBlob);
     useEvolutionStore.setState({ tipAt: this.deps.clock.now() });
     this.publishTip(session, 1);
   }
@@ -662,4 +790,11 @@ export class HistoryService {
 function messageOf(error: unknown): string {
   if (error instanceof HistoryError) return error.message;
   return 'History could not be recorded.';
+}
+
+/** `binding` with the copy's pause as given: `paused: true`, or no `paused` at all. */
+function withPause(binding: Binding, paused: boolean): Binding {
+  const next: Binding = { ...binding, paused };
+  if (!paused) delete next.paused;
+  return next;
 }

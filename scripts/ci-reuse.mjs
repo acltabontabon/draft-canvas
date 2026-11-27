@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -118,7 +118,10 @@ function lookup(workflow, event) {
   });
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Node runs a script from its real path, so `import.meta.url` is the link's target: argv[1] is
+// resolved the same way, or a script reached through a link (macOS's /tmp, a linked checkout)
+// exited 0 having done nothing.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const [mode, workflow] = process.argv.slice(2);
   try {
     if (!workflows.has(workflow) || !['record', 'lookup'].includes(mode)) throw new Error('Unknown CI evidence command.');

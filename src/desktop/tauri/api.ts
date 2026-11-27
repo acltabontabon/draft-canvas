@@ -73,7 +73,8 @@ export function createTauriApi(): DesktopApi {
     quitAck: (decision) => call('quit_ack', { decision }),
 
     openHandle: (handle) => call('open_handle', { handle }),
-    saveDocument: (handle, bytes, expectedStamp) => callRaw('save_document', { handle, expectedStamp }, bytes),
+    saveDocument: (handle, bytes, expectedStamp) =>
+      callRaw('save_document', expectedStamp === null ? { handle, expectMissing: true } : { handle, expectedStamp }, bytes),
     saveAs: (suggestedName, bytes, startIn) => callRaw('save_as', { suggestedName, startIn }, bytes),
     renameFile: (handle, newStem) => call('rename_file', { handle, newStem }),
     checkStamp: (handle, stamp) => call('check_stamp', { handle, stamp }),

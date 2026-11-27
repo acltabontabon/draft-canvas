@@ -92,8 +92,10 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/pages.yml
-    # CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, for the draftcanvas.dev deploy.
-    secrets: inherit
+    # Only the draftcanvas.dev deploy's two secrets.
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     with:
       artifact-name: ${{ needs.verification.outputs.artifact-name }}
       verified-commit: ${{ needs.verification.outputs.commit }}

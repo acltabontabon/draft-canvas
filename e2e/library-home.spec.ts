@@ -72,7 +72,7 @@ test.describe('Home screen', () => {
     await page.keyboard.press('ArrowRight');
     await expect(page.getByRole('tab', { name: 'Recent' })).toBeFocused();
     await page.keyboard.press('ArrowDown');
-    await expect(page.getByRole('button', { name: 'Open Order processing' })).toBeFocused();
+    await expect(page.getByRole('button', { name: /^Order processing\b/ })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.locator('.dc-editor')).toBeVisible();
     await page.getByRole('button', { name: 'Back to your diagrams' }).click();

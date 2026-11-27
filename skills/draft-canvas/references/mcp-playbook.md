@@ -157,23 +157,24 @@ Read the message and any `hint` before trying again.
 | `UNSUPPORTED_TYPE` | Unknown element type | Use a listed type, or set `fallbackType` |
 | `DUPLICATE_TITLE` | A diagram with that title exists | Update that one, or ask the person; `allowDuplicateTitle` only on their say-so |
 | `LAYOUT_FAILED` | No readable layout | Fewer elements per view (move detail inside), or send `layout: {allowDegraded: true}` and fix after |
-| `LAYOUT_CONSTRAINED` | A new element didn't fit beside its neighbours | Add the `suggestedOp` (an arrange) to the same update |
+| `LAYOUT_CONSTRAINED` | A new element didn't fit beside its neighbours. A problem in another view (a linked junction renamed there) names that view and has no `suggestedOp` | Add the `suggestedOp` (an arrange) to the same update. Another view: arrange it in a request with that `view` first, then resend |
 | `REVISION_CONFLICT` | The person edited meanwhile | `read_diagram`, rebuild the change on the new revision; or `onConflict: "rebase"` when your change doesn't touch what they edited |
 | `LIMIT_EXCEEDED` | Too much in one request | Split it into a create plus updates |
-| `OUT_OF_SCOPE` | Folder not enabled, or an id outside the `scope` you passed | Folder: tell the person which one to tick in Settings → AI agents. Scope: pass only ids from `read_selection`, or leave `scope` out |
+| `OUT_OF_SCOPE` | Folder not enabled; an id outside the `scope` you passed; or something the change would carry past it (a linked junction's group, a connector a retyped shape re-infers), which the message names | Folder: tell the person which one to tick in Settings → AI agents. Scope: pass only ids from `read_selection`; for what a change carries, take those ids into the scope or leave `scope` out |
 | `BUSY`, `TIMEOUT`, `APP_UNRESPONSIVE` | Nothing was changed | Retry the identical request with the same `requestId`, at most twice |
 | `OUTCOME_UNKNOWN` | The change may have reached the editor or disk | Check with `list_diagrams` or `read_diagram` before sending anything again |
 | `READ_ONLY` | The diagram is read-only (on disk, or opened read-only) | Don't retry. Tell the person; it changes only once they can edit it |
 | `DOCUMENT_BUSY` | The open diagram changed while the request waited; or the person has unsaved or recovered changes the file on disk disagrees with; or `activate` couldn't open it | Changed while waiting: `read_diagram` and send the change again. Unsaved or recovered changes: ask the person to save or discard, then `read_diagram` and rebuild it. `activate`: leave it out to change the file without opening it |
-| `NOT_FOUND` | No such diagram or view | `list_diagrams` again |
+| `NOT_FOUND` | No such diagram, view, group, flow or attachment; a `previewId` that expired; a starter that isn't downloaded. The message says which | A diagram: `list_diagrams` again. Anything in one: `read_diagram` for what is there now. A preview: `preview_diagram` again. A starter: compose from elements, or ask the person to load starters |
 | `NOT_ACTIVE` | `read_selection` or a selection render, but that diagram isn't open | Ask the person to open it and select, or read the whole view with `read_diagram` |
 | `SCOPE_TARGET_MISSING` | An id in `scope` is gone since the selection was captured | `read_selection` again |
 | `CURSOR_STALE` | The diagram changed between pages of a paged read | Read again from the first page |
-| `DUPLICATE_FLOW`, `CONTAINMENT_CYCLE` | Moving inside or out would clash with a flow's title, or put a shape inside itself | Rename the flow first, or pick another owner |
+| `DUPLICATE_FLOW` | The view already has a flow with that title: an `add` asking for it again, a `set.title` that clashes, or a move inside or out that would put two together | An `add`: change the flow that is there with `{op: "update", id, set: {steps}}` (the message names its id). A title: choose another. A move: rename one of the two first |
+| `CONTAINMENT_CYCLE` | A boundary would end up inside itself, or an owner inside its own view | Pick another parent or owner |
 | `REQUEST_ID_MISMATCH` | That id belongs to another request | Use the original payload to check its outcome. Use a fresh UUID for a separate change |
 | `CANCELLED` | The person stopped the request | Ask before sending it again |
 | `PROPOSAL_ONLY`, `RUN_LIMIT` | In a Nodi run: changes go through review, and only to the run's diagram | Send the same ops with `submit_proposal`; work only on that diagram |
-| `UNSUPPORTED` | The file isn't a diagram Draft Canvas can read | Tell the person; don't overwrite it |
+| `UNSUPPORTED` | The app doesn't draw it that way: a second ordinary relationship in one direction, a self-loop, a behaviour the pairing doesn't offer, `link` or `replicas` on the wrong shape, a type change across shapes. The message says what to send instead. Rarely, the file itself can't be read as a diagram | Change the request as the message says and resend. A file that can't be read: tell the person, and don't overwrite it |
 
 Never answer a failed update by creating a new diagram.
 
@@ -210,8 +211,12 @@ technology and follows it:
 
 `read_diagram` returns each sequence the same way (`mermaid`, `links`). `set.mermaid` replaces what
 it holds and keeps the links of participants still written under the same ids; `set.title` renames
-it; `set.links` re-links. A receipt advisory names anything in the text that is not drawn
-(`autonumber`, `rect`, lost messages). `get_capabilities` topic `sequences` has the rest.
+it; `set.links` re-links. Edit the text a read gave in place: what Mermaid can't say (a participant's
+kind, technology and colour, a box's colour, a reference read as a `ref:` note, a blank participant
+or box name read as "Participant" or "Group") stays as it was wherever your text still says what the
+read said. A receipt advisory names anything in the text that is not drawn (`autonumber`, `rect`,
+lost messages).
+`get_capabilities` topic `sequences` has the rest.
 
 ## Styled labels
 

@@ -1,4 +1,5 @@
 import { currentRevision } from '../../src/host/agentBridge';
+import { StrictMode } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
@@ -15,7 +16,8 @@ vi.mock('../../src/lib/preferences', () => ({
 const { Companion, IDLE_MS } = await import('../../src/desktop/ui/Companion');
 const { goodbyeLine, seedOf } = await import('../../src/desktop/ui/nodiLines');
 const { NodiDock } = await import('../../src/desktop/ui/NodiDock');
-const { companion } = await import('../../src/desktop/companion');
+const companionModule = await import('../../src/desktop/companion');
+const { companion } = companionModule;
 const { desktopStore } = await import('../../src/desktop/store');
 const { setDesktopController } = await import('../../src/desktop/useDesktop');
 const { createDocument, createNode } = await import('../../src/document/factory');
@@ -74,15 +76,17 @@ function fakeController() {
 let controller: ReturnType<typeof fakeController>;
 const doc = { ...createDocument('Orders'), nodes: [createNode({ id: 'db', type: 'service', x: 0, y: 0, text: 'Orders database' })] };
 
-function mount() {
+/** `strict`: under `<StrictMode>`, as `src/main.tsx` renders the app. */
+function mount({ strict = false }: { strict?: boolean } = {}) {
   setDesktopController(controller as never);
-  return render(
+  const tree = (
     <ReactFlowProvider>
       <Companion />
       {/* The status bar's end, where Nodi waits between conversations. */}
       <NodiDock />
-    </ReactFlowProvider>,
+    </ReactFlowProvider>
   );
+  return render(strict ? <StrictMode>{tree}</StrictMode> : tree);
 }
 
 async function settle() {
@@ -726,6 +730,60 @@ describe('the companion', () => {
     expect(screen.getByRole('region', { name: 'Conversation with Claude Code' }).textContent).toMatch(/shown on the canvas/);
     await settle();
     expect(controller.getProposal).toHaveBeenCalledWith('p1');
+  });
+
+  it('redraws a long reply a few times a second while it streams in, not on every chunk', async () => {
+    vi.useFakeTimers();
+    useUiStore.setState({ companionOpen: true });
+    await act(async () => {
+      mount();
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+    });
+    const line = (i: number) => `- The orders service writes the ledger before it answers, part ${i}.\n`;
+    act(() => {
+      companion.begin(doc.metadata.id, 'long', 'Walk me through all of it', null);
+      companion.apply('long', { type: 'message-chunk', text: Array.from({ length: 300 }, (_, i) => line(i)).join('') });
+    });
+    const parsed = vi.spyOn(companionModule, 'replyBlocks');
+    // Half a second more of it: a chunk every 5 ms, each its own event from the shell.
+    for (let i = 300; i < 400; i += 1) {
+      act(() => companion.apply('long', { type: 'message-chunk', text: line(i) }));
+      await act(async () => {
+        vi.advanceTimersByTime(5);
+      });
+    }
+    expect(parsed.mock.calls.length).toBeLessThanOrEqual(15);
+    expect(document.querySelectorAll('.dc-companion-reply li').length).toBeGreaterThan(300);
+
+    // Finished, all of it is there at once.
+    act(() => companion.apply('long', { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: null, usage: null }));
+    expect(document.querySelector('.dc-companion-reply li:last-child')?.textContent).toBe('The orders service writes the ledger before it answers, part 399.');
+  });
+
+  it('goes on redrawing a reply as it streams under StrictMode, as the app is rendered', async () => {
+    vi.useFakeTimers();
+    useUiStore.setState({ companionOpen: true });
+    await act(async () => {
+      mount({ strict: true });
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+    });
+    act(() => {
+      companion.begin(doc.metadata.id, 'strict', 'Walk me through it', null);
+      companion.apply('strict', { type: 'message-chunk', text: 'First words.' });
+    });
+    for (let i = 0; i < 20; i += 1) {
+      act(() => companion.apply('strict', { type: 'message-chunk', text: ` More ${i}.` }));
+      await act(async () => {
+        vi.advanceTimersByTime(50);
+      });
+    }
+    // StrictMode mounts, unmounts and mounts again: the redraw cleared on the way out was still taken
+    // for one on its way, and the card stayed at its first words for the rest of the reply.
+    expect(document.querySelector('.dc-companion-reply')?.textContent).toContain('More 19.');
   });
 
   it('explains conversation usage on keyboard focus, with cache separated from new tokens', async () => {

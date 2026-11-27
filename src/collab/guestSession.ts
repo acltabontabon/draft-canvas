@@ -49,6 +49,11 @@ export interface GuestEnvironment {
   readFile(): DraftDocument;
   applyRemote(file: DraftDocument): boolean;
   isBusy(): boolean;
+  /**
+   * Whether the canvas on screen is this session's copy: not while `open` is still opening it, when
+   * `readFile` is whatever was there before — perhaps this person's own diagram. Always, if absent.
+   */
+  onCopy?(): boolean;
   /** The owner's file, the first time it arrives: opened in the editor with this person's access. */
   open(file: DraftDocument, access: Role): void;
   /** The owner changed what this person may do. */
@@ -90,6 +95,17 @@ const RESEND_BURST_BYTES = 6 * 1024 * 1024;
 const RESEND_RATE_BYTES = 768 * 1024;
 
 /**
+ * The pace a gesture held here streams at while it lasts (the bridge sends it every 50 ms), and the
+ * burst allowed, counting every patch sent: each of those patches carries everything the gesture has
+ * moved so far, and Make room across a thousand shapes sent a fifth of a megabyte twenty times a
+ * second — past the owner's byte budget for a collaborator (`BYTE_RATE` in `hostSession.ts`) within
+ * seconds, so the owner cut this person off for flooding. Under the rate that budget refills at, a
+ * gesture of any length leaves it as full as it found it, less the burst.
+ */
+const LIVE_BURST_BYTES = 1024 * 1024;
+const LIVE_RATE_BYTES = RESEND_RATE_BYTES;
+
+/**
  * What may wait for a gesture here to end. A drag can be held as long as a mouse button can, while a
  * busy session keeps committing; past this the waiting commits are dropped and a fresh copy asked for
  * once the gesture ends, which is the same file for far less memory.
@@ -126,6 +142,10 @@ export class GuestSession {
   /** Patches waiting their turn behind a paced resend (`sendOrDrop`), in the order they must go. */
   private outbox: PendingPatch[] = [];
   private outboxTimer: unknown = null;
+  /** What a held gesture may still stream before it waits (`LIVE_RATE_BYTES`); below zero, how far past that pace the patches sent lately went. */
+  private liveBytes = LIVE_BURST_BYTES;
+  private liveAt = 0;
+  private liveTimer: unknown = null;
   /** Whether this connection's hello has gone: until then nothing else is sent on it (`send`). */
   private greeted = false;
   /** This connection has proved its welcome; an old replica alone does not authenticate it. */
@@ -145,6 +165,7 @@ export class GuestSession {
     this.env = env;
     this.events = events;
     this.clock = clock;
+    this.liveAt = clock.now();
   }
 
   get id(): string | null {
@@ -237,7 +258,12 @@ export class GuestSession {
 
   /** This person edited the file. */
   localChanged(): void {
-    if (!this.replica || this.ended || this.access !== 'editor') return;
+    // Some other canvas on screen (this copy still opening) holds nothing of this session's to send.
+    if (!this.replica || this.ended || this.access !== 'editor' || this.env.onCopy?.() === false) return;
+    // Mid-gesture, what is sent is only for watching: past its pace, this moment of it is skipped.
+    if (this.env.isBusy() && this.waitLive()) return;
+    if (this.liveTimer !== null) this.clock.clearTimeout(this.liveTimer);
+    this.liveTimer = null;
     const changes = diffFile(this.replica.local, this.env.readFile());
     if (changes.length === 0) {
       this.restorePending = false;
@@ -266,6 +292,34 @@ export class GuestSession {
     if (this.outbox.length > 0) this.outbox.push(patch);
     else this.sendPatch(patch);
     this.events.unconfirmed(this.replica.pending.length);
+  }
+
+  /**
+   * Whether a held gesture must wait before it sends again (`LIVE_RATE_BYTES`) — then it is tried
+   * again when its turn comes. Nothing is lost by the wait: the next patch is diffed from what was
+   * sent, so it carries the latest of everything the moments skipped had moved, and the gesture's
+   * end is never held back. Work still being paced out goes first, as it would have anyway.
+   */
+  private waitLive(): boolean {
+    const allowance = this.liveNow();
+    if (allowance > 0 && this.outbox.length === 0) return false;
+    this.liveTimer ??= this.clock.setTimeout(
+      () => {
+        this.liveTimer = null;
+        this.localChanged();
+      },
+      // Rounded up, so the turn has come when it fires rather than a hair before.
+      Math.max(HOLD_RETRY_MS, Math.ceil((-allowance / LIVE_RATE_BYTES) * 1000)),
+    );
+    return true;
+  }
+
+  /** `liveBytes` refilled to now. */
+  private liveNow(): number {
+    const now = this.clock.now();
+    this.liveBytes = Math.min(LIVE_BURST_BYTES, this.liveBytes + (Math.max(0, now - this.liveAt) / 1000) * LIVE_RATE_BYTES);
+    this.liveAt = now;
+    return this.liveBytes;
   }
 
   /** Whether `changes` fit in one patch: the message, and the moves the owner takes in one. */
@@ -321,7 +375,10 @@ export class GuestSession {
   }
 
   private sendPatch(patch: { clientSeq: number; changes: unknown }): void {
-    this.send({ t: 'patch', clientSeq: patch.clientSeq, changes: patch.changes, ...(this.epoch === null ? {} : { epoch: this.epoch }) });
+    const sent = this.send({ t: 'patch', clientSeq: patch.clientSeq, changes: patch.changes, ...(this.epoch === null ? {} : { epoch: this.epoch }) });
+    // Every patch counts against what a held gesture may stream, as the owner counts it (`ByteBudget`):
+    // a gesture only ever uses what an edit, or a resend, has left of the owner's budget.
+    if (sent !== null) this.liveBytes = this.liveNow() - utf8Bytes(sent);
   }
 
   setPresence(presence: Presence): void {
@@ -411,7 +468,9 @@ export class GuestSession {
     const unconfirmed: Change[][] = [];
     if (this.replica && !resuming) {
       for (const patch of this.replica.pending) unconfirmed.push(patch.changes);
-      const unsent = diffFile(this.replica.local, this.env.readFile());
+      // Only what is on this session's copy: welcomed again while it was still opening, the canvas on
+      // screen was the one before it, and the difference would have gone to the owner as an edit.
+      const unsent = this.env.onCopy?.() === false ? [] : diffFile(this.replica.local, this.env.readFile());
       if (unsent.length > 0) unconfirmed.push(unsent);
     }
     this.selfId = message.peer;
@@ -431,6 +490,10 @@ export class GuestSession {
       this.drainHeld();
     } else {
       this.restorePending = false;
+      // A moment of a gesture still waiting its turn (`waitLive`) is in what was just taken along; sent
+      // later, it would be diffed against a canvas the fresh copy is about to replace.
+      if (this.liveTimer !== null) this.clock.clearTimeout(this.liveTimer);
+      this.liveTimer = null;
       this.replica = new Replica(parsed.document, message.seq);
       // A fresh page given an old place back numbers its patches on from where that place left off.
       if (message.handled !== undefined) this.replica.rebase(message.handled);
@@ -579,7 +642,8 @@ export class GuestSession {
     if (this.holdTimer !== null) this.clock.clearTimeout(this.holdTimer);
     if (this.heartbeatTimer !== null) this.clock.clearTimeout(this.heartbeatTimer);
     if (this.resyncTimer !== null) this.clock.clearTimeout(this.resyncTimer);
-    this.holdTimer = this.heartbeatTimer = this.resyncTimer = null;
+    if (this.liveTimer !== null) this.clock.clearTimeout(this.liveTimer);
+    this.holdTimer = this.heartbeatTimer = this.resyncTimer = this.liveTimer = null;
     this.held.length = 0;
     this.heldBytes = 0;
     this.heldOut = false;
@@ -594,12 +658,16 @@ export class GuestSession {
     this.events.status(status, reason);
   }
 
-  private send(message: GuestMessage, priority: 'commit' | 'presence' = 'commit'): void {
+  /** The message as it went, or `null` when it could not go on this connection (yet). */
+  private send(message: GuestMessage, priority: 'commit' | 'presence' = 'commit'): string | null {
     // Nothing goes ahead of the hello on a new connection: the owner reads the first message as it,
     // and a patch there (one made while a resume proof was being worked out) closed the connection.
-    if (!this.greeted && message.t !== 'hello') return;
-    if (!this.welcomed && (message.t === 'patch' || message.t === 'presence' || message.t === 'resync')) return;
+    if (!this.greeted && message.t !== 'hello') return null;
+    if (!this.welcomed && (message.t === 'patch' || message.t === 'presence' || message.t === 'resync')) return null;
     if (message.t === 'hello') this.greeted = true;
-    this.transport?.send(encode(message), priority);
+    if (!this.transport) return null;
+    const text = encode(message);
+    this.transport.send(text, priority);
+    return text;
   }
 }

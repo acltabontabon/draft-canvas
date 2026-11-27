@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { afterDropGuard, connect, create, newCanvas, nextFrames } from './canvas';
+import { afterDropGuard, connect, create, newCanvas, nextFrames, presentButton } from './canvas';
 
 /**
  * Connection-attached details: dragging an existing Note/Code node onto a connector folds it into
@@ -287,7 +287,7 @@ test.describe('connection-attached details', () => {
     // Outside click commits (Escape now discards — see the dedicated test for that).
     await page.locator('.react-flow__pane').click({ position: { x: 100, y: 500 } });
 
-    await page.getByRole('button', { name: 'Present', exact: true }).click();
+    await presentButton(page).click();
     await expect(page.getByRole('button', { name: 'Exit presentation' })).toBeVisible();
 
     await expect(chip).toBeVisible();

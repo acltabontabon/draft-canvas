@@ -8,7 +8,7 @@ Make focused changes. Keep updates and final responses brief: what changed, what
 any blocker. Complete authorized work without unnecessary confirmation.
 
 The product principle is **your architecture, your agents, your decisions**
-([Principles](docs/reference/principles.md)): no account or server that sees diagrams, the person's own
+([Principles](CONTRIBUTING.md#principles)): no account or server that sees diagrams, the person's own
 agent, and every agent change reviewed before it lands. Design new features to keep it.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, commands and the repository map;
@@ -176,7 +176,9 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   `commands/arrange.ts`, which shows a preview first. The work runs on the agent worker
   (`agent/layoutPlan.ts` through `offThread.ts`, Cancel included) and is bounded by a deterministic
   work budget (`route.ts`'s `withBudget`), never a wall-clock deadline: the same diagram gives the
-  same preview on any machine, and a result that ran out says `partial`.
+  same preview on any machine, and a result that ran out says `partial`. The budget must bind before
+  the far-off clock backstop (`layoutPlan.ts`), which is only a hang guard; a run it stopped also
+  says `timedOut`.
 
 ### Outage walk
 

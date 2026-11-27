@@ -40,7 +40,8 @@ export async function createRoomImage(
   // parent's picture on every round trip, even though its visible architecture is unchanged.
   const key = JSON.stringify([
     room.nodes.map(({ inside: _inside, ...node }) => node), room.edges, room.flows,
-    room.openPoints, room.settings.showSequence,
+    // The picture draws the room's sketches too: without them a room just sketched on flew as it was.
+    room.openPoints, room.ink, room.settings.showSequence,
     // Computed CSS matrices round the landed camera; treat subpixel serialization noise as the
     // same picture when a fitted arrival becomes the outgoing room on the return trip.
     [Math.round(camera.x * 100) / 100, Math.round(camera.y * 100) / 100, Math.round(camera.zoom * 1_000_000) / 1_000_000],

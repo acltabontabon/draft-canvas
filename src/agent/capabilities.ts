@@ -63,7 +63,7 @@ export function capabilities(args: { topics?: unknown; starter?: unknown; tool?:
         elements: file.nodes.map((n) => ({ key: n.id, type: n.type, label: n.text ?? null, ...(n.parentId ? { group: n.parentId } : {}) })),
         relationships: file.edges.map((e, i) => ({ id: ids.edges[i], from: e.source, to: e.target, ...(e.label ? { label: e.label } : {}) })),
         flows: file.flows.map((f, i) => ({ id: ids.flows[i], title: f.title, steps: f.steps.length })),
-        note: 'Ids here are unprefixed; with starter.prefix "p-", element "api" becomes "p-api".',
+        note: 'Ids here are unprefixed; with starter.prefix "p-", element "api" becomes "p-api", as does every id inside its views. The request\'s own ids must differ from all of them.',
       },
     };
   }
@@ -144,7 +144,7 @@ export function capabilities(args: { topics?: unknown; starter?: unknown; tool?:
       write: 'sequences: [{id, title, mermaid, links?}] on create_diagram or an add op. mermaid is a Mermaid sequenceDiagram: participant/actor lines (with "as" names), ->> a call, -) asynchronous, -->> a reply, + and - after the arrow for work starting and ending, create/destroy, Note over/left of/right of, box … end, and alt/else, opt, loop, par/and, critical/option, break. Nothing in it is positioned: the app lays it out and sizes it.',
       links: 'links: {participantId: elementId} makes a participant stand for an element of the same view — it takes the element\'s name, kind and technology and follows it from then on. A participant written under an element\'s own id is linked without being listed. Link the participants that are shapes in the diagram; leave the rest free.',
       order: 'Only from an order the person or the code gives, as with flows. A sequence is never derived from the layout or from which relationships exist.',
-      edit: 'read_diagram returns each sequence as {id, title, mermaid, links} (mermaid left out with truncated: true when long; include ["fullText"] gives it). update set.mermaid replaces what it holds and keeps the links of participants still written under the same ids; set.title renames it; set.links re-links (null unlinks all); set.place moves it. remove by id.',
+      edit: 'read_diagram returns each sequence as {id, title, mermaid, links} (mermaid left out with truncated: true when long; include ["fullText"] gives it). update set.mermaid replaces what it holds and keeps the links of participants still written under the same ids; set.title renames it; set.links re-links (null unlinks all); set.place moves it. remove by id. Edit the text a read gave in place: what Mermaid can\'t say (a participant\'s kind, technology and colour, a box\'s colour, a reference read as a "ref:" note, a blank participant or box name read as "Participant" or "Group") stays as it was wherever the text still says what the read said.',
       notDrawn: 'autonumber, rect backgrounds, participant links/properties, two-way arrows and lost messages (-x) are not drawn; a receipt advisory names what was left out. A reply answers the latest unanswered call between the same two participants.',
       versusFlows: 'A flow walks existing relationships and is the presentation of the architecture. Use a sequence when the order, replies, conditions or participants go beyond what the relationships say — a protocol, a saga, an error path.',
     };

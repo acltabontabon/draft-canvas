@@ -125,7 +125,7 @@ describe('LibraryScreen — Home', () => {
     await userEvent.keyboard('{ArrowDown}');
     expect(screen.getByRole('tab', { name: 'Drafts' })).toHaveFocus();
     await userEvent.keyboard('{ArrowRight}{ArrowDown}');
-    expect(screen.getByRole('button', { name: 'Open Checkout' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: /^Checkout\b/ })).toHaveFocus();
     rerender(<LibraryScreen session={stubSession()} />);
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Find a diagram' })).not.toBeInTheDocument();
@@ -136,7 +136,7 @@ describe('LibraryScreen — Home', () => {
     await userEvent.click(screen.getByRole('button', { name: /View all/ }));
     expect(screen.getByRole('searchbox', { name: 'Search diagrams' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Home' }));
-    expect(screen.getByRole('button', { name: 'Open Checkout' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Checkout\b/ })).toBeInTheDocument();
   });
 
   it('creates a browser project from the empty invitation', async () => {
@@ -253,6 +253,32 @@ describe('LibraryScreen — dropped files', () => {
 
     fireEvent.drop(screen.getByRole('heading', { name: 'Recently edited', hidden: true }), dropped());
     await vi.waitFor(() => expect(adoptDocument).toHaveBeenCalledTimes(1));
+  });
+
+  it('says nothing of bringing an older file up to date: an upgrade is no repair', async () => {
+    // Every valid older export said "Imported with repairs: Upgraded document format from v25 to
+    // v34." and looked damaged, while the same diagram opened from the Library said nothing.
+    const notify = vi.fn();
+    const original = useUiStore.getState().notify;
+    useUiStore.setState({ notify });
+    try {
+      const adoptDocument = vi.fn(async () => {});
+      const { container } = render(<LibraryScreen session={stubSession({ adoptDocument })} />);
+      const older = {
+        format: 'draft-canvas',
+        version: 1,
+        metadata: { id: 'older', title: 'Older', createdAt: 1, updatedAt: 2 },
+        nodes: [{ id: 'a', type: 'service', x: 100, y: 100, width: 160, height: 70, z: 0, text: 'A' }],
+        edges: [],
+        viewport: { x: 0, y: 0, zoom: 1 },
+      };
+      const file = new File([JSON.stringify(older)], 'older.draftcanvas', { type: 'application/json' });
+      fireEvent.drop(container.firstElementChild!, { dataTransfer: { types: ['Files'], files: [file] } });
+      await vi.waitFor(() => expect(adoptDocument).toHaveBeenCalledTimes(1));
+      expect(notify.mock.calls.map(([message]) => message).join('\n')).not.toMatch(/repairs|Upgraded document format/);
+    } finally {
+      useUiStore.setState({ notify: original });
+    }
   });
 
   // #172: an empty browser has no Restore button, and a backup read as a diagram was "not valid JSON".

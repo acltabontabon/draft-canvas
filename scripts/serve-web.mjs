@@ -15,7 +15,7 @@
 
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { dirname, extname, join, normalize } from 'node:path';
+import { dirname, extname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const staged = join(dirname(fileURLToPath(import.meta.url)), '..', '.preview-web');
@@ -45,7 +45,9 @@ function serve(root, notFound) {
   return createServer((request, response) => {
     let path;
     try {
-      path = normalize(decodeURIComponent(new URL(request.url, 'http://localhost').pathname));
+      // A URL path, so POSIX on every platform: Windows' `normalize` turned `/` into `\`, and the
+      // trailing-slash redirect below sent the browser to `\/`.
+      path = posix.normalize(decodeURIComponent(new URL(request.url, 'http://localhost').pathname));
     } catch {
       // A stray `%` is a bad request, not a reason for the server to exit.
       response.writeHead(400).end('bad request');

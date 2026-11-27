@@ -34,7 +34,7 @@ import { renderFocus } from '../agent/focus';
 import { diffForPreview } from '../agent/proposal';
 import { holdPreview, readPreview, clearPreviews } from './agentPreviews';
 import { capabilities } from '../agent/capabilities';
-import { advisoriesReceipt, gate, legibilityReceipt, qualityReceipt } from '../agent/compile';
+import { advisoriesReceipt, gate, gateChange, legibilityReceipt, qualityReceipt } from '../agent/compile';
 import { AgentError, toAgentError } from '../agent/errors';
 import { HistoryToolError, historyTool, type HistoryToolArgs } from '../store/evolution/agentTool';
 import type { JobResult } from '../agent/jobs';
@@ -669,7 +669,9 @@ function receiptCounts(result: Extract<JobResult, { kind: 'update' }>) {
 
 function layoutConstrained(result: Extract<JobResult, { kind: 'update' }>) {
   return new AgentError('LAYOUT_CONSTRAINED', `The change would leave the diagram unreadable: ${result.problems[0]}`, {
-    hint: 'Nothing changed. Existing shapes are only moved by an arrange op: add {op:"arrange"} (for the view, or a scope) to the same request, or shorten long text. Don\'t create a replacement diagram.',
+    hint: result.elsewhere
+      ? `Nothing changed. ${result.elsewhere} Don't create a replacement diagram.`
+      : 'Nothing changed. Existing shapes are only moved by an arrange op: add {op:"arrange"} (for the view, or a scope) to the same request, or shorten long text. Don\'t create a replacement diagram.',
     details: { problems: result.problems.slice(0, 10), ...(result.suggestedOp ? { suggestedOp: result.suggestedOp } : {}) },
   });
 }
@@ -815,6 +817,8 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
   if (result.unchanged) {
     return { ...base, revision: handOut(host, snapshot), applied: false, persisted: wasClean, state: 'unchanged', ...receiptCounts(result) };
   }
+  // What a create and a closed file's update are held to (`gate`): nothing the next open would repair.
+  gateChange(snapshot.file, result.file);
 
   // 4. The gate, then the commit (which re-checks the revision in the same step as the change).
   await passGate(api, event.id);
@@ -842,6 +846,7 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
     const undone = rebasedOverlapOf(commitBase.file, reply.file, rerun.file);
     if (undone.length > 0) throw overlappingConflict(reply.revision, undone, true);
     if (rerun.problems.length) throw layoutConstrained(rerun);
+    gateChange(reply.file, rerun.file);
     wasClean = wasClean && host.isClean();
     commitBase = { ...snapshot, revision: reply.revision, file: reply.file };
     result = rerun;

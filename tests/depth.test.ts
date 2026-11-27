@@ -6,7 +6,10 @@ import { embed, hasInside, resolvePath, totals, viewOf } from '../src/depth/tree
 import { looksLikeSystemOverview } from '../src/depth/level';
 import { __resetInteraction, fileOf, fileWithLiveViewport, useEditorStore, viewLevel } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
-import type { DraftDocument } from '../src/document/types';
+import { createFlow } from '../src/document/flow';
+import { inkOf } from '../src/document/ink';
+import { removeElements } from '../src/document/operations';
+import type { DraftDocument, DraftInk } from '../src/document/types';
 
 /**
  * Architectural depth: looking inside a shape, drawing there, and coming back out.
@@ -539,6 +542,64 @@ describe('history under attack', () => {
 });
 
 /**
+ * A room exists only while it holds a shape, so the edit that takes its last one takes the room out
+ * of the file, sketches and flows included. The screen used to keep the edited view: the sketches
+ * stayed drawn and the flows listed, every edit to them recorded a step the file never kept, and
+ * they vanished on the next navigation or reload.
+ */
+describe('a room losing its last shape', () => {
+  const stroke: DraftInk = { id: 'k_room', tool: 'pen', color: 'graphite', size: 3, x: 0, y: 200, points: [0, 0, 80, 10] };
+
+  /** Inside a room holding one shape, a sketch over it and a flow. */
+  function furnished() {
+    const { platform } = withPlatform();
+    const inner = createNode({ type: 'component', x: 0, y: 0, text: 'Only part' });
+    const inside = { nodes: [inner], edges: [], flows: [createFlow({ title: 'Checkout' })], viewport: { x: 0, y: 0, zoom: 1 }, ink: [stroke] };
+    const document = store.getState().document;
+    store.setState({ document: { ...document, nodes: document.nodes.map((n) => (n.id === platform.id ? { ...n, inside } : n)) } });
+    useUiStore.setState({ toasts: [], readOnly: null, flowTrace: null, historyLens: false });
+    expect(store.getState().enterInside(platform.id)).toBe(true);
+    return { platform, inner };
+  }
+
+  it('takes its sketches and flows off the screen with it, and one undo brings them all back', () => {
+    const { platform, inner } = furnished();
+    store.getState().setSelection({ nodes: [inner.id], edges: [] });
+    store.getState().deleteSelection();
+
+    expect(insideOf(platform.id)).toBeUndefined();
+    expect(inkOf(store.getState().document)).toEqual([]);
+    expect(store.getState().document.flows).toEqual([]);
+    expect(useUiStore.getState().toasts.some((toast) => /sketches and flows/.test(toast.message))).toBe(true);
+    // The room on screen is the one the file holds, by identity: nothing is left to edit into a step.
+    expect(fileOf(store.getState())).toBe(store.getState().history.past.at(-1)!.after);
+
+    store.getState().undo();
+    expect(insideOf(platform.id)?.ink).toEqual([stroke]);
+    expect(inkOf(store.getState().document)).toEqual([stroke]);
+    expect(store.getState().document.flows.map((flow) => flow.title)).toEqual(['Checkout']);
+    store.getState().redo();
+    expect(inkOf(store.getState().document)).toEqual([]);
+    expect(store.getState().document.flows).toEqual([]);
+  });
+
+  it('refuses a new flow while it holds no shape, rather than list one the file never keeps', () => {
+    const { platform } = withPlatform();
+    useUiStore.setState({ toasts: [], readOnly: null, flowTrace: null, historyLens: false });
+    store.getState().enterInside(platform.id);
+    const steps = store.getState().history.past.length;
+    expect(store.getState().createFlow('Checkout')).toBeNull();
+    expect(store.getState().document.flows).toEqual([]);
+    expect(store.getState().history.past).toHaveLength(steps);
+    expect(useUiStore.getState().toasts.some((toast) => /Draw something here first/.test(toast.message))).toBe(true);
+    // With a shape drawn there, it is kept.
+    store.getState().addNode({ type: 'component', x: 0, y: 0 });
+    const id = store.getState().createFlow('Checkout');
+    expect(insideOf(platform.id)?.flows.map((flow) => flow.id)).toEqual([id]);
+  });
+});
+
+/**
  * Paths go stale. The shape that owns the room you are standing in can be taken away by an undo,
  * by a reload from outside, or by a conflict you discarded — and none of those are errors. The
  * answer is always the same: surface at the nearest room that still exists, and never render
@@ -576,6 +637,25 @@ describe('standing in a room that stops existing', () => {
     expect(store.getState().path).toEqual([]);
     expect(store.getState().outer).toBeNull();
     expect(store.getState().document).toBe(withoutPlatform);
+  });
+
+  /**
+   * An agent's change can take away the room you stand in. Its step is recorded at the root with the
+   * selection of the room that went, so its undo selected ids the root has not got: ⌘D on them said
+   * the diagram was too large.
+   */
+  it('an undo that puts back a room a file change took selects only what is on screen', () => {
+    const { platform } = withPlatform();
+    store.getState().enterInside(platform.id);
+    const inner = store.getState().addNode({ type: 'component', x: 0, y: 0, text: 'Controller' });
+    expect(store.getState().selection.nodes).toEqual([inner.id]);
+    expect(store.getState().applyToFile('Agent change', (whole) => removeElements(whole, [platform.id]))).toBe(true);
+    expect(store.getState().path).toEqual([]);
+
+    store.getState().undo();
+    const { document, selection } = store.getState();
+    expect(insideOf(platform.id)?.nodes.map((node) => node.id)).toEqual([inner.id]);
+    expect(selection.nodes.every((id) => document.nodes.some((node) => node.id === id))).toBe(true);
   });
 
   it('follows an undo that removes the shape you are standing inside', () => {

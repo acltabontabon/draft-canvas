@@ -11,6 +11,7 @@
  * document: following, going back and going forward are navigation, never an edit.
  */
 import { displayNameFor } from '../document/factory';
+import { playbackFlowOf } from '../document/sequenceFlow';
 import type { DraftDocument, DraftNode, DraftViewport } from '../document/types';
 import { resolvePath, samePath, viewOf, type DepthPath } from '../depth/tree';
 import { contextSentence, junctionContext, type JunctionContext } from '../junctions/destination';
@@ -18,9 +19,10 @@ import { counterpartsOf, groupLabel, junctionGroups, junctionOf, membersOf, same
 import { arrivalFrame, journeyOf, type Insets, type Journey } from '../junctions/journey';
 import { canGoBack, canGoForward, EMPTY_TRAIL, peekStop, step, travel, withoutStop, type TrailStop } from '../junctions/trail';
 import { announce } from '../lib/announce';
+import { motionMs } from '../lib/motion';
 import { count } from '../lib/plural';
 import { PRESENTATION_INSETS } from '../presentation/useFlowPlayback';
-import { fileOf, useEditorStore } from '../store/editorStore';
+import { fileOf, useEditorStore, type EditorStore, type FlowPlaybackState } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { navigateToRoom } from './depthNavigation';
 import type { Command, CommandContext, CommandOption, CommandStage } from './types';
@@ -89,6 +91,41 @@ function stopLabel(member: JunctionMember, context: JunctionContext | undefined)
   return where ? `${label} · ${where}` : label;
 }
 
+/**
+ * What was being presented in a place a journey left, kept with that place on the trail. A flow is
+ * told in its own room: stepping into another lets its playback go, since nothing of it is there to
+ * show. Coming back by the trail carries it on from the step it was on, as the guide promises; it
+ * used to end there, flow bar and all. As transient as the trail: never saved, undone or shared.
+ */
+interface Telling {
+  path: DepthPath;
+  playback: Pick<FlowPlaybackState, 'flowId' | 'sequenceNodeId' | 'walk' | 'step' | 'stage'>;
+  selectedFlowId: string | null;
+}
+
+const toldAt = new WeakMap<TrailStop, Telling>();
+
+/** The presentation under way, if one is being told, to carry on with on the way back. */
+function tellingOf(editor: EditorStore): Telling | undefined {
+  const { mode, flowPlayback, selectedFlowId, path } = editor;
+  if (mode !== 'present' || !flowPlayback.active || flowPlayback.flowId === null) return undefined;
+  const { flowId, sequenceNodeId, walk, step: at, stage } = flowPlayback;
+  return { path, playback: { flowId, sequenceNodeId, walk, step: at, stage }, selectedFlowId };
+}
+
+/** Carries on with what was being told at `stop`, once back in its room, while presenting and if it is still there. */
+function resumeTelling(stop: TrailStop): void {
+  const told = toldAt.get(stop);
+  if (!told) return;
+  toldAt.delete(stop);
+  const editor = useEditorStore.getState();
+  if (editor.mode !== 'present' || editor.flowPlayback.active || !samePath(editor.path, told.path)) return;
+  const { flowId, sequenceNodeId, walk } = told.playback;
+  if (!playbackFlowOf(editor.document, flowId, sequenceNodeId, walk)) return;
+  editor.setFlowPlayback({ active: true, ...told.playback });
+  if (told.selectedFlowId !== null && editor.document.flows.some((flow) => flow.id === told.selectedFlowId)) editor.setSelectedFlowId(told.selectedFlowId);
+}
+
 let arrivalTimer: ReturnType<typeof setTimeout> | null = null;
 let flashTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -110,7 +147,9 @@ function lightArrival(id: string, journey: Journey): void {
         if (useUiStore.getState().jumpFlashId === id) useUiStore.getState().setJumpFlashId(null);
       }, ARRIVAL_MS);
     },
-    Math.round(journey.duration * ARRIVAL_LEAD),
+    // The journey as the camera takes it: under reduced motion the camera jumps at once (`calm`), and
+    // a delay worked out from the full journey lit the ring up to 600 ms after the jump.
+    Math.round(motionMs(journey.duration) * ARRIVAL_LEAD),
   );
 }
 
@@ -160,6 +199,7 @@ export async function goToJunction(ctx: CommandContext, target: { id: string; pa
   };
   start.ui.setJunctionPeek(null);
   if (start.ui.contextMenu) start.ui.setContextMenu(null);
+  const telling = samePath(start.editor.path, destination.path) ? undefined : tellingOf(start.editor);
 
   const there = await enter(start, destination.path);
   if (!there) return false;
@@ -178,6 +218,7 @@ export async function goToJunction(ctx: CommandContext, target: { id: string; pa
   there.ui.setJunctionTrail(
     travel(there.ui.junctionTrail, documentId, here, { path: destination.path, camera: arrival.camera, junctionId: target.id, label: stopLabel(member, context) }),
   );
+  if (telling) toldAt.set(here, telling);
   // Nothing is left selected: what was selected is off screen now, where Delete must not find it,
   // and selecting the destination would put its inspector over the place just arrived at. The Go
   // key carries on from here all the same (`junctionKey`).
@@ -229,13 +270,19 @@ export async function stepTrail(ctx: CommandContext, direction: -1 | 1): Promise
     return false;
   }
   start.ui.setJunctionPeek(null);
+  const leaving = !samePath(start.editor.path, moved.stop.path);
+  const telling = leaving ? tellingOf(start.editor) : undefined;
   const there = await enter(start, moved.stop.path);
   if (!there) return false;
   there.ui.setJunctionTrail(moved.trail);
+  // Kept with the place being left as the trail now holds it (`step` writes the camera on it).
+  const left = moved.trail.stops[start.ui.junctionTrail.index];
+  if (telling && left) toldAt.set(left, telling);
 
   const view = { width: there.camera.viewWidth, height: there.camera.viewHeight };
   const journey = journeyOf(there.camera.getViewport(), moved.stop.camera, view);
   fly(there, moved.stop.camera, journey);
+  if (leaving) resumeTelling(moved.stop);
 
   if (there.editor.selection.nodes.length > 0 || there.editor.selection.edges.length > 0) there.editor.setSelection({ nodes: [], edges: [] });
   const junction = moved.stop.junctionId ? there.editor.document.nodes.find((node) => node.id === moved.stop.junctionId) : undefined;

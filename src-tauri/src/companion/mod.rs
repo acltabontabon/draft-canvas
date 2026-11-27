@@ -85,6 +85,9 @@ pub enum SessionArg<'a> {
 
 pub struct RunSpec<'a> {
     pub program: &'a Path,
+    /// The version `locate` read from `program`, when it read one: what anything learned about this
+    /// CLI is kept under, so the run doesn't ask for it a second time.
+    pub version: Option<&'a str>,
     pub work_dir: &'a Path,
     /// The Draft Canvas server as a file (`mcp_config`), for an agent that reads one…
     pub mcp_config: &'a Path,
@@ -280,30 +283,41 @@ pub fn validate(request: &PromptRequest) -> Result<(), AppError> {
     Ok(())
 }
 
-/// The MCP configuration one run's agent loads: only Draft Canvas's connector, told which run it is.
-/// `agent_dir` is where this app keeps `agent.json`: the connector is told it outright, so a run reaches
-/// the app that started it even when that isn't the installed app (a development or beta build).
 /// A shell line that reopens a conversation in the agent's own terminal UI, from the folder the
-/// companion ran it in (sessions are looked up by folder). Quoted for the platform's shell.
+/// companion ran it in (sessions are looked up by folder). Quoted for the platform's shell: on
+/// Windows that is PowerShell, the shell a terminal opens there. The cmd line it was before
+/// (`cd /d "…" && "…" …`) didn't parse in PowerShell, so pasting it into the terminal ran nothing.
 pub fn continue_line(work_dir: &Path, program: &Path, resume: &[String]) -> String {
     let quote = |text: &str| {
         if cfg!(windows) {
-            format!("\"{}\"", text.replace('"', "\"\""))
+            // PowerShell ends a single-quoted string at a curly single quote too (‘ ’ ‚ ‛), so a
+            // folder such as `O’Brien` cut the line short; any of them doubled reads as itself.
+            let mut quoted = String::with_capacity(text.len() + 2);
+            quoted.push('\'');
+            for c in text.chars() {
+                if matches!(c, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') {
+                    quoted.push(c);
+                }
+                quoted.push(c);
+            }
+            quoted.push('\'');
+            quoted
         } else {
             format!("'{}'", text.replace('\'', "'\\''"))
         }
     };
-    let cd = if cfg!(windows) { "cd /d" } else { "cd" };
     let args = resume
         .iter()
         .map(|a| quote(a))
         .collect::<Vec<_>>()
         .join(" ");
-    format!(
-        "{cd} {} && {} {args}",
-        quote(&work_dir.to_string_lossy()),
-        quote(&program.to_string_lossy())
-    )
+    let dir = quote(&work_dir.to_string_lossy());
+    let program = quote(&program.to_string_lossy());
+    if cfg!(windows) {
+        format!("Set-Location -LiteralPath {dir}; & {program} {args}")
+    } else {
+        format!("cd {dir} && {program} {args}")
+    }
 }
 
 /// What the run's own connector is told: which run it belongs to, which app to reach, and whether to
@@ -323,6 +337,9 @@ pub fn server_env(run_id: &str, agent_dir: &Path, code: bool) -> Vec<(&'static s
     env
 }
 
+/// The MCP configuration one run's agent loads: only Draft Canvas's connector, told which run it is.
+/// `agent_dir` is where this app keeps `agent.json`: the connector is told it outright, so a run reaches
+/// the app that started it even when that isn't the installed app (a development or beta build).
 pub fn mcp_config(sidecar: &Path, run_id: &str, agent_dir: &Path, code: bool) -> Vec<u8> {
     let env: serde_json::Map<String, serde_json::Value> = server_env(run_id, agent_dir, code)
         .into_iter()
@@ -642,13 +659,21 @@ impl Companion {
                     if lock(&companion.runs).get(&run).is_none_or(|r| r.stopped) {
                         return;
                     }
-                    let events = if finalizer.is_some() {
-                        lock(&planner).as_mut().unwrap().parse(&line)
+                    let (events, ended) = if finalizer.is_some() {
+                        let mut planner = lock(&planner);
+                        let planner = planner.as_mut().unwrap();
+                        let before = planner.stopped.is_some();
+                        let events = planner.parse(&line);
+                        let ended = (!before).then(|| planner.stopped.clone()).flatten();
+                        (events, ended)
                     } else {
-                        lock(&parser).as_mut().unwrap().parse(&line)
+                        (lock(&parser).as_mut().unwrap().parse(&line), None)
                     };
                     for event in events {
                         companion.record(&run, event);
+                    }
+                    if let (Some(stop), Some(finalizer)) = (ended, &finalizer) {
+                        companion.model_ended(&run, stop, finalizer);
                     }
                 }
                 Output::Exit(exit) => {
@@ -699,6 +724,34 @@ impl Companion {
         }
     }
 
+    /// A planned run's model gave its terminal result, before its process exits. Without a planner
+    /// that event closed tool authority and stopped a CLI that lingered after it; the planner held it
+    /// back for `finish_planning`, so neither happened. A failure ends the run now, as it always did
+    /// (nothing will be applied). A finished turn closes the model's own authority — the host's one
+    /// final edit stays possible — and a process still running after a short grace is stopped, its
+    /// decision still applied.
+    fn model_ended(&self, run_id: &str, stop: RunEvent, finalizer: &decision::Finalizer) {
+        if decision::failed(Some(&stop)) {
+            self.record(run_id, stop);
+            return;
+        }
+        (finalizer.model_done)();
+        let control = {
+            let mut runs = lock(&self.runs);
+            let Some(run) = runs.get_mut(run_id) else {
+                return;
+            };
+            if run.stopped || run.cancel_requested {
+                return;
+            }
+            run.terminal_grace = true;
+            run.control.clone()
+        };
+        if let Some(control) = control {
+            control.stop_after(TERMINAL_EXIT_GRACE);
+        }
+    }
+
     fn finish_planning(
         self: &Arc<Self>,
         run_id: &str,
@@ -706,7 +759,13 @@ impl Companion {
         planner: &mut decision::Planner,
         finalizer: &decision::Finalizer,
     ) {
-        let successful = exit.cause == Cause::Exited && exit.code == Some(0) && planner.succeeded();
+        // Stopped by the grace after its result rather than by the person: the turn still finished.
+        let lingered = exit.cause == Cause::Cancelled
+            && lock(&self.runs)
+                .get(run_id)
+                .is_some_and(|run| run.terminal_grace && !run.cancel_requested);
+        let successful = planner.succeeded()
+            && ((exit.cause == Cause::Exited && exit.code == Some(0)) || lingered);
         let stop = planner.stopped.take();
         let (cost, usage) = match &stop {
             Some(RunEvent::Stopped {
@@ -1391,14 +1450,21 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
+    /// A planned Codex run whose model prints a final decision and then does `ending` (`exit 0`,
+    /// `exit 1` or `sleep 30`), and an executor that keeps what it was asked to apply. Returns the
+    /// launch, the host's authorizations, the executor's input file and how often the model's own
+    /// authority was ended.
     fn planned_case(
         companion: &Arc<Companion>,
         root: &Path,
         final_text: &str,
         ending: &str,
-    ) -> (Launch, Arc<Mutex<Vec<serde_json::Value>>>, PathBuf) {
-        use std::os::unix::fs::PermissionsExt;
+    ) -> (
+        Launch,
+        Arc<Mutex<Vec<serde_json::Value>>>,
+        PathBuf,
+        Arc<std::sync::atomic::AtomicUsize>,
+    ) {
         let fixture = root.join("model.jsonl");
         let lines = [
             serde_json::json!({"type":"thread.started","thread_id":"model-session"}),
@@ -1413,13 +1479,29 @@ mod tests {
                 .collect::<String>(),
         )
         .unwrap();
-        let executor = root.join("executor");
-        std::fs::write(
-            &executor,
-            "#!/bin/sh\ncat > \"$0.args\"\ncat \"$0.events\"\n",
-        )
-        .unwrap();
-        std::fs::set_permissions(&executor, std::fs::Permissions::from_mode(0o700)).unwrap();
+        #[cfg(unix)]
+        let executor = {
+            use std::os::unix::fs::PermissionsExt;
+            let executor = root.join("executor");
+            std::fs::write(
+                &executor,
+                "#!/bin/sh\ncat > \"$0.args\"\ncat \"$0.events\"\n",
+            )
+            .unwrap();
+            std::fs::set_permissions(&executor, std::fs::Permissions::from_mode(0o700)).unwrap();
+            executor
+        };
+        // `findstr "^"` copies stdin; `%~dpn0` is this script's path without its extension.
+        #[cfg(windows)]
+        let executor = {
+            let executor = root.join("executor.cmd");
+            std::fs::write(
+                &executor,
+                "@findstr \"^\" > \"%~dpn0.args\"\r\n@type \"%~dpn0.events\"\r\n",
+            )
+            .unwrap();
+            executor
+        };
         let events = [
             serde_json::json!({"type":"tool-call","id":"final-edit","tool":"update_diagram","status":"in-progress"}),
             serde_json::json!({"type":"tool-call-update","id":"final-edit","status":"completed","error":null}),
@@ -1434,15 +1516,31 @@ mod tests {
                 .collect::<String>(),
         )
         .unwrap();
-        let mut command = Command::new("sh");
-        command
-            .args(["-c", &format!("cat \"$1\"; {ending}"), "_"])
-            .arg(&fixture);
+        #[cfg(unix)]
+        let command = {
+            let mut command = Command::new("sh");
+            command
+                .args(["-c", &format!("cat \"$1\"; {ending}"), "_"])
+                .arg(&fixture);
+            command
+        };
+        #[cfg(windows)]
+        let command = {
+            let ending = match ending {
+                "exit 0" => "exit /b 0",
+                "exit 1" => "exit /b 1",
+                "sleep 30" => "ping -n 31 127.0.0.1 >nul",
+                other => panic!("no Windows form for {other}"),
+            };
+            runner::tests::shell("", &format!("type \"{}\" & {ending}", fixture.display()))
+        };
         let mut request = request("Could you call the API Gateway instead and save that?");
         request.mode = ApplyMode::Direct;
         request.agent = AgentKind::Codex;
         let captured = Arc::new(Mutex::new(Vec::new()));
         let writes = captured.clone();
+        let model_done = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let done = model_done.clone();
         let launch = Launch {
             run_id: request.run_id.clone(),
             diagram_id: request.diagram_id.clone(),
@@ -1459,12 +1557,19 @@ mod tests {
                     lock(&writes).push(serde_json::json!({"tool":tool,"args":args}));
                     Ok(())
                 }),
+                model_done: Arc::new(move || {
+                    done.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                }),
             }),
         };
-        (launch, captured, executor.with_extension("args"))
+        (
+            launch,
+            captured,
+            executor.with_extension("args"),
+            model_done,
+        )
     }
 
-    #[cfg(unix)]
     #[test]
     fn a_model_final_edit_runs_once_after_exit_and_reports_real_usage_and_receipt() {
         let dir = tempdir().unwrap();
@@ -1483,12 +1588,14 @@ mod tests {
             })
             .unwrap();
         let decision = serde_json::json!({"tool":"rename_element","args":"{\"from\":\"API\",\"to\":\"Gateway\"}","text":""});
-        let (launch, authorized, args_file) =
+        let (launch, authorized, args_file, model_done) =
             planned_case(&companion, dir.path(), &decision.to_string(), "exit 0");
         let id = launch.run_id.clone();
         companion.start(launch).unwrap();
         let events = until_stopped(&rx, &id);
         assert_eq!(lock(&authorized).len(), 1);
+        // The model's own authority ended at its terminal result, before the host's edit.
+        assert_eq!(model_done.load(std::sync::atomic::Ordering::SeqCst), 1);
         let payload: serde_json::Value =
             serde_json::from_slice(&std::fs::read(args_file).unwrap()).unwrap();
         assert_eq!(payload["args"]["requestId"], id);
@@ -1528,7 +1635,6 @@ mod tests {
         assert!(history.turns.last().unwrap().outcome.contains("end-turn"));
     }
 
-    #[cfg(unix)]
     #[test]
     fn invalid_decisions_and_unsuccessful_model_exit_never_authorize_a_write() {
         let valid = serde_json::json!({"tool":"rename_element","args":"{\"from\":\"API\",\"to\":\"Gateway\"}","text":""}).to_string();
@@ -1542,7 +1648,7 @@ mod tests {
         ] {
             let dir = tempdir().unwrap();
             let (companion, rx, _) = companion(dir.path(), RunLimits::default());
-            let (launch, authorized, args_file) =
+            let (launch, authorized, args_file, _) =
                 planned_case(&companion, dir.path(), text, ending);
             let id = launch.run_id.clone();
             companion.start(launch).unwrap();
@@ -1563,13 +1669,12 @@ mod tests {
         }
     }
 
-    #[cfg(unix)]
     #[test]
     fn cancelling_after_a_final_decision_but_before_process_exit_prevents_execution() {
         let dir = tempdir().unwrap();
         let (companion, rx, _) = companion(dir.path(), RunLimits::default());
         let decision = serde_json::json!({"tool":"rename_element","args":"{\"from\":\"API\",\"to\":\"Gateway\"}","text":""});
-        let (launch, authorized, args_file) =
+        let (launch, authorized, args_file, _) =
             planned_case(&companion, dir.path(), &decision.to_string(), "sleep 30");
         let id = launch.run_id.clone();
         companion.start(launch).unwrap();
@@ -1588,6 +1693,36 @@ mod tests {
         ));
         assert!(lock(&authorized).is_empty());
         assert!(!args_file.exists());
+    }
+
+    /// A CLI that goes on running after its final answer used to keep the diagram busy until it
+    /// exited by itself or the five-minute idle limit stopped it, and then its decision was thrown
+    /// away. It is stopped after the short grace, and the answer it gave is applied.
+    #[test]
+    fn a_model_that_lingers_after_its_answer_is_stopped_and_its_edit_still_runs() {
+        let dir = tempdir().unwrap();
+        let (companion, rx, _) = companion(dir.path(), RunLimits::default());
+        let decision = serde_json::json!({"tool":"rename_element","args":"{\"from\":\"API\",\"to\":\"Gateway\"}","text":""});
+        let (launch, authorized, args_file, model_done) =
+            planned_case(&companion, dir.path(), &decision.to_string(), "sleep 30");
+        let id = launch.run_id.clone();
+        let started = std::time::Instant::now();
+        companion.start(launch).unwrap();
+        let events = until_stopped(&rx, &id);
+        assert!(
+            started.elapsed() < Duration::from_secs(15),
+            "stopped long before the model would have exited"
+        );
+        assert_eq!(model_done.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(lock(&authorized).len(), 1);
+        assert!(args_file.exists());
+        assert!(matches!(
+            events.last(),
+            Some(RunEvent::Stopped {
+                reason: StopReason::EndTurn,
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -2497,6 +2632,31 @@ mod tests {
             );
             assert!(prompt.ends_with(text));
         }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn the_terminal_line_is_powershell_on_windows() {
+        let line = continue_line(
+            Path::new(r"C:\Users\me\AppData\Local\Draft Canvas\companion\work"),
+            Path::new(r"C:\Users\me's\.local\bin\claude.exe"),
+            &["--resume".into(), "it's-1".into()],
+        );
+        assert_eq!(
+            line,
+            r"Set-Location -LiteralPath 'C:\Users\me\AppData\Local\Draft Canvas\companion\work'; & 'C:\Users\me''s\.local\bin\claude.exe' '--resume' 'it''s-1'"
+        );
+        // PowerShell reads a curly single quote as a quote too: each is doubled, not left to end
+        // the string.
+        let line = continue_line(
+            Path::new("C:\\Users\\O\u{2019}Brien\\work"),
+            Path::new("C:\\tools\\\u{2018}x\u{201A}\u{201B}\\claude.exe"),
+            &["--resume".into(), "s-1".into()],
+        );
+        assert_eq!(
+            line,
+            "Set-Location -LiteralPath 'C:\\Users\\O\u{2019}\u{2019}Brien\\work'; & 'C:\\tools\\\u{2018}\u{2018}x\u{201A}\u{201A}\u{201B}\u{201B}\\claude.exe' '--resume' 's-1'"
+        );
     }
 
     #[test]

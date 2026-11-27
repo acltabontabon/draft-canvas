@@ -8,6 +8,7 @@ import {
   setHistoryDetailsOpen,
   setTimelineOpen,
 } from '../../../commands/evolution';
+import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../../../lib/isEditableTarget';
 import { relativeTime } from '../../../lib/relativeTime';
 import { useEvolutionStore, type CaptureState, type RemoteState } from '../../../store/evolution/evolutionStore';
 import { Button } from '../../common/Button';
@@ -104,19 +105,24 @@ export function HistoryStatus() {
     if (!open) return;
     panel.current?.querySelector<HTMLElement>('button')?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setHistoryDetailsOpen(false);
-        ref.current?.focus();
-      }
+      if (event.key !== 'Escape' || isImeKeyEvent(event)) return;
+      // A menu or dialog stacked above this closes first, on its own Escape.
+      if (overlayAboveCanvasIsOpen()) return;
+      // Claimed in the capture phase, as every canvas popover claims it: heard in the bubble phase
+      // and left to go on, the same press also reached the editor's own Escape, which cleared the
+      // selection — or, with nothing selected inside a shape, backed out of it.
+      event.stopPropagation();
+      setHistoryDetailsOpen(false);
+      ref.current?.focus();
     };
     const onPointer = (event: PointerEvent) => {
       const target = event.target as Node;
       if (!panel.current?.contains(target) && !ref.current?.contains(target)) setHistoryDetailsOpen(false);
     };
-    window.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
     window.addEventListener('pointerdown', onPointer, true);
     return () => {
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
       window.removeEventListener('pointerdown', onPointer, true);
     };
   }, [open]);
@@ -151,7 +157,9 @@ export function HistoryStatus() {
         {announce}
       </span>
       {open && (
-        <div ref={panel} className="dc-history-details" role="dialog" aria-label="History">
+        // Its buttons own the bare keys while focus is in it (`data-dc-keyboard-region`): Delete on
+        // "Got it" deleted the canvas selection behind the popover, and a letter dropped a shape.
+        <div ref={panel} className="dc-history-details" role="dialog" aria-label="History" data-dc-keyboard-region="">
           <div className="dc-history-details-title">
             <Icon name="timeline" size={15} />
             History{altName ? <span className="dc-history-details-alt"> · {altName}</span> : null}

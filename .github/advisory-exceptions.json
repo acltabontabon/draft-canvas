@@ -3,16 +3,8 @@
     "ecosystem": "cargo",
     "id": "RUSTSEC-2024-0429",
     "package": "glib",
-    "reason": "Tauri's Linux-only GTK dependency. cargo tree for aarch64-apple-darwin and x86_64-pc-windows-msvc contains no glib. Distributed desktop targets are macOS and Windows only; adding Linux requires resolving this advisory first.",
-    "expires": "2026-12-09",
-    "tracking": "docs/reference/reliability.md#dependency-triage"
-  },
-  {
-    "ecosystem": "npm",
-    "id": "GHSA-fc5q-39xc-vjpf",
-    "package": "picomatch",
-    "reason": "ReDoS in glob matching with no patched release (4.0.7 is the latest). Reached only through build and test tooling (vite, vitest, vite-plugin-pwa/workbox); absent from the production dependency tree of the app and the site, and never given patterns from outside the repository. Upgrade and remove this entry once a fixed version ships.",
-    "expires": "2026-12-09",
-    "tracking": "docs/reference/reliability.md#dependency-triage"
+    "reason": "Tauri's Linux-only GTK dependency. cargo tree for aarch64-apple-darwin, x86_64-apple-darwin and x86_64-pc-windows-msvc contains no glib. Distributed desktop targets are macOS and Windows only; adding Linux requires resolving this advisory first. Rechecked 2026-11-27: the latest Tauri 2 (2.12.7) still needs wry 0.57, whose webkit2gtk 2.0 and gtk 0.18 hold glib at 0.18.5. The fix (glib 0.20 and later) comes with wry 0.58 (gtk 0.19, webkit2gtk 3.0, glib 0.22), which only Tauri 3, still in alpha, uses.",
+    "expires": "2027-01-09",
+    "tracking": "docs/reference/releases.md#dependency-triage"
   }
 ]

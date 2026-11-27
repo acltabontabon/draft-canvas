@@ -63,6 +63,17 @@ export const LOOP_CLOSE_FRACTION = 0.06;
  *  more than this is a line out of the shape, not a flick of the pen. */
 export const LOOP_TAIL_FRACTION = 0.22;
 
+// ---- Points (a count) ------------------------------------------------------------------------
+
+/**
+ * The most resampled points a drawing is read from. At `RESAMPLE_STEP_PX` that is 12,000 px of ink
+ * on screen, more than a box drawn round a whole 5K viewport; past it the step grows with the ink.
+ * Unbounded, a stroke read zoomed in ("Convert to shape" on one drawn zoomed out) or scribbled for
+ * minutes was read from hundreds of thousands of points, and finding where an outline closes took
+ * time with the square of them: 56 s for one stored stroke at zoom 4.
+ */
+export const MAX_RESAMPLED_POINTS = 4_000;
+
 // ---- Milliseconds ----------------------------------------------------------------------------
 
 /** How long the pen may rest before a drawing counts as finished and is read. */

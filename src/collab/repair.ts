@@ -10,12 +10,14 @@
  * Prune-only and deterministic: it removes or clears, in file order, and never creates an id, a
  * timestamp or a default. A file that is already consistent comes back as the same object, so this
  * can run after every application without costing re-renders. The rules are `validate.ts`'s, so a
- * repaired file opens without a repair report.
+ * repaired file opens without a repair report. The one that is not a removal is validation's too: a
+ * connector's end on a point its shape doesn't have goes to the one it has (`anchorOnShape`).
  */
 import { mapRooms, type Graph } from '../depth/tree';
 import { pruneFlowSteps } from '../document/flow';
 import { pruneOpenPoints } from '../document/openPoints';
 import { repairCompensationLinks } from '../document/compensation';
+import { anchorOnShape, middlePointsOnly } from '../document/queueGeometry';
 import type { DraftDocument, DraftEdge, DraftFlow, DraftNode } from '../document/types';
 import { withinGroupDepth } from '../document/validate';
 import { indexOf } from './fileIndex';
@@ -34,10 +36,31 @@ function repairGraph<G extends Graph>(graph: G): G {
     edges = graph.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target) && edge.source !== edge.target);
   }
   edges = repairCompensationLinks(edges);
+  edges = repairAnchors(edges, nodes);
 
   const flows = repairFlows(graph.flows, nodeIds, new Set(edges.map((edge) => edge.id)));
   if (nodes === graph.nodes && edges === graph.edges && flows === graph.flows) return graph;
   return { ...graph, nodes, edges, flows };
+}
+
+/**
+ * An end pinned where its shape has no point — a Junction's "left@0.2" — moved onto the one it has,
+ * as validation moves it. Checked against stand-ins, a modified copy's connector passed and was
+ * committed as sent: the owner's file then differed from what it reopened as, and from the copy every
+ * later joiner was sent. Only Junctions have fewer points, so a room without one costs a scan.
+ */
+function repairAnchors(edges: DraftEdge[], nodes: DraftNode[]): DraftEdge[] {
+  if (edges.length === 0 || !nodes.some((node) => middlePointsOnly(node.type))) return edges;
+  const types = new Map(nodes.map((node) => [node.id, node.type]));
+  let out: DraftEdge[] | undefined;
+  edges.forEach((edge, i) => {
+    const sourceAnchor = edge.sourceAnchor && anchorOnShape(types.get(edge.source), edge.sourceAnchor);
+    const targetAnchor = edge.targetAnchor && anchorOnShape(types.get(edge.target), edge.targetAnchor);
+    if (sourceAnchor === edge.sourceAnchor && targetAnchor === edge.targetAnchor) return;
+    out ??= edges.slice();
+    out[i] = { ...edge, ...(sourceAnchor ? { sourceAnchor } : {}), ...(targetAnchor ? { targetAnchor } : {}) };
+  });
+  return out ?? edges;
 }
 
 /** Clears membership in a boundary that is gone, is not a boundary, or would make a cycle. */

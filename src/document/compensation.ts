@@ -1,3 +1,4 @@
+import { cleanEdgeLabel } from './sanitize';
 import type { DraftEdge } from './types';
 
 const EMPTY_COMPENSATIONS: readonly DraftEdge[] = Object.freeze([]);
@@ -5,12 +6,13 @@ const visibleCache = new WeakMap<readonly DraftEdge[], readonly DraftEdge[]>();
 const linkedCache = new WeakMap<readonly DraftEdge[], Map<string, readonly DraftEdge[]>>();
 
 /** A generic call's free-text operation is not an HTTP verb. Preserve useful text as the
- * resource, while discarding the old generic "OK" placeholder when switching to HTTP. */
+ * resource, while discarding the old generic "OK" placeholder when switching to HTTP. The verb is
+ * kept within a label's limit, as a load keeps a label: past it, the next open would cut the end. */
 export function normalizeCompensationHttpLabel(label: string | undefined): string | undefined {
   const trimmed = label?.trim();
   if (!trimmed || trimmed.toUpperCase() === 'OK') return undefined;
   if (/^(?:GET|POST|PUT|PATCH|DELETE)(?:\s|$)/i.test(trimmed)) return trimmed;
-  return `POST ${trimmed}`;
+  return cleanEdgeLabel(`POST ${trimmed}`);
 }
 
 /** A linked compensation is an ordinary edge in the file, even while its line is folded away. */
@@ -45,34 +47,56 @@ export function linkedCompensations(edges: readonly DraftEdge[], parentId: strin
   return index.get(parentId) ?? EMPTY_COMPENSATIONS;
 }
 
-/** Repair a missing/invalid link by leaving the action visible and independent. Never erase its details. */
+/** Whether the repair could change `edge`: a link to check, compensation details on a connector that
+ *  is not an action, or an HTTP action whose operation may still need its verb. */
+function mayNeedRepair(edge: DraftEdge): boolean {
+  if (edge.compensationFor !== undefined || edge.compensationVisible !== undefined) return true;
+  if (edge.semantic === 'compensates') return edge.compensationProtocol === 'http';
+  return edge.compensationName !== undefined || edge.compensationProtocol !== undefined || edge.compensationDescription !== undefined;
+}
+
+/** An HTTP action names its operation with a verb, linked or not (`normalizeCompensationHttpLabel`). */
+function withHttpOperation(edge: DraftEdge): DraftEdge {
+  if (edge.semantic !== 'compensates' || edge.compensationProtocol !== 'http') return edge;
+  const label = normalizeCompensationHttpLabel(edge.label);
+  if (label === edge.label) return edge;
+  if (label === undefined) {
+    const { label: _oldLabel, ...withoutLabel } = edge;
+    return withoutLabel;
+  }
+  return { ...edge, label };
+}
+
+/**
+ * Repair a missing/invalid link by leaving the action visible and independent. Never erase its details.
+ * One pass keeps what a second would, whatever else the room holds: a load runs it once, and the next
+ * open has to keep what that one saved. It used to strip a broken link and leave the operation as it
+ * was, and to skip an unlinked HTTP action unless another connector in the room was linked, so a label
+ * changed on the second open, silently.
+ */
 export function repairCompensationLinks(edges: DraftEdge[]): DraftEdge[] {
-  if (!edges.some((edge) => edge.compensationFor !== undefined || edge.compensationVisible !== undefined || (edge.semantic !== 'compensates' && (edge.compensationName !== undefined || edge.compensationProtocol !== undefined || edge.compensationDescription !== undefined)))) return edges;
+  if (!edges.some(mayNeedRepair)) return edges;
   const byId = new Map(edges.map((edge) => [edge.id, edge]));
   let changed = false;
   const repaired = edges.map((edge) => {
-    if (edge.semantic !== 'compensates' && edge.compensationFor === undefined && edge.compensationVisible === undefined && edge.compensationName === undefined && edge.compensationProtocol === undefined && edge.compensationDescription === undefined) return edge;
+    if (!mayNeedRepair(edge)) return edge;
     const parent = edge.compensationFor ? byId.get(edge.compensationFor) : undefined;
     const valid = edge.semantic === 'compensates' && parent && parent !== edge && parent.semantic !== 'compensates';
-    if (valid || (edge.semantic === 'compensates' && edge.compensationFor === undefined && edge.compensationVisible === undefined)) {
-      if (edge.compensationProtocol !== 'http') return edge;
-      const label = normalizeCompensationHttpLabel(edge.label);
-      if (label === edge.label) return edge;
-      changed = true;
-      if (label === undefined) {
-        const { label: _oldLabel, ...withoutLabel } = edge;
-        return withoutLabel;
+    const unlinked = edge.semantic === 'compensates' && edge.compensationFor === undefined && edge.compensationVisible === undefined;
+    let kept = edge;
+    if (!valid && !unlinked) {
+      const { compensationFor: _link, compensationVisible: _visible, ...independent } = edge;
+      if (edge.semantic !== 'compensates') {
+        delete independent.compensationName;
+        delete independent.compensationProtocol;
+        delete independent.compensationDescription;
       }
-      return { ...edge, label };
+      kept = independent;
     }
-    const { compensationFor: _link, compensationVisible: _visible, ...independent } = edge;
-    if (edge.semantic !== 'compensates') {
-      delete independent.compensationName;
-      delete independent.compensationProtocol;
-      delete independent.compensationDescription;
-    }
-    changed = true;
-    return independent;
+    // An action whose link was just removed is read as the unlinked action it now is.
+    const next = withHttpOperation(kept);
+    if (next !== edge) changed = true;
+    return next;
   });
   return changed ? repaired : edges;
 }

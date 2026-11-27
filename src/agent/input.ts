@@ -31,7 +31,7 @@ import {
 import { LIMITS } from '../document/limits';
 import { DEFAULT_TITLE } from '../document/sanitize';
 import { Problems } from './errors';
-import { starterFor, starterIds, type AgentStarter } from './starter';
+import { starterFor, starterIds, starterTaken, type AgentStarter } from './starter';
 import { isEvidence, EVIDENCE_LIMIT } from '../document/evidence';
 import type { SourceEvidence } from '../document/types';
 import { CREATE_FIELDS, ROOM_FIELDS, unknownFieldHint } from './fields';
@@ -73,6 +73,8 @@ export const AGENT_LIMITS = {
   /** A Junction's `link`: the name of its group. Short: it is an identifier, never shown. */
   linkLength: 64,
   insideDepth: LIMITS.maxInsideDepth,
+  /** A captured selection passed back as `scope`: at most this many shapes, and as many relationships. */
+  scopeIds: 300,
 } as const;
 
 /** New ids an agent chooses. Existing ids — including the editor's own `n_…` ones — are addressed as they are. */
@@ -421,9 +423,28 @@ export interface RoomContext {
      *  against what is there, not only against the rest of its own batch. */
     pairs?: ReadonlyMap<string, readonly (EdgeSemantic | undefined)[]>;
     flows?: ReadonlyMap<string, string | undefined>;
+    /** How many boundaries each of `groups` sits inside (`boundaryDepths`): what a new member adds to. */
+    groupDepths?: ReadonlyMap<string, number>;
   };
   depth: number;
   fallbackType?: NativeShape;
+}
+
+/** How many boundaries each boundary of a room sits inside, by id (under `prefix`, for a starter's). */
+export function boundaryDepths(nodes: readonly Pick<DraftNode, 'id' | 'type' | 'parentId'>[], prefix = ''): Map<string, number> {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const depths = new Map<string, number>();
+  for (const node of nodes) {
+    if (node.type !== 'group') continue;
+    let count = 0;
+    const seen = new Set([node.id]);
+    for (let at = node.parentId; at !== undefined && !seen.has(at); at = byId.get(at)?.parentId) {
+      seen.add(at);
+      count += 1;
+    }
+    depths.set(`${prefix}${node.id}`, count);
+  }
+  return depths;
 }
 
 /** Reads a room: its elements, relationships, groups, flows and notes. References are resolved
@@ -463,6 +484,26 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
       at = parentOf.get(at);
     }
   }
+  // Boundaries nest only as deep as a file keeps them (`LIMITS.maxGroupDepth`): deeper, the next open
+  // cut a grouping link, which a create answered only as INTERNAL and an open diagram took as it was.
+  const above = new Map<string, number>();
+  const boundariesAbove = (id: string): number => {
+    const known = above.get(id);
+    if (known !== undefined) return known;
+    above.set(id, 0); // A cycle, refused above, counts no further.
+    const parent = parentOf.get(id);
+    const count = parentOf.has(id) ? (parent === undefined ? 0 : 1 + boundariesAbove(parent)) : (ctx.existing?.groupDepths?.get(id) ?? 0);
+    above.set(id, count);
+    return count;
+  };
+  const tooDeep = (at: string, id: string, inside: number): void => {
+    if (inside > LIMITS.maxGroupDepth) {
+      r.problems.add('LIMIT_EXCEEDED', at, `boundaries nest at most ${LIMITS.maxGroupDepth} deep, and "${id}" would be inside ${inside}; put it in a boundary further out, or draw that detail in an inside view`);
+    }
+  };
+  groups.forEach((g, i) => {
+    if (g.parent !== undefined && groupIds.has(g.parent)) tooDeep(`${path}/groups/${i}/parent`, g.id, 1 + boundariesAbove(g.parent));
+  });
 
   const nodes: NodeSpec[] = [];
   r.array(raw.nodes, `${path}/nodes`, AGENT_LIMITS.nodesPerRequest).forEach((n, i) => {
@@ -501,6 +542,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
     const color = r.oneOf(item.color, `${at}/color`, ACCENTS);
     const group = typeof item.group === 'string' ? item.group : undefined;
     if (group !== undefined && !groupIds.has(group)) r.problems.add('INVALID_REFERENCE', `${at}/group`, `no group "${group}" in this view`);
+    else if (group !== undefined) tooDeep(`${at}/group`, id ?? String(item.id), 1 + boundariesAbove(group));
     const evidence = readEvidence(r, item.evidence, `${at}/evidence`);
     const attachments = readAttachments(r, item.attachments, `${at}/attachments`);
     const place = item.place !== undefined ? readPlace(r, item.place, `${at}/place`) : undefined;
@@ -657,6 +699,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
     const id = r.newId(item.id, `${at}/id`, ctx.taken);
     const body = readNoteBody(r, item, at);
     const relation = readNoteRelation(r, item, at, { elementIds, groupIds, relationshipIds }, body?.type ?? 'note');
+    if (relation?.group) tooDeep(`${at}/${item.about !== undefined ? 'about' : 'near'}`, id ?? String(item.id), 1 + boundariesAbove(relation.group));
     let style: LabelStyle | undefined;
     if (item.style !== undefined) {
       if (body?.type !== 'text') {
@@ -1011,8 +1054,9 @@ export function readCreate(raw: unknown, resolved?: AgentStarter): CreateSpec {
       groups: new Set(ids.nodes.filter((n) => n.group).map((n) => n.id)),
       relationships: new Set(ids.edges),
       relationshipSemantics: new Map(ids.edges.map((id, index) => [id, chosen.file.edges[index]?.semantic])),
+      groupDepths: boundaryDepths(chosen.file.nodes, starter.prefix),
     };
-    for (const id of [...ids.nodes.map((n) => n.id), ...ids.edges, ...ids.flows]) taken.add(id);
+    for (const id of starterTaken(chosen, starter.prefix)) taken.add(id);
   }
   const room = readRoom(r, body, '', { taken, depth: 0, fallbackType, ...(existing ? { existing } : {}) });
   const layout = readLayout(r, body.layout, '/layout', new Set(room.flows.map((f) => f.id)));

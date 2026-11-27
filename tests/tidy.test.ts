@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildDocumentForNodeCount } from '../benchmark/workloads/generator';
+import { LAYOUT_BACKSTOP_MS, planArrange, planTidy, tidyBudget, TIDY_WORK_MAX, TIDY_WORK_PER_CONNECTOR, TIDY_WORK_UNITS } from '../src/agent/layoutPlan';
 import { tidyView } from '../src/agent/tidy';
 import { measureContext } from '../src/agent/place';
+import { routeWork } from '../src/edges/edgeRoutes';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
@@ -91,6 +94,60 @@ describe('tidyView', () => {
     // The connector that was fine keeps its own object, and so its place in history.
     expect(tidied.view.edges.find((edge) => edge.id === 'ad')).toBe(doc.edges.find((edge) => edge.id === 'ad'));
     expect(tidied.view.nodes).toBe(doc.nodes);
+  });
+});
+
+describe('the work a layout job does', () => {
+  // Every candidate redraws the whole view, almost all of it as the one before did, and a route drawn
+  // outside the canvas was never kept: on the supported diagram, Tidy up routed 40,110 times for 1,826
+  // different connectors. A unit of the budget is a connector drawn, found or worked out alike.
+  it('works out each connector\'s route once, however many candidates draw it', () => {
+    const doc = buildDocumentForNodeCount(100);
+    routeWork.computed = 0;
+    const arranged = planArrange(doc);
+    expect(arranged.kind).toBe('plan');
+    const used = arranged.kind === 'plan' ? arranged.plan.used : 0;
+    expect(used).toBeGreaterThan(5_000);
+    expect(routeWork.computed).toBeLessThan(used / 10);
+    routeWork.computed = 0;
+    const tidied = planTidy(buildDocumentForNodeCount(300));
+    const spent = tidied.kind === 'plan' ? tidied.plan.used : tidied.used;
+    expect(spent).toBeGreaterThan(1_000);
+    expect(routeWork.computed).toBeLessThan(spent / 3);
+  }, 30_000);
+
+  // A budget that grew with every connector took a 1,500-connector diagram past the clock's backstop
+  // on a machine half as fast as a desktop, and the preview then depended on the machine.
+  it('budgets more work for more connectors, up to a most that any diagram gets', () => {
+    expect(tidyBudget(300)).toBe(TIDY_WORK_UNITS + TIDY_WORK_PER_CONNECTOR * 300);
+    expect(tidyBudget(800)).toBe(TIDY_WORK_UNITS + TIDY_WORK_PER_CONNECTOR * 800);
+    expect(tidyBudget(1_500)).toBe(TIDY_WORK_MAX);
+    expect(tidyBudget(10_000)).toBe(TIDY_WORK_MAX);
+  });
+
+  it('says when it was the clock and not the budget that stopped it', () => {
+    // A connector pinned straight through a shape, which Tidy up would re-attach.
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0, text: 'A' });
+    const wall = createNode({ id: 'wall', type: 'service', x: 300, y: 0, text: 'Wall' });
+    const b = createNode({ id: 'b', type: 'service', x: 600, y: 0, text: 'B' });
+    const through = { ...createEdge({ id: 'ab', source: 'a', target: 'b', routing: 'straight' }), sourceAnchor: { side: 'right' as const, offset: 0.5 }, targetAnchor: { side: 'left' as const, offset: 0.5 } };
+    const doc = addEdges(addNodes(createDocument('Through'), [a, wall, b]), [through]);
+    const planned = planTidy(doc);
+    expect(planned.kind).toBe('plan');
+    expect(planned.kind === 'plan' && planned.plan.partial).toBe(false);
+    expect('timedOut' in (planned.kind === 'plan' ? planned.plan : planned)).toBe(false);
+    // On a machine so slow that every look at the clock finds the backstop long past.
+    let now = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => (now += LAYOUT_BACKSTOP_MS + 1));
+    let stopped: ReturnType<typeof planTidy>;
+    try {
+      stopped = planTidy(doc);
+    } finally {
+      clock.mockRestore();
+    }
+    const said = stopped.kind === 'plan' ? stopped.plan : stopped;
+    expect(said.partial).toBe(true);
+    expect(said.timedOut).toBe(true);
   });
 });
 

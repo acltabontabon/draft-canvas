@@ -1,5 +1,6 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createDocument } from '../src/document/factory';
 import { Toolbar } from '../src/ui/Editor/Toolbar';
 import { ALL_PRESETS, SELECT_TOOLTIP, tooltipContentFor } from '../src/lib/presets';
 import { useEditorStore } from '../src/store/editorStore';
@@ -116,5 +117,19 @@ describe('Toolbar primitive tooltips', () => {
     renderToolbar();
     fireEvent.click(screen.getByRole('button', { name: 'Select' }));
     expect(useUiStore.getState().armed).toBeNull();
+  });
+});
+
+describe('Present', () => {
+  it('names the flow it will play, as the button shows it', () => {
+    // "Present · Place an order" on screen was "Present" to a screen reader (WCAG 2.5.3).
+    const document = { ...createDocument('Present name'), flows: [{ id: 'f1', title: 'Place an order', steps: [] }] };
+    useEditorStore.setState({ document, selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    renderToolbar();
+    const flows = screen.getByRole('group', { name: 'Flows and presenting' });
+    // A string name matches the whole name here.
+    expect(within(flows).getByRole('button', { name: 'Present' })).toBeInTheDocument();
+    act(() => useEditorStore.setState({ selectedFlowId: 'f1' }));
+    expect(within(flows).getByRole('button', { name: 'Present Place an order' })).toHaveTextContent('Present·Place an order');
   });
 });

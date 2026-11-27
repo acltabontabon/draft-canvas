@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { cloneDocumentAsNew, createDocument } from '../document/factory';
 import { DEFAULT_TITLE, titleWithSuffix } from '../document/sanitize';
 import { createId } from '../document/ids';
+import { realRepairs } from '../document/validate';
 import { totals } from '../depth/tree';
 import { LIMITS } from '../document/limits';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
@@ -696,7 +697,8 @@ export function useDocumentSession(): DocumentSession {
       }
     }
     if (result.startWarning) notify(result.startWarning);
-    if (result.repairs.length > 0) notify(`Opened with repairs: ${result.repairs.join(' ')}`);
+    const repaired = realRepairs(result.repairs);
+    if (repaired.length > 0) notify(`Opened with repairs: ${repaired.join(' ')}`);
     return null;
   }, [notify, openShared]);
 

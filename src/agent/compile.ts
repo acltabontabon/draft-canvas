@@ -15,7 +15,7 @@ import { readCreate, type CreateSpec, type LayoutSpec, type RoomSpec } from './i
 import { hasPeerCalls } from '../layout/layered';
 import { captionSizer, measureContext, placeRoom, type PlacedRoom } from './place';
 import { silent, type Report } from './progress';
-import { checkFit, isBetterCandidate, isCleanCandidate, checkQuality, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityIssue, type QualityReport } from './quality';
+import { asDrawn, checkFit, isBetterCandidate, isCleanCandidate, checkQuality, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityIssue, type QualityReport } from './quality';
 import { pastDeadline, relaxLayoutAnchors, repairAnchors, withDeadline, type KeptPin } from './route';
 import { buildFromStarter, starterKeptIds, type AgentStarter } from './starter';
 import { legibilityCost, legibilityOf, type Legibility } from './legibility';
@@ -67,7 +67,8 @@ function composeWithin(raw: unknown, diagramId: string, report: Report, starter?
   // generated diagrams follow moved shapes. A starter's pins are authored; kept.
   const relaxed = spec.starter ? { placed: candidate.placed, kept: [] } : relaxPlaced(spec, candidate.placed, ctx);
   const placed = relaxed.placed;
-  const found = qualityOfEveryRoom(placed, ctx, explicitIds(spec));
+  // Judged as the canvas will draw it (`asDrawn`): the repairs above re-anchored connectors in place.
+  const found = qualityOfEveryRoom(asDrawnRoom(placed), ctx, explicitIds(spec));
   const legibility = legibilityOf(placed.nodes, placed.edges, aboutOf(spec));
   const fit = used.viewport ? checkFit(renderedBoundsOf(placed.nodes, placed.edges, ctx), smallestFontPresent(placed.nodes, placed.edges), used.viewport) : undefined;
   // A starter's own drawing was laid out by hand and passed the gallery's check: this one, written for
@@ -517,6 +518,14 @@ function explicitIds(room: RoomSpec): Set<string> {
   return out;
 }
 
+/** `room` with every connector, in every inside view too, a new object (`asDrawn`). */
+function asDrawnRoom(room: PlacedRoom): PlacedRoom {
+  const nodesOf = (nodes: PlacedRoom['nodes']): PlacedRoom['nodes'] => nodes.map((node) => (
+    node.inside ? { ...node, inside: { ...node.inside, nodes: nodesOf(node.inside.nodes), edges: asDrawn(node.inside.edges) } } : node
+  ));
+  return { ...room, nodes: nodesOf(room.nodes), edges: asDrawn(room.edges) };
+}
+
 function qualityOfEveryRoom(room: PlacedRoom, ctx: ReturnType<typeof measureContext>, explicit?: ReadonlySet<string>): QualityReport {
   const errors: QualityIssue[] = [];
   const warnings: QualityIssue[] = [];
@@ -587,4 +596,32 @@ export function gate(document: DraftDocument): string {
     throw new AgentError('INTERNAL', 'The composed diagram would be altered on its next open.', { details: { repairs: parsed.repairs.slice(0, 5) } });
   }
   return text;
+}
+
+/**
+ * `gate` for a change to the diagram open in the editor, which commits a document rather than
+ * writing text: refused for what the change would have its next open repair. The open document is
+ * the person's, and a repair it would get already is not the change's doing. Without this the open
+ * diagram took what a create or a closed file's update is refused for, and the next open repaired it.
+ */
+export function gateChange(before: DraftDocument, after: DraftDocument): void {
+  const repairsOf = (document: DraftDocument): string[] => {
+    const parsed = deserializeDocument(serializeDocument(document));
+    return parsed.ok ? parsed.repairs : ['It would not read back.'];
+  };
+  const now = repairsOf(after);
+  if (now.length === 0) return;
+  // A repair is told apart by its words without their numbers, and weighed by its first number:
+  // "Gave 1 node(s) new ids" is less of what "Gave 2 node(s) new ids" was, which a change that made
+  // it smaller was refused for when the two were compared word for word.
+  const kindOf = (repair: string) => repair.replace(/\d+/g, '#');
+  const tally = (repairs: readonly string[]) => {
+    const counts = new Map<string, number>();
+    for (const repair of repairs) counts.set(kindOf(repair), (counts.get(kindOf(repair)) ?? 0) + Number(/\d+/.exec(repair)?.[0] ?? 1));
+    return counts;
+  };
+  const was = tally(repairsOf(before));
+  const is = tally(now);
+  const added = now.filter((repair) => is.get(kindOf(repair))! > (was.get(kindOf(repair)) ?? 0));
+  if (added.length > 0) throw new AgentError('INTERNAL', 'The changed diagram would be altered on its next open. Nothing changed.', { details: { repairs: added.slice(0, 5) } });
 }

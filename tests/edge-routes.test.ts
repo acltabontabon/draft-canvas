@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createEdge, createNode } from '../src/document/factory';
 import { routingPlan } from '../src/edges/bundles';
 import { crossingPlan } from '../src/edges/crossings';
-import { computeEdgeRoutes, edgeRoutes, type EdgeRouteInputs } from '../src/edges/edgeRoutes';
-import { obstaclesForEdge } from '../src/edges/obstacles';
+import { computeEdgeRoutes, edgeRoutes, withRouteMemo, type EdgeRouteInputs, type EdgeRoutes } from '../src/edges/edgeRoutes';
+import { obstacleKey, obstaclesForEdge } from '../src/edges/obstacles';
 import { laneIndex, rectOf } from '../src/edges/routing';
 import type { DraftEdge, DraftNode } from '../src/document/types';
 
@@ -57,5 +57,73 @@ describe('shared connector routes', () => {
     expect(edgeRoutes(inputs, 'transient')).not.toBe(first);
     const filed = edgeRoutes(inputs);
     expect(edgeRoutes(inputs, 'transient')).toBe(filed);
+  });
+});
+
+describe('routes kept for a layout job', () => {
+  it('are found again while the job runs, and let go of when it ends', () => {
+    const nodes = [box('s', 0, 3000), box('t', 700, 3100)];
+    const edges = [createEdge({ id: 'st', source: 's', target: 't' })];
+    const inputs = inputsFor(nodes, edges, edges[0]!);
+    let kept: EdgeRoutes | undefined;
+    withRouteMemo(() => {
+      kept = edgeRoutes(inputs, 'transient');
+      expect(edgeRoutes({ ...inputs }, 'transient')).toBe(kept);
+      // A job inside a job keeps on with the same routes.
+      withRouteMemo(() => expect(edgeRoutes(inputs, 'transient')).toBe(kept));
+    });
+    expect(edgeRoutes(inputs, 'transient')).not.toBe(kept);
+    expect(edgeRoutes(inputs, 'transient')).toEqual(kept);
+    // And never filed for the canvas.
+    expect(edgeRoutes(inputs)).not.toBe(kept);
+  });
+});
+
+describe('a route\'s cache key', () => {
+  // A long connector's obstacles grow with the diagram: serialised whole for every route asked for,
+  // a plan of every connector cost the connectors times the shapes (68 MiB of key text a pass at
+  // 10,000 elements, over a third of a commit).
+  const nodes = [box('a', 0, 0), box('b', 1200, 0), box('m1', 300, -40), box('m2', 600, 30), box('m3', 900, -60)];
+  const edges = [createEdge({ id: 'ab', source: 'a', target: 'b' })];
+
+  it('reads a connector\'s obstacles once, not again for every route asked for', () => {
+    const inputs = inputsFor(nodes, edges, edges[0]!);
+    expect(inputs.obstacles.length).toBe(3);
+    const stringify = vi.spyOn(JSON, 'stringify');
+    try {
+      edgeRoutes(inputs);
+      edgeRoutes({ ...inputs });
+      const reached = stringify.mock.calls.some(([value]) => Array.isArray(value) && (value.includes(inputs.obstacles) || inputs.obstacles.some((rect) => value.includes(rect))));
+      expect(reached).toBe(false);
+    } finally {
+      stringify.mockRestore();
+    }
+  });
+
+  it('names the obstacles by where they are, so the same shapes in a new list find the same route', () => {
+    const inputs = inputsFor(nodes, edges, edges[0]!);
+    const again = { ...inputs, obstacles: inputs.obstacles.map((rect) => ({ ...rect })) };
+    expect(edgeRoutes(again)).toBe(edgeRoutes(inputs));
+    // A shape a unit over is another question.
+    const nudged = nodes.map((node) => (node.id === 'm2' ? { ...node, y: node.y + 1 } : node));
+    expect(edgeRoutes(inputsFor(nudged, edges, edges[0]!))).not.toBe(edgeRoutes(inputs));
+  });
+
+  it('never gives two different obstacle lists one key', () => {
+    const rect = { x: 1, y: 2, width: 3, height: 4 };
+    const keys = [
+      obstacleKey([]),
+      obstacleKey([rect]),
+      obstacleKey([{ ...rect, x: 12 }]),
+      obstacleKey([rect, rect]),
+      obstacleKey([{ x: 1, y: 2, width: 34, height: 4 }]),
+      obstacleKey([{ ...rect, anchorBand: { top: 2, bottom: 6 } }]),
+      obstacleKey([{ ...rect, anchorBand: { top: 2, bottom: 6, glyphTop: 3 } }]),
+      obstacleKey([{ ...rect, anchorBand: { top: 2, bottom: 6, left: 1, right: 4 } }]),
+      obstacleKey([{ ...rect, x: -1 }]),
+      obstacleKey([{ ...rect, x: 1.5 }]),
+    ];
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(obstacleKey([{ ...rect }])).toBe(obstacleKey([rect]));
   });
 });

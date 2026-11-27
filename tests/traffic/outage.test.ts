@@ -20,8 +20,12 @@ const parsed = parseDocument(
 if (!parsed.ok) throw new Error(parsed.error);
 const starter = parsed.document;
 
-/** Nothing an outage says may claim a rate, a latency or a likelihood: the drawing holds none. */
-const INVENTED = /\b\d+(\.\d+)?\s*(%|ms|rps|\/min|\/s|per (second|minute))|\bp9\d\b|\blikely\b|\bprobab/i;
+/**
+ * Nothing an outage says may claim a rate, a latency, a likelihood or a capacity: the drawing holds
+ * none. Words too, not only numbers: "slower, not stopped" and "with less room than before" are a
+ * latency and a capacity. (The names in these drawings use none of these words.)
+ */
+const INVENTED = /\b\d+(\.\d+)?\s*(%|ms|rps|\/min|\/s|per (second|minute))|\bp9\d\b|\blikely\b|\bprobab|\bslow(er|s|ly)?\b|\bfast(er)?\b|\bquick(er|ly)?\b|\b(less|more|no) room\b|\bheadroom\b|\bcapacity\b|\bthroughput\b|\blatenc|\boverload|\bunder load\b|\bbottleneck/i;
 
 describe('outage walk — the Event-Driven starter', () => {
   it('follows a failing dependency back to the queue, the dead-letter queue and the missing replay', () => {
@@ -557,7 +561,18 @@ describe('outage walk — instances', () => {
     expect(one.edges.size).toBe(0);
     expect(one.notes).toHaveLength(1);
     expect(one.notes[0]).toMatchObject({ tone: 'shield', note: '2 of 3 still running' });
-    expect(one.notes[0]?.text).toMatch(/the other 2 keep taking work from Orders — slower, not stopped/);
+    expect(one.notes[0]?.text).toBe('Fulfilment is drawn with 3 instances, so the other 2 keep taking work from Orders. Nothing drawn says whether they can take all the work.');
+  });
+
+  it('says nothing of speed or room when one instance of several is down', () => {
+    // Fed by a queue, and called: the two ways the note is worded.
+    const called = [node('web', 'service', { text: 'Storefront' }), { ...node('api', 'service', { text: 'Catalog' }), replicas: 2 }, node('db', 'database', { text: 'Products' })];
+    const calls = [edge('a', 'web', 'api', { semantic: 'calls' }), edge('b', 'api', 'db', { semantic: 'reads' })];
+    const answering = walk(called, calls, 'api');
+    expect(answering.notes[0]?.text).toBe('Catalog is drawn with 2 instances, so the other keeps answering. Nothing drawn says whether it can take all the work.');
+    for (const outage of [walk(nodes, edges, 'worker'), answering]) {
+      for (const line of outageSummary(outage)) expect(line).not.toMatch(INVENTED);
+    }
   });
 
   it('takes every instance when asked, and never asks for more of something already replicated', () => {
@@ -750,6 +765,96 @@ describe('outage walk — what a shape is decides how it reads', () => {
     expect(mayTakeDown(nodes, 'empty')).toBe(false);
     expect(mayTakeDown(nodes, 'lonely')).toBe(true);
     expect(outageOf(analysis, nodes, edges, { id: 'missing' })).toBeNull();
+  });
+});
+
+describe('outage walk — work that goes round a loop', () => {
+  // The analysis counts a loop once, so the routes inside one carry no counted paths. Work still
+  // travels them: the walk once skipped them, called everything only a loop reached quiet whatever
+  // went down, and never failed a caller that waits inside one.
+  const events = [
+    node('shopper', 'actor', { text: 'Shopper' }),
+    node('orders', 'service', { text: 'Orders' }),
+    node('ordersDb', 'database', { text: 'Orders DB' }),
+    node('orderEvents', 'queue', { text: 'Order events' }),
+    node('billing', 'service', { text: 'Billing' }),
+    node('ledger', 'database', { text: 'Ledger' }),
+    node('billingEvents', 'queue', { text: 'Billing events' }),
+  ];
+  const choreography = [
+    edge('place', 'shopper', 'orders', { semantic: 'calls' }),
+    edge('save', 'orders', 'ordersDb', { semantic: 'writes' }),
+    edge('announce', 'orders', 'orderEvents', { semantic: 'publishes', async: true }),
+    edge('bill', 'orderEvents', 'billing', { semantic: 'consumes', async: true }),
+    edge('book', 'billing', 'ledger', { semantic: 'writes' }),
+    edge('settled', 'billing', 'billingEvents', { semantic: 'publishes', async: true }),
+    edge('close', 'billingEvents', 'orders', { semantic: 'consumes', async: true }),
+  ];
+
+  it('reaches what only a loop leads to, so losing something else leaves it running', () => {
+    const outage = walk(events, choreography, 'ordersDb');
+
+    expect(outage.nodes.get('orders')).toBe('failing');
+    expect(outage.nodes.get('shopper')).toBe('failing');
+    for (const id of ['orderEvents', 'billing', 'ledger']) expect(outage.nodes.get(id), id).toBe('unaffected');
+    // What Billing events hands the failing Orders comes back, as it would outside a loop.
+    expect(outage.nodes.get('billingEvents')).toBe('retrying');
+    expect(outage.notes.some((note) => note.id.startsWith('quiet:'))).toBe(false);
+    expect(outage.headline).toBe('Orders DB is down. Order events, Billing and 1 more carry on.');
+    // What only Billing leads to goes quiet when Billing is down, loop or no loop.
+    expect(walk(events, choreography, 'billing').notes.find((note) => note.id.startsWith('quiet:'))?.text).toBe('Everything that reaches Billing events and Ledger comes through Billing.');
+  });
+
+  it('holds and redelivers for a consumer inside the loop', () => {
+    const outage = walk(events, choreography, 'ledger');
+
+    expect(outage.nodes.get('billing')).toBe('failing');
+    expect(outage.nodes.get('orderEvents')).toBe('retrying');
+    expect(outage.notes.map((note) => note.note)).toContain('keeps redelivering — no dead-letter drawn');
+    expect(walk(events, choreography, 'billing').nodes.get('orderEvents')).toBe('holding');
+  });
+
+  it('fails a caller that waits inside a loop of calls', () => {
+    const nodes = [node('shopper', 'actor', { text: 'Shopper' }), node('orders', 'service', { text: 'Orders' }), node('payments', 'service', { text: 'Payments' }), node('ledger', 'database', { text: 'Ledger' })];
+    const edges = [
+      edge('buy', 'shopper', 'orders', { semantic: 'calls' }),
+      edge('charge', 'orders', 'payments', { semantic: 'calls' }),
+      edge('confirm', 'payments', 'orders', { semantic: 'calls' }),
+      edge('book', 'payments', 'ledger', { semantic: 'writes' }),
+    ];
+    const outage = walk(nodes, edges, 'ledger');
+
+    expect(Object.fromEntries(outage.nodes)).toEqual({ ledger: 'down', payments: 'failing', orders: 'failing', shopper: 'failing' });
+    expect(outage.notes.map((note) => note.id)).toEqual(['no-fallback:payments', 'chain:orders', 'people:shopper']);
+    // A connector inside the loop carries work, so it can be taken down too.
+    expect(walk(nodes, edges, { id: 'confirm', connector: true }).connector).toEqual({ from: ['payments'], to: ['orders'] });
+  });
+
+  it('reads the Saga (choreography) starter: losing the orders store stops nothing the events lead to', () => {
+    const parsedSaga = parseDocument(readFileSync(join(process.cwd(), 'tests/fixtures/starters/starters/patterns/saga-choreography/saga-choreography.draftcanvas'), 'utf8'));
+    if (!parsedSaga.ok) throw new Error(parsedSaga.error);
+    const saga = parsedSaga.document;
+    const read = (id: string) => outageOf(analyzeTraffic({ nodes: saga.nodes, edges: saga.edges }), saga.nodes, saga.edges, { id }, saga.flows)!;
+
+    // It read "Everything that reaches Adyen, Delivery Service, Kitchen Service and 6 more comes
+    // through Orders DB", though the events go on from an Order Service that is still running.
+    const orders = read('order-db');
+    expect(orders.nodes.get('order')).toBe('failing');
+    expect(orders.nodes.get('customer')).toBe('failing');
+    for (const id of ['orders-events', 'adyen', 'payment-db', 'payments-events', 'kitchen', 'kitchen-db', 'delivery']) expect(orders.nodes.get(id), id).toBe('unaffected');
+    expect(orders.notes.some((note) => note.id.startsWith('quiet:'))).toBe(false);
+    expect(orders.headline).toBe('Orders DB is down. orders.events, Payments DB and 5 more carry on.');
+    // What kitchen.events hands the failing Order Service comes back, and goes the way drawn for
+    // a failure: to the Payment Service's refund, so the flow drawn for that comes into use.
+    expect(orders.nodes.get('kitchen-events')).toBe('retrying');
+    expect(orders.nodes.get('payment')).toBe('catching');
+    expect(orders.flows.find((flow) => flow.title === 'Restaurant rejects the ticket')?.state).toBe('recovery');
+
+    // And a store inside the loop: the payment fails, so its events come back to the queue.
+    const payments = read('payment-db');
+    expect(payments.nodes.get('payment')).toBe('failing');
+    expect(payments.nodes.get('orders-events')).toBe('retrying');
+    for (const line of outageSummary(payments)) expect(line).not.toMatch(INVENTED);
   });
 });
 

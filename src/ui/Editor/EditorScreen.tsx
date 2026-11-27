@@ -66,6 +66,7 @@ import { OutlinePanel } from './OutlinePanel';
 import { StylePanel } from './StylePanel';
 import { useEditorDress } from '../../canvas/useEditorDress';
 import { createNudgeCoalescer } from './nudgeCoalescer';
+import { focusPlacedByPointer, watchFocusOrigin } from './focusOrigin';
 import { useSelectionAnnouncements } from './useSelectionAnnouncements';
 import { OpenPointPopover } from '../../canvas/OpenPointPopover';
 import { DepthAnnouncer, DepthStack } from './DepthStack';
@@ -137,15 +138,13 @@ function hasNameToType(type: DraftNode['type']): boolean {
   return type !== 'ellipse' && type !== 'sequence';
 }
 
-/** Focus sits on a control that was reached from the keyboard (`:focus-visible`), not by a click. */
+/** Focus sits on a control that was reached from the keyboard, not by a click. Asked of how focus
+ *  arrived (`focusOrigin.ts`), not of `:focus-visible`: Chromium turns that on for whatever has focus
+ *  the moment a key goes down, before this page hears the key. */
 function keyboardFocusIsOnControl(): boolean {
   const active = document.activeElement;
   if (!active || active === document.body) return false;
-  try {
-    return active.matches(':focus-visible');
-  } catch {
-    return false;
-  }
+  return !focusPlacedByPointer(active);
 }
 
 /** Sample content for a fresh code card, so it is never a blank grey box. */
@@ -698,6 +697,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           onBack={() => returnHome(session.closeDocument)}
           onPresent={onPresent}
           onExport={() => setExportOpen(true)}
+          onPlaceShape={createAtPointer}
           readOnly={readOnly !== null}
         />
         </div>
@@ -1157,6 +1157,10 @@ export function useKeyboard({
     return () => window.removeEventListener('keydown', onEscapeCapture, true);
   }, []);
 
+  // The bare keys below ask how focus reached a control (`keyboardFocusIsOnControl`), so how it
+  // arrives is followed from the moment the editor is up.
+  useEffect(() => watchFocusOrigin(), []);
+
   useEffect(() => {
     const nudges = createNudgeCoalescer((dx, dy, ids) => useEditorStore.getState().nudgeSelection(dx, dy, ids));
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1332,18 +1336,15 @@ export function useKeyboard({
             return;
           case '=':
           case '+':
-            event.preventDefault();
-            void zoomIn();
-            return;
           case '-':
-            event.preventDefault();
-            void zoomOut();
-            return;
           case '0':
-            // Reset-to-100%, the browser/VS Code/design-tool convention for this chord — keeps the
-            // current viewport center rather than recentering on the document.
             event.preventDefault();
-            void zoomTo(1);
+            // A presenter's own zoom, like their pan, hands them the camera. Moved by the keyboard,
+            // the canvas never hears of it, and the next step or a resize snapped the camera back.
+            if (presenting) useUiStore.getState().setPresentation({ framing: 'manual' });
+            // ⌘0 is reset-to-100%, the browser/VS Code/design-tool convention for this chord — it
+            // keeps the current viewport center rather than recentering on the document.
+            void (key === '0' ? zoomTo(1) : key === '-' ? zoomOut() : zoomIn());
             return;
           case 'b':
           case 'i': {
@@ -1415,6 +1416,11 @@ export function useKeyboard({
       switch (event.key) {
         case 'Backspace':
         case 'Delete':
+          // The same guard as the letters below: Tabbed onto Share or a status-bar chip, Backspace is
+          // a key pressed on that control. It deleted the canvas selection behind the person's back,
+          // with nothing on screen to say so. A button that merely kept focus after a click still
+          // lets Delete delete, as it lets a letter drop a shape.
+          if (!focusIsOnCanvas() && keyboardFocusIsOnControl()) return;
           event.preventDefault();
           // ⌥⌫ takes a shape out of the middle of a line and joins the line back up.
           if (event.altKey) state.deleteSelectionKeepingLines();

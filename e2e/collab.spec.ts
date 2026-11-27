@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { clickEdge, connect, create, newCanvas } from './canvas';
+import { clickEdge, connect, create, newCanvas, presentButton } from './canvas';
 
 /**
  * A live session between two browsers that share nothing — two contexts, two storages — over a real
@@ -207,7 +207,7 @@ test('two browsers edit one canvas live, and the owner stays in charge', async (
   await expect.poll(async () => (await labels(guest.page)).length, { timeout: 10_000 }).toBe(3);
 
   // The owner presents; the collaborator is offered to follow, and their view goes along.
-  await owner.getByRole('button', { name: 'Present', exact: true }).click();
+  await presentButton(owner).click();
   const prompt = guest.page.locator('.dc-follow');
   await expect(prompt).toContainText('Olive is presenting', { timeout: 10_000 });
   await prompt.getByRole('button', { name: 'Follow' }).click();
@@ -268,7 +268,7 @@ test('a collaborator who follows a walkthrough sees the presenter’s own step, 
   await expect(guest.getByText('Joined. You can view this diagram.')).toBeVisible();
   await expect(guest.getByText('Edits you make are shared live')).toHaveCount(0);
 
-  await owner.getByRole('button', { name: 'Present', exact: true }).click();
+  await presentButton(owner).click();
   const prompt = guest.locator('.dc-follow');
   await expect(prompt).toContainText('Untitled flow · opening', { timeout: 10_000 });
   await prompt.getByRole('button', { name: 'Follow' }).click();

@@ -83,17 +83,24 @@ export async function bootDesktop(): Promise<void> {
     const api: DesktopApi = { ...nativeApi, saveAs: createExplorerSaver(nativeApi, desktopStore) };
     const { channel, link } = createHostLink();
     const controller = new DesktopController({ api, link, store: desktopStore, ui });
-    // History is kept by the shell here, for whatever working copy the controller has open.
-    installDesktopHistory(api, () => controller.historyCopyKey());
-    installRemoteHistory(api, () => controller.historyFile());
     setDesktopController(controller);
     registerDesktopHost({ channel, returnHome: () => void controller.returnHome() });
     setFileSaver(fileSaverFor(api));
     await controller.start();
+    // History is kept by the shell here, for whatever working copy the controller has open: set up
+    // once the shell has answered, still before anything renders. Set up before, it outlived a
+    // fallback, and the web app that came up recorded every diagram's history through a shell that
+    // wasn't there.
+    installDesktopHistory(api, () => controller.historyCopyKey());
+    installRemoteHistory(api, () => controller.historyFile());
   } catch (error) {
     logDiagnostic(error, { operation: 'desktop-boot' });
     setDesktopController(null);
     registerDesktopHost(null);
     setFileSaver(null);
+    useUiStore.getState().notify(
+      'Draft Canvas couldn’t start its desktop features, so files, projects and Nodi aren’t available in this window, and diagrams are kept in its own storage. Restart Draft Canvas to try again.',
+      'error',
+    );
   }
 }

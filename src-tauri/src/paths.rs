@@ -62,9 +62,33 @@ pub fn sanitize_stem(name: &str) -> String {
     let cleaned = cleaned.trim_matches(|c: char| c == '.' || c.is_whitespace());
     if cleaned.is_empty() {
         DEFAULT_STEM.to_string()
+    } else if is_reserved_device_name(cleaned) {
+        // Windows reads the device name up to the first dot, so that is where the name changes.
+        let at = cleaned.find('.').unwrap_or(cleaned.len());
+        format!("{}_{}", &cleaned[..at], &cleaned[at..])
     } else {
         cleaned.to_string()
     }
+}
+
+/// A name Windows keeps for a device — `CON`, `nul`, `COM1`, `LPT²`, with or without an extension or
+/// trailing spaces before it. Such a name opens the device rather than a file on some versions of
+/// Windows and is refused on others, so no file or folder Draft Canvas names is given one, on any
+/// platform: a diagram saved on a Mac must still copy to a Windows machine.
+pub fn is_reserved_device_name(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or(name).trim_end();
+    let upper = stem.to_ascii_uppercase();
+    if matches!(
+        upper.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) {
+        return true;
+    }
+    let mut chars = upper.chars();
+    let prefix: String = chars.by_ref().take(3).collect();
+    let rest: Vec<char> = chars.collect();
+    (prefix == "COM" || prefix == "LPT")
+        && matches!(rest.as_slice(), [c] if c.is_ascii_digit() || matches!(c, '¹' | '²' | '³'))
 }
 
 /// A name a person typed for "Rename file…": unlike `sanitize_stem`, which quietly rewrites whatever an
@@ -96,6 +120,11 @@ pub fn validate_rename_stem(stem: &str) -> Result<String, AppError> {
         return Err(AppError::invalid_path(format!(
             "That name is too long (the limit is {MAX_STEM_CHARS} characters)."
         )));
+    }
+    if is_reserved_device_name(cleaned) {
+        return Err(AppError::invalid_path(
+            "That name is reserved by the system. Choose another name.",
+        ));
     }
     Ok(cleaned.to_string())
 }
@@ -130,6 +159,31 @@ fn display_path_in(path: &Path, home: Option<&Path>) -> String {
     path.display().to_string()
 }
 
+/// Whether a path the app stored earlier and `path` name the same file or folder today. A stored path
+/// keeps the spelling it was saved with, while handles come from the canonical one: after a case-only
+/// rename in Explorer or Finder (or a re-pointed link) the two strings differ, and "Remove from Home"
+/// or "Remove from Recent" found nothing to remove while opening the item again added it twice.
+pub fn same_place(stored: &str, path: &Path) -> bool {
+    let stored = Path::new(stored);
+    // Only a stored path that could lead here is looked up on disk: one ending in the same name, give
+    // or take case. Every entry was resolved before, on each open and under the lists' locks, and an
+    // entry on an offline network share can take many seconds to answer.
+    stored == path
+        || (same_name_ignoring_case(stored, path)
+            && dunce::canonicalize(stored).is_ok_and(|real| real == path))
+}
+
+/// Whether two paths end in the same name ignoring case: what a case-only rename, or a link in a
+/// folder above, leaves alike.
+fn same_name_ignoring_case(a: &Path, b: &Path) -> bool {
+    match (a.file_name(), b.file_name()) {
+        (Some(a), Some(b)) => {
+            a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+        }
+        _ => false,
+    }
+}
+
 pub(crate) fn home_dir() -> Option<PathBuf> {
     if cfg!(windows) {
         return None;
@@ -143,6 +197,33 @@ pub(crate) fn home_dir() -> Option<PathBuf> {
 mod tests {
     use super::*;
     use crate::errors::ErrorKind;
+
+    #[test]
+    fn a_stored_path_is_looked_up_only_when_it_could_lead_here() {
+        let dir = tempfile::tempdir().unwrap();
+        let real = dunce::canonicalize(dir.path()).unwrap();
+        let here = real.join("Payments.draftcanvas");
+        std::fs::write(&here, "{}").unwrap();
+        assert!(same_place(here.to_str().unwrap(), &here));
+        // Another name is never resolved on disk, so an entry on an offline share isn't asked.
+        assert!(!same_name_ignoring_case(
+            &real.join("Orders.draftcanvas"),
+            &here
+        ));
+        assert!(!same_place(
+            real.join("Orders.draftcanvas").to_str().unwrap(),
+            &here
+        ));
+        assert!(same_name_ignoring_case(
+            &PathBuf::from("/elsewhere/PAYMENTS.draftcanvas"),
+            &here
+        ));
+        #[cfg(any(windows, target_os = "macos"))]
+        assert!(same_place(
+            real.join("PAYMENTS.draftcanvas").to_str().unwrap(),
+            &here
+        ));
+    }
 
     #[test]
     fn extension_check_ignores_case() {
@@ -188,6 +269,9 @@ mod tests {
         assert_eq!(sanitize_stem("notes.draftcanvas"), "notes");
         assert_eq!(sanitize_stem(""), "Untitled canvas");
         assert_eq!(sanitize_stem(" ... "), "Untitled canvas");
+        assert_eq!(sanitize_stem("CON"), "CON_");
+        assert_eq!(sanitize_stem("nul.v2"), "nul_.v2");
+        assert_eq!(sanitize_stem("Console"), "Console");
         assert_eq!(
             sanitize_stem(&"x".repeat(400)).chars().count(),
             MAX_STEM_CHARS
@@ -237,6 +321,24 @@ mod tests {
             validate_rename_stem(".draftcanvas").err().unwrap().kind,
             ErrorKind::InvalidPath
         );
+        for reserved in [
+            "CON",
+            "con.draftcanvas",
+            "Nul.v2",
+            "AUX ",
+            "com1",
+            "LPT9",
+            "COM²",
+        ] {
+            assert_eq!(
+                validate_rename_stem(reserved).err().unwrap().kind,
+                ErrorKind::InvalidPath,
+                "{reserved}"
+            );
+        }
+        for fine in ["Console", "COM10", "LPT", "auxiliary", "nul-hypothesis"] {
+            assert!(validate_rename_stem(fine).is_ok(), "{fine}");
+        }
         assert_eq!(
             validate_rename_stem(&"x".repeat(MAX_STEM_CHARS + 1))
                 .err()

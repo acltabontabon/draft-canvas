@@ -2,12 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serializeDocument } from '../../src/export/project';
 import { createDocument, createNode } from '../../src/document/factory';
 import { DesktopError } from '../../src/desktop/api';
+import { __resetAgentWrites, confirmWrite, rememberPendingWrite } from '../../src/desktop/agentWrites';
 import { createHarness, decoder, documentText, type Harness } from './harness';
 
 let h: Harness;
 
 beforeEach(() => {
   h = createHarness();
+  __resetAgentWrites();
 });
 
 afterEach(() => {
@@ -272,8 +274,45 @@ describe('saving', () => {
 
       expect(h.asked[0]!.buttons).toEqual(['Overwrite', 'Save As…', 'Cancel']);
       expect(h.api.saveDocument).toHaveBeenCalledTimes(2);
-      expect(h.api.saveDocument.mock.calls[1]![2]).toBeUndefined();
+      // Over the version it asked about, which the conflict named.
+      expect(h.api.saveDocument.mock.calls[1]![2]).toBe('v1:2');
       expect(decoder.decode(h.api.saveDocument.mock.calls[1]![1])).toBe(edited());
+      expect(h.files.get(handle)!.text).toBe(edited());
+      expect(doc()).toMatchObject({ dirty: false });
+    });
+
+    /** The file changes once more while the first question is up: a sync client, a `git pull`. */
+    function changedAgainWhileAsking(handle: string): string {
+      const again = documentText('Changed again');
+      const ask = h.api.ask.getMockImplementation()!;
+      h.api.ask.mockImplementationOnce(async (...args) => {
+        const file = h.files.get(handle)!;
+        file.text = again;
+        file.version += 1;
+        return ask(...args);
+      });
+      return again;
+    }
+
+    it('asks again, rather than writing over a change made while it was asking', async () => {
+      const handle = await conflicted();
+      const again = changedAgainWhileAsking(handle);
+      h.answer(0, 2);
+      await h.controller.save();
+
+      expect(h.asked).toHaveLength(2);
+      expect(h.asked[1]!.message).toContain('changed again while you were deciding');
+      expect(h.files.get(handle)!.text).toBe(again);
+      expect(doc()).toMatchObject({ dirty: true });
+    });
+
+    it('overwrites the newer change once it is the one asked about', async () => {
+      const handle = await conflicted();
+      changedAgainWhileAsking(handle);
+      h.answer(0, 0);
+      await h.controller.save();
+
+      expect(h.api.saveDocument.mock.calls.map(([, , stamp]) => stamp)).toEqual(['v1:1', 'v1:2', 'v1:3']);
       expect(h.files.get(handle)!.text).toBe(edited());
       expect(doc()).toMatchObject({ dirty: false });
     });
@@ -793,6 +832,50 @@ describe('a file’s recovery copy', () => {
     expect(crashed.store.getSnapshot().doc).toMatchObject({ dirty: false });
   });
 
+  /** A copy this version can't read: written by a newer one before a downgrade, say. */
+  const newerCopy = (title: string) => JSON.stringify({ ...(JSON.parse(documentText(title)) as object), version: 99 });
+
+  it('opens the file as it is on disk, keeping the copy, when the recovered changes can’t be read', async () => {
+    const crashed = createHarness();
+    const handle = crashed.addFile('ledger');
+    const id = 'f_55555555-5555-4555-8555-555555555555';
+    const copy = newerCopy('ledger');
+    crashed.recovery.set(id, {
+      text: copy,
+      entry: { id, title: 'ledger', updatedAt: Date.now(), bytes: 10, origin: { kind: 'file', name: 'ledger', displayPath: crashed.files.get(handle)!.displayPath, handle, baseStamp: 'v1:1' } },
+    });
+    crashed.answer(0);
+
+    await crashed.controller.openHandle(handle);
+    await crashed.settle();
+
+    expect(crashed.errors).toEqual([{ title: 'Couldn’t recover the unsaved changes to ledger.draftcanvas', message: expect.stringContaining('newer version') }]);
+    expect(crashed.loads().map((load) => load.text)).toEqual([crashed.files.get(handle)!.text]);
+    expect(crashed.store.getSnapshot().doc).toMatchObject({ name: 'ledger', dirty: false });
+    expect(crashed.recovery.get(id)?.text).toBe(copy);
+  });
+
+  it('says so, and settles nothing, when a draft picked on Home can’t be read', async () => {
+    const ledger = h.addFile('ledger');
+    const id = 'f_66666666-6666-4666-8666-666666666666';
+    h.recovery.set(id, {
+      text: newerCopy('ledger'),
+      entry: { id, title: 'ledger', updatedAt: Date.now(), bytes: 10, origin: { kind: 'file', name: 'ledger', displayPath: h.files.get(ledger)!.displayPath, handle: ledger, baseStamp: 'v1:1' } },
+    });
+    await openFile();
+    h.edit(edited());
+    await h.settle();
+
+    await h.controller.recover(id);
+    await h.settle();
+
+    expect(h.errors).toEqual([{ title: 'Couldn’t recover the draft', message: expect.stringContaining('newer version') }]);
+    expect(h.asked).toEqual([]);
+    expect(doc()).toMatchObject({ name: 'payments', dirty: true });
+    expect(h.loads()).toHaveLength(1);
+    expect(h.recovery.has(id)).toBe(true);
+  });
+
   it('does not open the file at all when the user cancels', async () => {
     const crashed = createHarness();
     const handle = crashed.addFile('payments');
@@ -812,6 +895,56 @@ describe('a file’s recovery copy', () => {
 
     expect(crashed.loads()).toEqual([]);
     expect(crashed.recovery.size).toBe(1);
+  });
+});
+
+describe('a file still on its way to the screen', () => {
+  /** The editor takes a while to show a large diagram: each load is shown when the test says. */
+  function slowEditor() {
+    const deliver = h.link.deliver;
+    let show = () => {};
+    h.link.deliver = (message) => {
+      const typed = message as { type?: string; text?: string; seq?: number };
+      deliver(typed.type === 'draft-canvas:load' ? { ...typed, type: 'held' } : message);
+      if (typed.type === 'draft-canvas:load') show = () => h.link.onOpened({ text: typed.text!, seq: typed.seq });
+    };
+    return () => show();
+  }
+
+  it('is not shown or reported as unsaved, and quitting does not ask about it', async () => {
+    const show = slowEditor();
+    await h.controller.start();
+    const handle = h.addFile('payments');
+    const opening = h.controller.openHandle(handle);
+    await h.settle();
+
+    expect(doc()).toMatchObject({ kind: 'file', name: 'payments', dirty: false });
+    expect(h.api.reportState).toHaveBeenLastCalledWith({ kind: 'file', dirty: false, name: 'payments', handle });
+    h.hostEvent({ type: 'quit-requested' });
+    await h.settle();
+    expect(h.asked).toEqual([]);
+    expect(h.api.quitAck.mock.calls.map(([decision]) => decision)).toEqual(['working', 'ready']);
+
+    show();
+    await opening;
+    expect(doc()).toMatchObject({ dirty: false });
+  });
+
+  it('is left without a question while what was reverted to is still on its way', async () => {
+    const show = slowEditor();
+    const handle = h.addFile('payments');
+    const opening = h.controller.openHandle(handle);
+    await h.settle();
+    show();
+    await opening;
+    h.edit(edited(), 1);
+    h.answer(0);
+    await h.controller.revert();
+
+    await h.controller.newQuickDraft();
+
+    expect(h.asked.map((question) => question.title)).toEqual(['Revert to the saved payments?']);
+    expect(doc()).toEqual({ kind: 'quick', dirty: false });
   });
 });
 
@@ -838,6 +971,21 @@ describe('going back to Home', () => {
   it('still hears about it when the app closes the document on its own', async () => {
     await openFile();
     h.link.onMessage({ type: 'draft-canvas:closed' });
+    expect(doc()).toEqual({ kind: 'none' });
+  });
+
+  it('hears a close of the load on screen, not of one it has since replaced', async () => {
+    await openFile();
+    await h.controller.newQuickDraft();
+    await h.settle();
+
+    // Back's close of `payments` (load 1), drawn slowly, arriving after ⌘N sent the Quick Draft (load 2).
+    h.link.onMessage({ type: 'draft-canvas:closed', seq: 1 });
+    expect(doc()).toEqual({ kind: 'quick', dirty: false });
+    h.edit(edited('Quick Draft'), 2);
+    expect(doc()).toEqual({ kind: 'quick', dirty: true });
+
+    h.link.onMessage({ type: 'draft-canvas:closed', seq: 2 });
     expect(doc()).toEqual({ kind: 'none' });
   });
 });
@@ -1081,11 +1229,88 @@ describe('from the app', () => {
   });
 });
 
+describe('a setting or a change on Home the shell refuses', () => {
+  it('says why, rather than going back without a word', async () => {
+    const id = 'q_77777777-7777-4777-8777-777777777777';
+    h.recovery.set(id, { text: documentText('Sketch'), entry: { id, title: 'Sketch', updatedAt: Date.now(), bytes: 10, origin: { kind: 'quick' } } });
+    await h.controller.start();
+    const refusal = () => new DesktopError('Io', 'Draft Canvas couldn’t write to its data folder.');
+    h.api.settingsSet.mockRejectedValueOnce(refusal()).mockRejectedValueOnce(refusal());
+    h.api.recentsRemove.mockRejectedValueOnce(refusal());
+    h.api.recentsClear.mockRejectedValueOnce(refusal());
+    h.api.recoveryDiscard.mockRejectedValueOnce(refusal());
+    h.answer(0);
+
+    await h.controller.setCloseBehavior('tray');
+    await h.controller.setAutoCheckUpdates(false);
+    await h.controller.forgetRecent('h_9');
+    await h.controller.clearRecents();
+    await h.controller.discardRecovery(id);
+
+    expect(h.errors).toEqual(
+      [
+        'Couldn’t change what closing the window does',
+        'Couldn’t change checking for updates',
+        'Couldn’t remove it from Recent',
+        'Couldn’t clear Recent',
+        'Couldn’t discard the draft',
+      ].map((title) => ({ title, message: 'Draft Canvas couldn’t write to its data folder.' })),
+    );
+    expect(h.store.getSnapshot().settings).toEqual({ closeBehavior: 'ask', autoCheckUpdates: true });
+    expect(h.store.getSnapshot().recovery.map((entry) => entry.id)).toEqual([id]);
+  });
+});
+
 describe('start-up', () => {
   it('shows recents and what was left unsaved, and opens nothing on its own', async () => {
     h.api.recentsList.mockResolvedValueOnce([{ handle: 'h_9', kind: 'file', name: 'old', displayPath: '~/old.draftcanvas', lastOpenedMs: 1 }]);
     await h.controller.start();
     expect(h.store.getSnapshot()).toMatchObject({ ready: true, platform: 'macos', recents: [expect.objectContaining({ name: 'old' })] });
     expect(h.loads()).toEqual([]);
+  });
+});
+
+describe('a file an agent changed while it was closed', () => {
+  // Opened, it is shown as it was before the change and the change is applied on top, as one undo
+  // step. The file on disk already holds the change the whole time: a ⌘S while the editor was still
+  // applying it wrote the "before" over the agent's change, and the screen then showed it as saved.
+  it('is not written over by a save made while the change is still being put on screen', async () => {
+    await h.controller.start();
+    const before = documentText('orders');
+    const after = edited('orders');
+    const handle = h.addFile('orders', after);
+    rememberPendingWrite(1, { title: 'orders', before, after });
+    confirmWrite(1, '~/work/orders.draftcanvas', 'v1:1');
+    const asked: { id: number; kind: string }[] = [];
+    const deliver = h.link.deliver;
+    h.link.deliver = (message) => {
+      const typed = message as { type?: string; command?: string; id?: number; request?: { kind: string } };
+      if (typed.type === 'draft-canvas:command' && typed.command === 'agent') {
+        asked.push({ id: typed.id!, kind: typed.request!.kind });
+        return;
+      }
+      deliver(message);
+    };
+    const opening = h.controller.openHandle(handle);
+    await h.settle();
+    expect(asked.map((a) => a.kind)).toEqual(['snapshot']);
+
+    await h.controller.save();
+    expect(h.api.saveDocument).not.toHaveBeenCalled();
+    expect(doc()).toMatchObject({ dirty: false });
+
+    h.link.onMessage({
+      type: 'draft-canvas:agent',
+      id: asked[0]!.id,
+      reply: { kind: 'snapshot', file: createDocument('orders'), revision: 'r1', path: [], selection: { nodes: [], edges: [] } },
+    });
+    await h.settle();
+    expect(asked.map((a) => a.kind)).toEqual(['snapshot', 'commit']);
+    h.edit(after);
+    h.link.onMessage({ type: 'draft-canvas:agent', id: asked[1]!.id, reply: { kind: 'committed', revision: 'r2' } });
+    await opening;
+    await h.settle();
+    expect(h.files.get(handle)!.text).toBe(after);
+    expect(doc()).toMatchObject({ dirty: false });
   });
 });

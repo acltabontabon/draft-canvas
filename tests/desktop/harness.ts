@@ -27,6 +27,7 @@ import {
   type RecoveryEntry,
   type RunSnapshot,
   type SavedAs,
+  type SaveResult,
   type StartLocation,
   type UpdateSnapshot,
 } from '../../src/desktop/api';
@@ -194,11 +195,14 @@ export function createHarness() {
       if (!file) throw new DesktopError('InvalidHandle', 'That file is no longer available.');
       return opened(handle, file);
     }),
-    saveDocument: vi.fn(async (handle: string, bytes: Uint8Array, expectedStamp: string | undefined) => {
+    saveDocument: vi.fn(async (handle: string, bytes: Uint8Array, expectedStamp: string | null | undefined): Promise<SaveResult> => {
       const file = files.get(handle);
       if (!file) throw new DesktopError('NotFound', 'Draft Canvas couldn’t find that file.');
       if (file.readOnly) throw new DesktopError('ReadOnly', `Draft Canvas couldn’t save ${file.name}.draftcanvas because the file is read-only.`);
-      if (expectedStamp !== undefined && expectedStamp !== stampOf(file)) return { outcome: 'conflict' as const };
+      // `null` asks for a file that has gone, and every file here is there: a conflict, as in the shell.
+      if (expectedStamp === null || (expectedStamp !== undefined && expectedStamp !== stampOf(file))) {
+        return { outcome: 'conflict' as const, current: stampOf(file) };
+      }
       file.text = decoder.decode(bytes);
       file.version += 1;
       return { outcome: 'saved' as const, stamp: stampOf(file) };
@@ -502,6 +506,8 @@ export function createHarness() {
     historyProjectPush: vi.fn(noHistory),
   } satisfies DesktopApi;
 
+  // The load the stand-in app last showed, which its `closed` names, as the app's does.
+  let shownSeq: number | undefined;
   const link: HostLink = {
     deliver: (message) => {
       delivered.push(message);
@@ -510,8 +516,10 @@ export function createHarness() {
       if (typed.type === 'draft-canvas:command' && typed.command === 'flush') {
         queueMicrotask(() => link.onMessage({ type: 'draft-canvas:flushed', id: typed.id! }));
       } else if (typed.type === 'draft-canvas:command' && typed.command === 'close') {
-        queueMicrotask(() => link.onMessage({ type: 'draft-canvas:closed' }));
+        const seq = shownSeq;
+        queueMicrotask(() => link.onMessage({ type: 'draft-canvas:closed', ...(seq !== undefined ? { seq } : {}) }));
       } else if (typed.type === 'draft-canvas:load') {
+        shownSeq = typed.seq;
         queueMicrotask(() => link.onOpened({ text: typed.text!, seq: typed.seq }));
       }
     },

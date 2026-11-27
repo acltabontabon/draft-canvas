@@ -1,5 +1,5 @@
 import type { DraftEdge, DraftFlow, DraftNode } from '../document/types';
-import { listOf, lostBy, outageNameOf, outageOf, type Outage } from './outage';
+import { listOf, outageNameOf, outageReadings, type OutageGlance } from './outage';
 import type { TrafficAnalysis } from './types';
 
 /**
@@ -11,6 +11,8 @@ import type { TrafficAnalysis } from './types';
  * many questions it leaves open. Nothing here is a new claim: every line is one a person would get
  * by taking that one thing down. So it carries no score and no severity. The order is what the drawing
  * says: what reaches a person first, then by the flows it breaks, then by how much else it touches.
+ * The readings come from `outageReadings`, which works out what they share once for the graph, so a
+ * review costs about what its outages reach rather than the whole graph once per shape.
  *
  * A Service drawn with several instances loses one, as the walk does, which is why drawing a
  * second instance takes a shape off this list. A Boundary is read as everything in it lost
@@ -65,16 +67,8 @@ export function outageReview(
    * What a review keeps of one reading, or `null` when losing it changes nothing else drawn.
    * `lead` opens its sentence: "Without Orders", "If Checkout can't reach Orders".
    */
-  const entryOf = (outage: Outage, kind: OutageReviewEntry['kind'], label: string, lead: string): OutageReviewEntry | null => {
-    let affected = 0;
-    const reaches: string[] = [];
-    for (const [id, state] of outage.nodes) {
-      if (state === 'unaffected' || state === 'down') continue;
-      affected += 1;
-      if (state === 'failing' && analysis.nodes.get(id)?.role === 'origin') reaches.push(id);
-    }
-    const broken = outage.flows.filter((flow) => flow.state === 'breaks').map((flow) => ({ id: flow.id, title: flow.title }));
-    const questions = outage.notes.filter((note) => note.tone === 'question').length;
+  const entryOf = (outage: OutageGlance, kind: OutageReviewEntry['kind'], label: string, lead: string): OutageReviewEntry | null => {
+    const { affected, reaches, breaks: broken, questions } = outage;
     if (affected === 0 && broken.length === 0 && (kind !== 'connector' || questions === 0)) return null;
     const seen = reaches.map(name);
     // One shape lost leaves "other" shapes; a Boundary or a connector lost is not itself a shape.
@@ -103,9 +97,10 @@ export function outageReview(
       text: `${lead}: ${parts.join('; ') || nothing}.${open}`,
     };
   };
+  const readings = outageReadings(analysis, nodes, edges, flows);
   for (const node of nodes) {
-    if (lostBy(nodes, node.id).length === 0) continue;
-    const outage = outageOf(analysis, nodes, edges, { id: node.id }, flows);
+    if (readings.lostBy(node.id).length === 0) continue;
+    const outage = readings.read({ id: node.id });
     if (!outage) continue;
     // A Boundary is several shapes lost together: a zone, a cluster, a provider.
     if (node.type === 'group') {
@@ -123,7 +118,7 @@ export function outageReview(
     else review.spared.push({ id: node.id, name: label });
   }
   for (const edge of edges) {
-    const outage = outageOf(analysis, nodes, edges, { id: edge.id, connector: true }, flows);
+    const outage = readings.read({ id: edge.id, connector: true });
     if (!outage?.connector) continue;
     const from = listOf(outage.connector.from.map(name));
     const to = listOf(outage.connector.to.map(name));

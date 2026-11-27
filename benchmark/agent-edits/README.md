@@ -1,84 +1,43 @@
-# Common edit token benchmark
+# Agent edit token benchmark
 
-Run from the repository root with signed-in `codex` and `claude` CLIs, installed Chromium and a
-freshly built MCP sidecar (`cargo build --manifest-path src-tauri/Cargo.toml -p draft-canvas-mcp`):
+Measures how many input tokens Nodi's agents (Codex and Claude) spend on common edits, through the real
+sidecar and browser editor. These are live, paid model calls, so the benchmark stays out of CI.
+
+## Running it
+
+From the repository root, with signed-in `codex` and `claude` CLIs, Chromium installed, and a fresh
+sidecar build (`cargo build --manifest-path src-tauri/Cargo.toml -p draft-canvas-mcp`):
 
 ```bash
 BENCH_MAX_INPUT=3000 BENCH_NO_READS=1 node --import tsx benchmark/agent-edits/run.mjs
 BENCH_REVIEW=1 BENCH_MAX_INPUT=3000 BENCH_NO_READS=1 node --import tsx benchmark/agent-edits/run.mjs
 ```
 
-These are live, paid model calls, intentionally outside CI. Each prompt in [prompts.json](prompts.json)
-starts with a fresh synthetic architecture fixture. Requests and actual outcomes accumulate in one
-logical chat per client; as in Nodi, each model turn starts fresh and can read that local history.
-The fixture resets between edits to isolate content verification; chat history does not reset.
-Both clients run at low effort:
-Codex `gpt-6-luna`, Claude `sonnet` (the result records the actual model). An optional positional
-substring filters cases, for example `codex-description`. `BENCH_OUTPUT` sets the artifact directory;
-otherwise the runner prints a new temporary directory. `BENCH_RUN` labels repeated samples.
-`BENCH_MAX_INPUT` requires strictly fewer input tokens than its value; `BENCH_NO_READS` requires
-zero model tool calls. Omit these guards when measuring a baseline that needs reads.
+Each prompt in [prompts.json](prompts.json) starts from a fresh synthetic diagram. A positional argument
+filters cases by substring, for example `codex-description`. Failed or refused attempts are kept and make
+the runner exit non-zero.
 
-For long chats, set `BENCH_TURNS=30` to cycle through the five prompts six times. Run both direct
-and `BENCH_REVIEW=1` modes. `BENCH_RESUME=1 BENCH_PROMPT_REF=b5d45e2` measures the preceding
-strategy with actual CLI session resumption and its frozen prompt; Codex's cumulative session
-usage is differenced per turn, while cached tokens still count. This comparison uses the current
-checked editor/sidecar, not a frozen desktop build. The extra history operation is never advertised
-up front and the preceding prompt does not use it.
+| Variable | Effect |
+| --- | --- |
+| `BENCH_REVIEW=1` | Prepare a proposal instead of applying the edit; the saved diagram must not change |
+| `BENCH_MAX_INPUT` | Fail a sample that uses this many input tokens or more (cached tokens count) |
+| `BENCH_NO_READS=1` | Fail a sample that makes any model tool call |
+| `BENCH_TURNS` | Chat length; `30` cycles the five prompts six times |
+| `BENCH_FOLLOWUP=1`, `BENCH_HISTORY_DIR` | Ask a follow-up that needs an earlier run's chat history |
+| `BENCH_EXPECT_REPLY=1` | With no history, the model must ask for clarification and change nothing |
+| `BENCH_RESUME=1`, `BENCH_PROMPT_REF` | Compare against CLI session resumption with a frozen prompt |
+| `BENCH_TREE`, `BENCH_SIDECAR`, `BENCH_PORT` | Measure another source tree and its separately built sidecar |
+| `BENCH_OUTPUT`, `BENCH_RUN` | Artifact directory (default: a new temp directory) and a label for repeated samples |
 
-To test a context-dependent follow-up, set `BENCH_TURNS=1 BENCH_FOLLOWUP=1` and
-`BENCH_HISTORY_DIR` to an earlier run's artifact directory. It asks for a description used earlier,
-without supplying the value. These cases intentionally allow history reads and are reported
-separately from the under-3k self-contained edits. With no history, add `BENCH_EXPECT_REPLY=1`:
-the model must clarify and leave the file untouched. The native history implementation's bounds,
-expiry, persistence, isolation and cancellation are tested separately; the broker fixture supplies
-an immutable copy of this synthetic chat to each run.
+## Results
 
-The runner reads Nodi's brief, mode instructions, response schema and turn template from Rust source.
-It verifies the sidecar's advertised planning tools against the generated source before spending
-model tokens. The final decision executes only after a clean CLI exit, through the real sidecar
-receipt executor and browser editor. The fixture broker admits only the exact authorized tool and
-arguments. Native access, journal, cancellation and approval gates are covered separately by the
-Rust and desktop integration tests; this fixture broker is not a substitute for those tests.
-The editor revision is captured locally before the model starts and pinned on simple intents;
-neither that revision nor a diagram snapshot is sent to the model. The host selects apply versus
-proposal, generates proposal summaries and resolves names through the ordinary checked pipeline.
+Artifacts include the prompts, client events, receipts, before and after documents, pending proposals and
+`result.json`. Recheck saved artifacts without model calls:
 
-Input usage includes cached and cache-write tokens. No fixed client overhead is subtracted. Artifacts
-include prompts, client events, receipts, before/after documents, pending proposals and `result.json`.
-Codex's JSON event stream omits some `exec` calls, including tool discovery. The runner also audits
-this synthetic run's local Codex transcript and records every tool-call name; missing transcripts
-fail the audit. No transcript contents or personal context are copied into the report.
-Failed or refused attempts are retained and make the runner exit nonzero. A successful sample must
-change the requested field, preserve unrelated content, and, in review mode, leave the saved diagram
-byte-for-byte unchanged while preparing a pending proposal. The proposal candidate is checked with
-the real patch engine; accepting proposals is tested by the browser suite. Connection rewiring may
-recompute that connection's anchors, but must preserve its label, semantics and all other content.
+```bash
+node benchmark/agent-edits/collect.mjs output.json sample-label=/path/to/artifacts
+```
 
-For a frozen-source comparison, set `BENCH_TREE`, `BENCH_SIDECAR` and optionally `BENCH_PORT`.
-Use a separately built executable: Cargo's shared target directory can retain a different tree's
-binary even when a build reports it fresh. Mismatched tool catalogs are a harness error, not a
-benchmark sample. Repeat both modes before drawing conclusions; model choices and client overhead
-vary, so these samples are not universal token caps. Review the JSON results, including failures,
-alongside the PR's comparison table.
-
-[history-results.json](history-results.json) contains 40 resumed-session baseline cases, 240 tuning
-cases (including refusals, budget misses and interrupted fixtures), 120 final cases across four
-30-turn chats, and eight history-dependent/clarification checks. All 120 final edits succeeded;
-119 stayed below 3,000 input tokens. The budget guard correctly fails the remaining Codex redirect
-at 5,791 tokens because it made an unnecessary `exec` discovery call. This is not a strict 3k cap.
-Context-dependent follow-ups retrieved the correct value but used 10,597–15,696 tokens; requests
-with missing history asked for clarification without changing the diagram or creating a proposal.
-
-[intent-results.json](intent-results.json) compares local intents to the preceding compact-read
-implementation, with two final samples per client/mode/prompt: all 40 completed below 3,000 input
-tokens with zero model tool calls. It also retains 20 tuning samples, including a 5,915-token
-Codex discovery outlier that led to the explicit no-discovery instruction and transcript audit.
-One earlier batch was invalidated by a dev-server reload during a source edit; the revision check
-refused that request. The runner now disables file watching so the synthetic shell cannot disappear
-mid-call. These measurements are not a universal cap for long histories or ambiguous requests. The earlier
-[results.json](results.json) retains the historical baseline and compact-read results, including the
-failed proposal. Recheck saved artifacts without model calls with
-`node benchmark/agent-edits/collect.mjs output.json sample-label=/path/to/artifacts` (repeat the last
-argument for each sample). Verification compares serialized content, so object-key order and omitted
-`undefined` fields cannot create false failures.
+Earlier measurements are in `results.json`, `intent-results.json` and `history-results.json`. Model
+choices and client overhead vary, so repeat both modes before drawing conclusions; the 3,000-token guard
+is a check, not a guaranteed cap.

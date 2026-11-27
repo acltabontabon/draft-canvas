@@ -16,6 +16,7 @@
  * message and in flight, eight partial messages at once, 15 s without a new chunk), and anything that
  * fails is dropped and reported through `onDrop` — never thrown into the channel's event handler.
  */
+import { REAL_CLOCK } from '../clock';
 
 export const FRAME_VERSION = 1;
 export const FRAME_HEADER_BYTES = 10;
@@ -73,6 +74,11 @@ interface PartialMessage {
   received: number;
   bytes: number;
   chunks: (Uint8Array | undefined)[];
+  /**
+   * When it is given up on, on the monotonic clock its timer runs on. On the wall clock, a step forward
+   * (time sync, a VM resuming, a change by hand) dropped a message that was still arriving, and a step
+   * back held a stalled one, and the bytes it holds, for as long as the step.
+   */
   deadline: number;
 }
 
@@ -144,7 +150,7 @@ export class Reassembler {
       if (this.partials.size >= this.maxPartials) {
         return this.drop('overflow', `more than ${this.maxPartials} messages in flight`);
       }
-      partial = { kind, count, received: 0, bytes: 0, chunks: new Array(count), deadline: Date.now() + this.timeoutMs };
+      partial = { kind, count, received: 0, bytes: 0, chunks: new Array(count), deadline: REAL_CLOCK.now() + this.timeoutMs };
       this.partials.set(id, partial);
       this.schedule();
     }
@@ -158,7 +164,7 @@ export class Reassembler {
     // Time without progress, not time to finish: a big snapshot over a slow link, or across a short
     // outage, takes longer than the timeout and is still arriving. (Only ever later, so the armed timer
     // at worst wakes early and `expire` re-arms it.)
-    partial.deadline = Date.now() + this.timeoutMs;
+    partial.deadline = REAL_CLOCK.now() + this.timeoutMs;
     // Copied: the frame's buffer belongs to the channel event and may be large.
     partial.chunks[index] = payload.slice();
     partial.received++;
@@ -221,11 +227,11 @@ export class Reassembler {
     this.timer = setTimeout(() => {
       this.timer = null;
       this.expire();
-    }, Math.max(0, earliest - Date.now()));
+    }, Math.max(0, earliest - REAL_CLOCK.now()));
   }
 
   private expire(): void {
-    const now = Date.now();
+    const now = REAL_CLOCK.now();
     for (const [id, partial] of [...this.partials]) {
       if (partial.deadline > now) continue;
       this.partials.delete(id);

@@ -73,6 +73,7 @@ import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 import { InspectorColourButton, InspectorColourPalette } from './InspectorColour';
 import { TextFormatBar } from './TextFormatBar';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
+import { useCanvasFocusReturn } from './canvasFocus';
 import { QUEUE_ICON_OPTIONS } from './queueOptions';
 import { SERVICE_ICON_OPTIONS } from './serviceOptions';
 import {
@@ -240,6 +241,7 @@ function ElementInspectorBody({
   const panelRef = useRef<HTMLDivElement>(null);
   const dragControl = usePopoverDrag(panelRef, nodeId);
   usePopoverKeyboard(panelRef);
+  useCanvasFocusReturn(panelRef, closing);
   const sequenceFocus = useUiStore((state) => (state.sequenceFocus?.nodeId === nodeId ? state.sequenceFocus : null));
 
   // Close an open panel when the selection changes, including selection inside a sequence.
