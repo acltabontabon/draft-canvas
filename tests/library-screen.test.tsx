@@ -255,6 +255,32 @@ describe('LibraryScreen — dropped files', () => {
     await vi.waitFor(() => expect(adoptDocument).toHaveBeenCalledTimes(1));
   });
 
+  it('says nothing of bringing an older file up to date: an upgrade is no repair', async () => {
+    // Every valid older export said "Imported with repairs: Upgraded document format from v25 to
+    // v34." and looked damaged, while the same diagram opened from the Library said nothing.
+    const notify = vi.fn();
+    const original = useUiStore.getState().notify;
+    useUiStore.setState({ notify });
+    try {
+      const adoptDocument = vi.fn(async () => {});
+      const { container } = render(<LibraryScreen session={stubSession({ adoptDocument })} />);
+      const older = {
+        format: 'draft-canvas',
+        version: 1,
+        metadata: { id: 'older', title: 'Older', createdAt: 1, updatedAt: 2 },
+        nodes: [{ id: 'a', type: 'service', x: 100, y: 100, width: 160, height: 70, z: 0, text: 'A' }],
+        edges: [],
+        viewport: { x: 0, y: 0, zoom: 1 },
+      };
+      const file = new File([JSON.stringify(older)], 'older.draftcanvas', { type: 'application/json' });
+      fireEvent.drop(container.firstElementChild!, { dataTransfer: { types: ['Files'], files: [file] } });
+      await vi.waitFor(() => expect(adoptDocument).toHaveBeenCalledTimes(1));
+      expect(notify.mock.calls.map(([message]) => message).join('\n')).not.toMatch(/repairs|Upgraded document format/);
+    } finally {
+      useUiStore.setState({ notify: original });
+    }
+  });
+
   // #172: an empty browser has no Restore button, and a backup read as a diagram was "not valid JSON".
   it('restores a backup ZIP dropped on a first-run Home instead of importing it as a diagram', async () => {
     const adoptDocument = vi.fn(async () => {});
