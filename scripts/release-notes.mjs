@@ -17,7 +17,7 @@
 
 import { lstatSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ChangelogError, REPO, parseChangelog, parseVersion, releaseNotes, unwrap, versionFromTag, whatsNew, withDraft } from './changelog.mjs';
 
 export { unwrap };
@@ -212,7 +212,9 @@ export function releaseBody(tag, changelog, { platform, mediaDirectory } = {}) {
   return `${parts.join('\n\n')}\n`;
 }
 
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+// `file://${argv[1]}` is never this module's URL on Windows (backslashes, a drive letter), so the
+// script exited 0 there having done nothing.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = process.argv.slice(2);
   const tag = args.find((arg) => !arg.startsWith('--') && args[args.indexOf(arg) - 1] !== '--platform');
   const platform = args.includes('--platform') ? args[args.indexOf('--platform') + 1] : undefined;

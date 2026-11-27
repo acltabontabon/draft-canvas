@@ -26,7 +26,7 @@
 import { createHash, createPublicKey, verify as edVerify } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ChangelogError, findEntry, changelogUrl, parseChangelog, releaseNotes, unwrap } from './changelog.mjs';
 import { changelogSection } from './release-notes.mjs';
 
@@ -437,4 +437,6 @@ function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) main();
+// `file://${argv[1]}` is never this module's URL on Windows (backslashes, a drive letter), so the
+// script exited 0 there having done nothing; the Windows release job's signature check checked nothing.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
