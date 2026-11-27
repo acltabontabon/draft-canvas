@@ -72,4 +72,25 @@ describe('agent jobs off the main thread', () => {
     expect(FakeWorker.started).toBe(2);
     expect(__workerUsable()).toBe(true);
   });
+
+  it('cancels a queued job without waiting for the running worker or stopping it', async () => {
+    const job = { kind: 'probe' } as unknown as Job;
+    const refused = expect(runOffThread(job)).rejects.toMatchObject({ code: 'LAYOUT_FAILED' });
+    await vi.advanceTimersByTimeAsync(0);
+
+    const controller = new AbortController();
+    const onError = vi.fn();
+    void runOffThread(job, undefined, controller.signal).catch(onError);
+    const next = runOffThread(job);
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ name: 'AbortError' }));
+    expect(FakeWorker.started).toBe(1);
+    expect(FakeWorker.received).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(HARD_LIMIT_MS + 1);
+    await refused;
+    await expect(next).resolves.toMatchObject({ kind: 'probe' });
+    expect(FakeWorker.received).toHaveLength(2);
+  });
 });

@@ -4,9 +4,9 @@
 //! for every project:
 //!
 //! - **Claude Code** reads `~/.claude/skills` (`$CLAUDE_CONFIG_DIR/skills` when that is set).
-//! - **Codex**, **Cursor**, **Gemini CLI** and **Junie** all read `~/.agents/skills`, the folder the
-//!   open Agent Skills convention names. (Cursor reads Claude Code's folder too, so one install is
-//!   enough for it.)
+//! - **Codex**, **Cursor**, **Gemini CLI**, **Junie** and **OpenCode** all read `~/.agents/skills`,
+//!   the folder the open Agent Skills convention names. (Cursor reads Claude Code's folder too, so one
+//!   install is enough for it.)
 //!
 //! Updates are the point of keeping a manifest. Every install writes `.draft-canvas-skill.json` beside
 //! the files: the skill's version and a hash of exactly what was written. From that the app can tell
@@ -695,6 +695,10 @@ mod tests {
             "32",
             "00b2ffb90ba5a817340ca1242239109c7d3c5ac50a5091dcaef725e70c02e9d1",
         ),
+        (
+            "33",
+            "b02cfccd04c7e8f46c26daf49f1174407c57d1c915712fbe9b7ad9352aa21e35",
+        ),
     ];
 
     #[test]
@@ -718,6 +722,27 @@ mod tests {
         assert_ne!(bundled_version(), "0");
         let text = String::from_utf8_lossy(FILES[0].1);
         assert!(text.contains(&format!("name: {SKILL_NAME}\n")));
+    }
+
+    /// What the agents sharing `~/.agents/skills` need to list the skill. OpenCode is the strictest:
+    /// front matter opening the file, a `name` that is the folder's own (lowercase words joined by
+    /// single hyphens, 64 characters at most) and a description of 1 to 1024 characters.
+    #[test]
+    fn the_bundled_skill_is_one_every_agent_reading_the_shared_folder_lists() {
+        let text = String::from_utf8_lossy(FILES[0].1);
+        let front = text
+            .strip_prefix("---\n")
+            .and_then(|rest| rest.split_once("\n---\n"))
+            .expect("front matter first")
+            .0;
+        let field = |key: &str| front.lines().find_map(|line| line.strip_prefix(key));
+        assert_eq!(field("name: "), Some(SKILL_NAME));
+        assert!(SKILL_NAME.len() <= 64);
+        for word in SKILL_NAME.split('-') {
+            assert!(!word.is_empty() && word.chars().all(|c| matches!(c, 'a'..='z' | '0'..='9')));
+        }
+        let description = field("description: ").expect("a description").trim();
+        assert!((1..=1024).contains(&description.len()));
     }
 
     #[test]

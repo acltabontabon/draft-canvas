@@ -282,6 +282,8 @@ describe('contextMenuCommandsFor — a junction', () => {
     const types = layout(entries);
     expect(types).toEqual([
       'header',
+      'junction-add-counterpart',
+      'sep',
       'edit-text',
       'sep',
       'duplicate',
@@ -293,6 +295,27 @@ describe('contextMenuCommandsFor — a junction', () => {
       'sep',
       'delete',
     ]);
+  });
+
+  it('leads with where a linked Junction continues, then the ways to change the link', () => {
+    const editor = useEditorStore.getState();
+    const junction = editor.addNode({ type: 'ellipse', x: 0, y: 0 });
+    editor.addJunctionCounterpart(junction.id, { x: 900, y: 400 });
+    const entries = contextMenuCommandsFor(stubContext(), { kind: 'node', id: junction.id }, { x: 0, y: 0 });
+    expect(layout(entries).slice(0, 7)).toEqual(['header', 'junction-follow', 'sep', 'junction-add-counterpart', 'junction-unlink', 'sep', 'edit-text']);
+    // The picker of groups is a second step, which a menu has no room for: it stays in the palette.
+    expect(layout(entries)).not.toContain('junction-link-to');
+  });
+
+  it('offers to link two selected Junctions, and nothing of the kind for a mixed selection', () => {
+    const editor = useEditorStore.getState();
+    const a = editor.addNode({ type: 'ellipse', x: 0, y: 0, text: 'A' });
+    const b = editor.addNode({ type: 'ellipse', x: 400, y: 0, text: 'A' });
+    const service = editor.addNode({ type: 'service', x: 800, y: 0 });
+    useEditorStore.getState().setSelection({ nodes: [a.id, b.id], edges: [] });
+    expect(layout(contextMenuCommandsFor(stubContext(), { kind: 'selection' }, { x: 0, y: 0 }))).toContain('junctions-link');
+    useEditorStore.getState().setSelection({ nodes: [a.id, service.id], edges: [] });
+    expect(layout(contextMenuCommandsFor(stubContext(), { kind: 'selection' }, { x: 0, y: 0 }))).not.toContain('junctions-link');
   });
 });
 

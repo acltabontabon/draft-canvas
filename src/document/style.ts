@@ -1,4 +1,5 @@
 import { isRecord } from '../lib/isRecord';
+import { isGlyphComponentKind, isGlyphServiceKind } from './dataStoreGeometry';
 import { isFiniteNumber } from '../lib/math';
 import { cleanText } from './sanitize';
 import {
@@ -269,7 +270,8 @@ export function shapeKindOf(node: KindFields): string | undefined {
  * Where a drawing goes on a shape. A `glyph` shape is a picture with its name beneath, and the
  * drawing replaces the picture. A `body` shape is a box with its name inside, and the drawing
  * replaces the box. Text, notes, code, sequences and boundaries hold their own content and take
- * no drawing at all.
+ * no drawing at all, and neither does External: its dashed outline is what says the system is
+ * outside ours, and a drawing in place of the box would take that away.
  */
 export type ArtSlot = 'glyph' | 'body';
 
@@ -280,9 +282,10 @@ export function artSlotOf(type: DraftNodeType, kind: string | undefined): ArtSlo
     case 'actor':
       return 'glyph';
     case 'service':
-      return kind === undefined || kind === 'generic' || kind === 'api' ? 'body' : 'glyph';
+      if (kind === 'external') return null;
+      return isGlyphServiceKind(kind) ? 'glyph' : 'body';
     case 'component':
-      return kind === undefined || kind === 'generic' ? 'body' : 'glyph';
+      return isGlyphComponentKind(kind) ? 'glyph' : 'body';
     case 'queue':
     case 'ellipse':
       return 'body';
@@ -291,9 +294,17 @@ export function artSlotOf(type: DraftNodeType, kind: string | undefined): ArtSlo
   }
 }
 
+/**
+ * Drawings a style keeps for a shape this app no longer draws one on. External was a glyph before
+ * document format 33, and a style made then (every gallery pack among them) draws one. The app
+ * that still draws it as a glyph reads the same file, gallery packs included, so its drawing is
+ * kept, unread here, rather than lost when a style is opened and saved again.
+ */
+const KEPT_UNDRAWN: ReadonlySet<string> = new Set(['service:external']);
+
 function keyTakesArt(key: string): boolean {
   const [type, kind] = key.split(':') as [DraftNodeType, string | undefined];
-  return artSlotOf(type, kind) !== null;
+  return artSlotOf(type, kind) !== null || KEPT_UNDRAWN.has(key);
 }
 
 /* ------------------------------------------------------------- validation -- */
@@ -464,13 +475,23 @@ export function normalizeStyle(raw: unknown): NormalizedStyle {
     if (light || dark) style.schemes = { ...(light ? { light } : {}), ...(dark ? { dark } : {}) };
   }
 
-  // Drawings first: a shape may only name one that survived.
+  // Drawings first: a shape may only name one that survived. Only drawings something names count
+  // toward the limits: replacing a shape's drawing near the limit once dropped the new one (the old
+  // one still took its room), and then the old one too as unused, losing both.
+  const named = new Set<string>();
+  if (isRecord(raw.shapes)) {
+    for (const entry of Object.values(raw.shapes)) {
+      if (isRecord(entry) && entry.builtin !== true && typeof entry.art === 'string') named.add(entry.art);
+    }
+  }
+  if (isRecord(raw.backdrop) && typeof raw.backdrop.art === 'string') named.add(raw.backdrop.art);
   const assets: StyleAsset[] = [];
   if (Array.isArray(raw.assets)) {
     let dropped = 0;
     let chars = 0;
     const seen = new Set<string>();
     for (const candidate of raw.assets) {
+      if (!isRecord(candidate) || typeof candidate.id !== 'string' || !named.has(candidate.id)) continue;
       const asset = assets.length < STYLE_LIMITS.maxAssets ? normalizeAsset(candidate) : null;
       const size = asset ? asset.paths.reduce((sum, path) => sum + path.d.length, 0) : 0;
       if (!asset || seen.has(asset.id) || chars + size > STYLE_LIMITS.maxAssetsChars) {

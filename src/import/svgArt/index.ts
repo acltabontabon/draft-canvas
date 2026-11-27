@@ -256,17 +256,26 @@ export function importSvgArt(text: string, mode: SvgArtMode = 'diagram'): SvgArt
     if (element.name.toLowerCase() === 'style') notes.add(NOTE_SHEET);
   }
 
-  /** A gradient or pattern as the one colour it starts with. */
+  /** A gradient or pattern as the one colour it starts with, read once per id: a file that names
+   *  its own root as a paint on every element would otherwise walk the whole tree for each. */
+  const starts = new Map<string, Read>();
   const resolved = (paint: Read): Read => {
     if (paint.kind !== 'reference') return paint;
     notes.add(NOTE_GRADIENT);
+    const known = starts.get(paint.id);
+    if (known) return known;
+    let start: Read = { kind: 'current' };
     const target = byId.get(paint.id);
     for (const stop of target ? descendants(target) : []) {
       if (stop.name !== 'stop') continue;
       const colour = readPaint(presentation(stop)['stop-color'] ?? '');
-      if (colour?.kind === 'colour') return colour;
+      if (colour?.kind === 'colour') {
+        start = colour;
+        break;
+      }
     }
-    return { kind: 'current' };
+    starts.set(paint.id, start);
+    return start;
   };
 
   const drawn: Drawn[] = [];

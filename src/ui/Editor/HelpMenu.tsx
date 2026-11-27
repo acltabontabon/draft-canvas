@@ -1,41 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
 import { openLink } from '../../host/openLink';
 import { PRODUCT } from '../../product';
-import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../common/Button';
 import { Tooltip } from '../common/Tooltip';
 import { useUnreadReleaseNotes } from '../common/useUnreadReleaseNotes';
 import { ToolbarMenu, type ToolbarMenuItem } from './toolbar/ToolbarMenu';
 import { toolbarLabel, toolbarTooltip } from './toolbar/toolbarTooltips';
-
-/**
- * Undo and redo, beside the zoom controls with the other ways of handling the canvas — kept on screen
- * for anyone without a keyboard (a tablet), out of the header for everyone else, who presses ⌘Z.
- */
-export function HistoryControls() {
-  const undo = useEditorStore((state) => state.undo);
-  const redo = useEditorStore((state) => state.redo);
-  const past = useEditorStore((state) => state.history.past.length);
-  const future = useEditorStore((state) => state.history.future.length);
-  // The store refuses both while a flow is traced or the copy is read-only; say so, don't no-op.
-  const tracing = useUiStore((state) => state.flowTrace !== null);
-  const readOnly = useUiStore((state) => state.readOnly !== null);
-  const held = tracing || readOnly;
-  // A disabled button gets no hover events, so the shared tooltip never opens on it; the reason is
-  // its native title, which browsers do show on a disabled control.
-  const why = readOnly ? 'This diagram is read-only.' : tracing ? 'Finish or cancel tracing the flow first.' : undefined;
-  return (
-    <span className="dc-status-history">
-      <Tooltip content={toolbarTooltip('undo')}>
-        {(tip) => <Button icon="undo" variant="quiet" disabled={held || past === 0} onClick={undo} aria-label={toolbarLabel('undo')} {...tip} title={held ? why : undefined} />}
-      </Tooltip>
-      <Tooltip content={toolbarTooltip('redo')}>
-        {(tip) => <Button icon="redo" variant="quiet" disabled={held || future === 0} onClick={redo} aria-label={toolbarLabel('redo')} {...tip} title={held ? why : undefined} />}
-      </Tooltip>
-    </span>
-  );
-}
 
 /**
  * Appearance, one click from the corner where the app's other controls are: your style, the canvas

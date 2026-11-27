@@ -30,8 +30,9 @@ With **Select**, click a stroke to choose it (`Shift`-click for more), drag to m
 `Backspace` to erase it. A marquee picks up the strokes inside it. Right-click a stroke for
 **Convert to shape** and **Erase stroke**.
 
-Sketches belong to the view they were drawn in; each [room](depth.md) keeps its own. A view holds
-sketches only while it holds a shape, so draw a shape first.
+Sketches belong to the view they were drawn in. The top-level canvas can hold sketches on its own.
+Inside a [room](depth.md), add a shape before drawing or pasting a sketch, or paste the shape and
+sketch together. Duplicating a selection copies its shapes and sketches together.
 
 ## Smart Ink
 

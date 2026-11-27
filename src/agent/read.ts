@@ -15,6 +15,7 @@ import { continuationsFor } from '../continuation';
 import { classify, type C4Classification } from '../depth/c4';
 import { effectiveLevel } from '../depth/level';
 import { canCreateInside, hasInside, ownerAt, resolvePath, roomsOf, viewOf, type DepthPath } from '../depth/tree';
+import { groupLabel, membersOf } from '../junctions/groups';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { categoryOf } from '../document/connectorSemantics';
 import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode } from '../document/types';
@@ -111,15 +112,15 @@ export function readLookup(file: DraftDocument, args: Record<string, unknown>, r
   const query = args.query.trim().toLowerCase();
   const matches: Record<string, unknown>[] = [];
   let total = 0;
-  const add = (id: string, label: string, type: string, path: DepthPath) => {
-    if (!id.toLowerCase().includes(query) && !label.toLowerCase().includes(query)) return;
+  const add = (id: string, label: string, type: string, path: DepthPath, link?: string) => {
+    if (!id.toLowerCase().includes(query) && !label.toLowerCase().includes(query) && !link?.toLowerCase().includes(query)) return;
     total += 1;
     if (matches.length === 20) return;
     const shown = truncated(label, 200);
-    matches.push({ id, label: shown.text, type, view: { inside: [...path] }, ...(shown.truncated ? { labelTruncated: true } : {}) });
+    matches.push({ id, label: shown.text, type, view: { inside: [...path] }, ...(link ? { link } : {}), ...(shown.truncated ? { labelTruncated: true } : {}) });
   };
   for (const room of roomsOf(file)) {
-    for (const node of room.graph.nodes) add(node.id, node.text ?? '', typeWordOf(node), room.path);
+    for (const node of room.graph.nodes) add(node.id, node.text ?? '', typeWordOf(node), room.path, node.link);
     for (const edge of room.graph.edges) add(edge.id, edge.label ?? '', 'relationship', room.path);
     for (const flow of room.graph.flows) add(flow.id, flow.title, 'flow', room.path);
   }
@@ -157,7 +158,7 @@ export function readEdit(file: DraftDocument, args: Record<string, unknown>, rev
     const view = { inside: [...room.path] };
     const nodes = new Map(room.graph.nodes.map(node => [node.id, node]));
     for (const node of room.graph.nodes) {
-      if (contains(node.id, node.text ?? '')) add(() => ({ id: node.id, type: typeWordOf(node), ...text(node.text ?? ''), view, ...(hasInside(node) ? { inside: true } : {}) }));
+      if (contains(node.id, node.text ?? '', node.link ?? '')) add(() => ({ id: node.id, type: typeWordOf(node), ...text(node.text ?? ''), view, ...(node.link ? { link: node.link } : {}), ...(hasInside(node) ? { inside: true } : {}) }));
     }
     for (const edge of room.graph.edges) {
       const fromLabel = nodes.get(edge.source)?.text ?? '';
@@ -387,6 +388,29 @@ function cursorOffsets(cursor: unknown, revision: string, path: DepthPath, signa
   return payload.offsets;
 }
 
+interface LinkedJunctions {
+  link: string;
+  label: string;
+  places: Array<{ id: string; view: string[] }>;
+}
+
+/**
+ * The junction groups with a member among `page`: each with its label and every place it is drawn,
+ * the view path of each. Facts about the file as drawn; a group of one is a junction not linked to
+ * another yet.
+ */
+function linkedJunctionsOf(file: DraftDocument, page: readonly DraftNode[]): LinkedJunctions[] {
+  const seen = new Set<string>();
+  const groups: LinkedJunctions[] = [];
+  for (const node of page) {
+    if (!node.link || seen.has(node.link)) continue;
+    seen.add(node.link);
+    const members = membersOf(file, node.link);
+    groups.push({ link: node.link, label: groupLabel(members), places: members.map((member) => ({ id: member.node.id, view: [...member.path] })) });
+  }
+  return groups;
+}
+
 function project(
   file: DraftDocument,
   view: DraftDocument,
@@ -463,6 +487,8 @@ function project(
       ...(node.description ? { description: node.description } : {}),
       ...(node.technology ? { technology: node.technology } : {}),
       ...(node.replicas ? { replicas: node.replicas } : {}),
+      // A junction's group: the same value on another junction is where this one continues.
+      ...(node.link ? { link: node.link } : {}),
       // Set by create, add and set.color; read back so an edit can keep or change it knowingly.
       ...(node.accent ? { color: node.accent } : {}),
       ...group,
@@ -571,6 +597,12 @@ function project(
     // Facts read from the semantics, not requests: what to do about each is the person's call.
     ...(review.length ? { review } : {}),
     ...(outside.size ? { outsideEndpoints: [...outside.values()] } : {}),
+    ...(() => {
+      // Where the junctions on this page continue, anywhere in the file: a link is a relationship
+      // no connector shows, so it is said here rather than left to be worked out from equal names.
+      const linked = linkedJunctionsOf(file, page);
+      return linked.length ? { linkedJunctions: linked } : {};
+    })(),
   };
   if (partial) {
     result.partial = true;

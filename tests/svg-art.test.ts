@@ -239,6 +239,14 @@ describe('a shape drawn with a style’s own drawing', () => {
     ]);
   });
 
+  it('draws what it holds, not what another drawing under the same id held', () => {
+    // A style from a file can reuse an id; the placed paths were once cached by id alone.
+    const first = artShapes(HOUSE, { x: 0, y: 0, w: 48, h: 48 }, 'stretch', LIGHT.accents.teal, LIGHT);
+    const other = { ...HOUSE, paths: HOUSE.paths.map((path) => ({ ...path, d: 'M1 1L5 5Z' })) };
+    const second = artShapes(other, { x: 0, y: 0, w: 48, h: 48 }, 'stretch', LIGHT.accents.teal, LIGHT);
+    expect(second.map((shape) => (shape.t === 'path' ? shape.d : ''))).not.toEqual(first.map((shape) => (shape.t === 'path' ? shape.d : '')));
+  });
+
   it('keeps its words where they were and changes nothing else about the shape', () => {
     const resolved = resolveStyle(styleWith(Object.fromEntries(NODE_TYPES.map((type) => [type, { art: HOUSE.id }]))));
     for (const entry of every) {

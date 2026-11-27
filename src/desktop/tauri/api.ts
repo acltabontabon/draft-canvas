@@ -27,6 +27,7 @@ interface AppErrorPayload {
   kind: AppErrorKind;
   message: string;
   path?: string;
+  reason?: string;
 }
 
 function isAppError(value: unknown): value is AppErrorPayload {
@@ -34,7 +35,7 @@ function isAppError(value: unknown): value is AppErrorPayload {
 }
 
 function asDesktopError(error: unknown): DesktopError {
-  if (isAppError(error)) return new DesktopError(error.kind, error.message, error.path);
+  if (isAppError(error)) return new DesktopError(error.kind, error.message, error.path, error.reason);
   return new DesktopError('Io', typeof error === 'string' && error ? error : 'Something unexpected went wrong.');
 }
 
@@ -115,6 +116,52 @@ export function createTauriApi(): DesktopApi {
       return (await call<{ text: string }>('recovery_read', { id })).text;
     },
     recoveryDiscard: (id) => call('recovery_discard', { id }),
+
+    historyList: () => call('history_list'),
+    historyCreate: (meta) => call('history_create', { meta }),
+    historyRemove: (repo) => call('history_remove', { repo }),
+    historyMeta: (repo) => call('history_meta', { repo }),
+    historyWriteMeta: (repo, meta) => call('history_write_meta', { repo, meta }),
+    historyWriteSnapshot: (repo, { text, ...head }) => callRaw('history_write_snapshot', { repo, ...head }, utf8.encode(text)),
+    historyUpdateRef: (repo, update) => call('history_update_ref', { repo, update }),
+    historyReadRef: (repo, name) => call('history_read_ref', { repo, name }),
+    historyListRefs: (repo, prefix) => call('history_list_refs', { repo, prefix }),
+    historyReadCommits: (repo, oids) => call('history_read_commits', { repo, oids }),
+    // Raw bytes back (a diagram is megabytes); the shell has already checked they are UTF-8.
+    async historyReadSnapshot(repo, oid) {
+      return new TextDecoder('utf-8', { fatal: true }).decode(await call<ArrayBuffer>('history_read_snapshot', { repo, oid }));
+    },
+    historyLog: (repo, query) => call('history_log', { repo, query }),
+    historyMergeBases: (repo, a, b) => call('history_merge_bases', { repo, a, b }),
+    historyIsAncestor: (repo, ancestor, descendant) => call('history_is_ancestor', { repo, ancestor, descendant }),
+    historyWriteTag: (repo, tag) => call('history_write_tag', { repo, tag }),
+    historyListTags: (repo, prefix) => call('history_list_tags', { repo, prefix }),
+    historyJournalPut: (repo, record) => call('history_journal_put', { repo, record }),
+    historyJournalList: (repo) => call('history_journal_list', { repo }),
+    historyJournalDelete: (repo, opId) => call('history_journal_delete', { repo, opId }),
+    historyUsage: (repo) => call('history_usage', { repo }),
+    historyMaintain: (repo) => call('history_maintain', { repo }),
+    async historyPackReachable(repo, tips) {
+      return new Uint8Array(await call<ArrayBuffer>('history_pack_reachable', { repo, tips }));
+    },
+    historyImportBegin: (meta, pack) => callRaw('history_import_begin', { meta }, pack),
+    historyImportCommit: (staging, refs) => call('history_import_commit', { staging, refs }),
+    historyImportAbort: (staging) => call('history_import_abort', { staging }),
+    historyBindingGet: (copyId) => call('history_binding_get', { copyId }),
+    historyBindingPut: (binding) => call('history_binding_put', { binding }),
+    historyBindingDelete: (copyId) => call('history_binding_delete', { copyId }),
+    historyBindingList: () => call('history_binding_list'),
+    historyGitStatus: () => call('history_git_status'),
+    historyRemoteSet: (repo, url) => call('history_remote_set', { repo, url }),
+    historyRemoteRemove: (repo) => call('history_remote_remove', { repo }),
+    historyFetch: (repo) => call('history_fetch', { repo }),
+    historyPushPreview: (repo, refs) => call('history_push_preview', { repo, refs }),
+    historyPush: (repo, refs) => call('history_push', { repo, refs }),
+    historyProjectRepo: (handle) => call('history_project_repo', { handle }),
+    historyProjectPublishBranch: (handle, message) => call('history_project_publish_branch', { handle, message }),
+    historyProjectCommitCurrent: (handle, message, expectedHead) => call('history_project_commit_current', { handle, message, expectedHead }),
+    historyProjectPushPreview: (handle, branch) => call('history_project_push_preview', { handle, branch }),
+    historyProjectPush: (handle, branch) => call('history_project_push', { handle, branch }),
 
     settingsSet: (patch) => call<DesktopSettings>('settings_set', { patch }),
     ask: (title, message, buttons) => call('ask', { title, message, buttons }),

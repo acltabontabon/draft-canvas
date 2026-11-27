@@ -238,6 +238,47 @@ describe('style packs', () => {
 });
 
 describe('the gallery, as the interface sees it', () => {
+  it('stops an active refresh and keeps the gallery empty when downloads are cleared', async () => {
+    const { useGalleryStore } = await import('../src/store/galleryStore');
+    const started = Promise.withResolvers<AbortSignal>();
+    const download = Promise.withResolvers<Response>();
+    const fetch = vi.fn((url: string, init: RequestInit) => {
+      if (url.endsWith('catalog.json')) {
+        started.resolve(init.signal!);
+        return download.promise;
+      }
+      return Promise.resolve(new Response('', { status: 404 }));
+    });
+    vi.stubGlobal('fetch', fetch);
+
+    const enabling = useGalleryStore.getState().enable();
+    const signal = await started.promise;
+    const clearing = useGalleryStore.getState().disable();
+    download.resolve(new Response(vendoredCatalogText()));
+    await Promise.all([enabling, clearing]);
+
+    expect(signal.aborted).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(await loadGallery()).toBeNull();
+    expect(useGalleryStore.getState()).toMatchObject({ enabled: false, status: 'idle', snapshot: null, failure: null });
+  });
+
+  it('does not add a starter to another diagram opened while the starter was loading', async () => {
+    serve();
+    const { useGalleryStore } = await import('../src/store/galleryStore');
+    const { useEditorStore } = await import('../src/store/editorStore');
+    await useGalleryStore.getState().enable();
+    useEditorStore.getState().setDocument(createDocument('First'));
+
+    const adding = useGalleryStore.getState().addToCanvas('monolith');
+    const other = createDocument('Second');
+    useEditorStore.getState().setDocument(other);
+
+    expect(await adding).toEqual([]);
+    expect(useEditorStore.getState().document).toBe(other);
+    await useGalleryStore.getState().disable();
+  });
+
   it('stays busy from "Load starters" until the starters arrive, however the list is opened meanwhile', async () => {
     serve();
     const { useGalleryStore } = await import('../src/store/galleryStore');

@@ -68,7 +68,7 @@ export const ELEMENT_TYPES: Record<string, NativeShape & { summary: string }> = 
   config: { type: 'artifact', artifactKind: 'config', summary: 'Configuration a service starts with or reloads (a YAML file, env vars, feature flags).' },
   secret: { type: 'artifact', artifactKind: 'secret', summary: 'A secret a service is handed (an API key, a token, a private key).' },
   certificate: { type: 'artifact', artifactKind: 'certificate', summary: 'A certificate a service presents or trusts (TLS, mTLS, a CA).' },
-  junction: { type: 'ellipse', summary: 'A small routing point where connectors meet or split.' },
+  junction: { type: 'ellipse', summary: 'A small routing point where connectors meet or split; with a link, one point drawn in several places, which people travel between.' },
 };
 
 /** The words agents reach for without looking anything up, mapped to the real ones. */

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { create, newCanvas } from './canvas';
+import { create, newCanvas, nextFrames } from './canvas';
 
 /** "Arrange diagram": a preview with the reading direction to choose, then three shapes stacked on
  *  one spot come apart on Apply, and one ⌘Z puts them back. */
@@ -73,11 +73,12 @@ test('the preview frames the result, and Cancel puts the view back exactly where
   await create(page, 'Service', { x: 200, y: 200 });
   await create(page, 'Data Store', { x: 500, y: 200 });
   await create(page, 'Queue', { x: 800, y: 200 });
+  await page.mouse.move(5, 5);
   await page.evaluate(async () => {
     const { useEditorStore } = await import('/src/store/editorStore.ts');
     type Placed = { x: number; y: number };
-    // Far apart and off to one side, so framing the arrangement has to move and zoom the camera.
-    useEditorStore.getState().apply('Scatter', (doc: { nodes: Placed[] }) => ({ ...doc, nodes: doc.nodes.map((node: Placed, i: number) => ({ ...node, x: 300 + i * 40, y: 300 + i * 900 })) }));
+    // Place the leftmost shape below the topmost one so no shape already occupies the layout origin.
+    useEditorStore.getState().apply('Scatter', (doc: { nodes: Placed[] }) => ({ ...doc, nodes: doc.nodes.map((node: Placed, i: number) => ({ ...node, x: 420 - i * 40, y: 300 + i * 900 })) }));
     // Nothing selected: a selected shape shows its own move, which is the next assertion's subject.
     useEditorStore.getState().setSelection({ nodes: [], edges: [] });
   });
@@ -95,18 +96,21 @@ test('the preview frames the result, and Cancel puts the view back exactly where
   await expect(page.locator('.dc-preview-was')).toHaveCount(0);
   await expect.poll(camera).not.toBe(before);
 
-  // Moves shows where every shape came from; Before lifts the sheet and returns the view.
+  // Moves shows where every shape came from; Before returns the view without motion when requested.
   await bar.getByText('Moves', { exact: true }).click();
   await expect(page.locator('.dc-preview-was')).toHaveCount(3);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await bar.getByText('Before', { exact: true }).click();
   await expect(page.locator('.dc-agent-preview')).toHaveCount(0);
-  await expect.poll(camera).toBe(before);
+  await nextFrames(page);
+  expect(await camera()).toBe(before);
 
   await bar.getByText('Result', { exact: true }).click();
   await expect.poll(camera).not.toBe(before);
   await bar.getByRole('button', { name: 'Cancel' }).click();
   await expect(bar).toBeHidden();
-  await expect.poll(camera).toBe(before);
+  await nextFrames(page);
+  expect(await camera()).toBe(before);
 });
 
 test('says it is arranging a large diagram, and Cancel stops it with nothing changed', async ({ page, browserName }) => {

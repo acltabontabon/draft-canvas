@@ -19,12 +19,19 @@ const MEANT: Record<string, readonly string[]> = {
   to: ['target'],
 };
 
-/** The closest allowed field, by spelling or a known alias. */
-export function suggestedField(key: string, allowed: readonly string[]): string | undefined {
+/**
+ * The closest allowed field, by spelling or a known alias. A key in `realFields` is spelled
+ * correctly — it is a field of some other kind of thing — so it is never taken for a misspelling:
+ * `kind` on an element is a wrong field, not a typo of `link`.
+ */
+export function suggestedField(key: string, allowed: readonly string[], realFields?: ReadonlySet<string>): string | undefined {
   const lower = key.toLowerCase();
   // Edit distance cannot be less than the length difference. Skip impossible matches before
   // traversing a hostile field name: validation runs on the page, before the worker's time limit.
-  const near = lower.length >= 4 ? allowed.find((field) => field !== key && Math.abs(lower.length - field.length) <= 2 && distance(lower, field.toLowerCase()) <= 2) : undefined;
+  const near =
+    lower.length >= 4 && !realFields?.has(key)
+      ? allowed.find((field) => field !== key && Math.abs(lower.length - field.length) <= 2 && distance(lower, field.toLowerCase()) <= 2)
+      : undefined;
   return near ?? allowed.find((field) => MEANT[field]?.includes(lower));
 }
 
@@ -38,7 +45,7 @@ export function unknownFieldHint(key: string, allowed: readonly string[]): strin
 /** Runtime field sets are also the keys of the published patch schema. */
 export const ROOM_FIELDS = ['level', 'nodes', 'relationships', 'groups', 'flows', 'notes', 'sequences'] as const;
 export const SET_FIELDS = {
-  element: ['label', 'type', 'description', 'technology', 'replicas', 'color', 'group', 'evidence', 'place'],
+  element: ['label', 'type', 'description', 'technology', 'replicas', 'link', 'color', 'group', 'evidence', 'place'],
   group: ['label', 'kind', 'group', 'color', 'place'],
   // The three free cards a note can be — a note, a code snippet, a label — and an attachment, which
   // is any of them folded onto a host. `attach` turns one into the other, keeping its id.
@@ -57,7 +64,7 @@ export const SET_FIELDS = {
 export const CREATE_FIELDS = {
   request: ['requestId', 'title', 'project', 'starter', ...ROOM_FIELDS, 'layout', 'open', 'allowDuplicateTitle', 'fallbackType'],
   group: ['id', 'label', 'kind', 'parent', 'color'],
-  element: ['id', 'type', 'label', 'description', 'technology', 'replicas', 'group', 'color', 'attachments', 'inside', 'evidence', 'place'],
+  element: ['id', 'type', 'label', 'description', 'technology', 'replicas', 'link', 'group', 'color', 'attachments', 'inside', 'evidence', 'place'],
   relationship: ['id', 'from', 'to', 'label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'compensationFor', 'compensationVisible', 'compensationName', 'compensationProtocol', 'compensationDescription', 'attachments', 'evidence', 'route'],
   flow: ['id', 'title', 'color', 'variantOf', 'steps'],
   note: ['id', 'text', 'kind', 'code', 'language', 'about', 'near', 'attach', 'style', 'color'],

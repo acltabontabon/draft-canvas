@@ -19,7 +19,8 @@
  */
 
 import { LIMITS } from '../document/limits';
-import { SIDES, type DraftDocument, type DraftEdge, type DraftPoint, type EdgeAnchor, type Side } from '../document/types';
+import { anchorOnShape } from '../document/queueGeometry';
+import { SIDES, type DraftDocument, type DraftEdge, type DraftNode, type DraftPoint, type EdgeAnchor, type Side } from '../document/types';
 import { AgentError } from './errors';
 import type { Reader } from './input';
 
@@ -148,12 +149,14 @@ function anchorOf(end: RouteEnd): EdgeAnchor | undefined {
 
 /** One connector routed by hand: the ends given — pinned, or automatic for `"auto"` — and the bends
  *  given (`via: []` drops them). */
-export function routed(edge: DraftEdge, route: RouteSpec): DraftEdge {
+export function routed(edge: DraftEdge, route: RouteSpec, typeOf: (id: string) => DraftNode['type'] | undefined): DraftEdge {
   const next: DraftEdge = { ...edge };
-  for (const [end, key] of [[route.from, 'sourceAnchor'], [route.to, 'targetAnchor']] as const) {
+  for (const [end, key, node] of [[route.from, 'sourceAnchor', edge.source], [route.to, 'targetAnchor', edge.target]] as const) {
     if (end === undefined) continue;
     const anchor = anchorOf(end);
-    if (anchor) next[key] = anchor;
+    // A pin on a Junction lands on the middle of the side asked for, the one point it has: an
+    // offset elsewhere named a handle it doesn't render and the connector wasn't drawn.
+    if (anchor) next[key] = anchorOnShape(typeOf(node), anchor);
     else delete next[key];
   }
   if (route.via !== undefined) {
@@ -169,5 +172,6 @@ export function applyRoutes(view: DraftDocument, routes: ReadonlyMap<string, Rou
   for (const id of routes.keys()) {
     if (!view.edges.some((e) => e.id === id)) throw new AgentError('INVALID_REFERENCE', `${at}: no relationship "${id}" in this view to route.`);
   }
-  return { ...view, edges: view.edges.map((edge) => (routes.has(edge.id) ? routed(edge, routes.get(edge.id)!) : edge)) };
+  const types = new Map(view.nodes.map((n) => [n.id, n.type]));
+  return { ...view, edges: view.edges.map((edge) => (routes.has(edge.id) ? routed(edge, routes.get(edge.id)!, (id) => types.get(id)) : edge)) };
 }

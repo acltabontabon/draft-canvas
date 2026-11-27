@@ -19,6 +19,7 @@ import {
 import { SEQUENCE_WRAP_IDS } from './sequence';
 import type { Command, CommandContext } from './types';
 import type { ContextMenuTarget } from '../store/uiStore';
+import { junctionSelectionCommands } from './junctions';
 
 /**
  * A right-click menu is a small, curated subset of what `commandsFor` already knows how to build —
@@ -77,6 +78,12 @@ const MENU_LABELS: Record<string, string> = {
   'arrange-selection': 'Rearrange selection',
   arrange: 'Rearrange layout',
   delete: 'Delete',
+  // The header (and the toolbar's own shape) already says this is a Junction: the verbs are enough,
+  // and a Junction's toolbar stays as small as the shape it belongs to.
+  'junction-follow': 'Follow link',
+  'junction-add-counterpart': 'Add link',
+  'junction-unlink': 'Unlink',
+  'junctions-link': 'Link junctions',
 };
 
 export const menuLabelOf = (command: Command) => MENU_LABELS[command.id] ?? command.title;
@@ -208,9 +215,15 @@ function sequenceMenu(ctx: CommandContext, node: DraftNode, commands: Command[])
   ]);
 }
 
-/** A Junction is a routing point, not a content holder — no Add Note/Add Code. */
+/**
+ * A Junction is a routing point, not a content holder — no Add Note/Add Code. What it does have is
+ * where it continues: going there leads, then the ways to link it. "Link to junction group…" is a
+ * picker (a `CommandStage`), so it stays in the palette.
+ */
 function junctionMenu(node: DraftNode, commands: Command[]): ContextMenuEntry[] {
   return grouped(nodeHeader(node), [
+    pick(commands, ['junction-follow']),
+    pick(commands, ['junction-add-counterpart', 'junction-link-matching', 'junction-unlink']),
     pick(commands, ['edit-text']),
     pick(commands, COPY_AND_ORDER),
     pick(commands, ['spotlight']),
@@ -310,6 +323,7 @@ function selectionMenu(ctx: CommandContext, commands: Command[]): ContextMenuEnt
   return grouped({ type: 'header', title: selectionCount(nodes.length, edges.length) }, [
     // One shared point for everything selected — the header already says how many.
     pick(commands, ['group', 'ungroup', 'tidy', 'arrange-selection', 'open-point-add']),
+    pick(commands, ['junctions-link', 'junctions-unlink']),
     pick(commands, ['sequence-from-selection']),
     { type: 'icons', label: 'Align and distribute', items: align },
     pick(commands, COPY_AND_ORDER),
@@ -348,7 +362,7 @@ export function contextMenuCommandsFor(
       return selectionMenu(ctx, [
         // Only with shapes among what is selected: for connectors alone it would tidy the whole view.
         ...(ctx.editor.selection.nodes.length > 0 ? pick(canvasCommands(ctx), ['tidy']) : []),
-        ...arrangeSelectionCommands(ctx), ...multiCommands(ctx), ...pick(openPointCommands(ctx), ['open-point-add'])]);
+        ...arrangeSelectionCommands(ctx), ...junctionSelectionCommands(ctx), ...multiCommands(ctx), ...pick(openPointCommands(ctx), ['open-point-add'])]);
     }
     default:
       return [];

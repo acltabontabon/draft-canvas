@@ -222,7 +222,8 @@ test.describe('clicking a connector', () => {
     await expect(page.locator('.react-flow__edge')).toHaveCount(4);
     await expect(page.locator('.dc-quick-connect')).toHaveCount(0);
     expect(await page.locator('.react-flow__edge[data-id="short"] .dc-edge-hit').first().getAttribute('d')).toBe(before);
-    await expect(page.getByRole('button', { name: /^Undo/ })).toBeDisabled();
+    // Nothing to undo: the history holds no step (the status bar has no Undo button to read).
+    expect(await page.evaluate(async () => (await import('/src/store/editorStore.ts')).useEditorStore.getState().history.past.length)).toBe(0);
   });
 
   test('Shift and ⌘ add a connector to the selection, and take it back off', async ({ page }) => {

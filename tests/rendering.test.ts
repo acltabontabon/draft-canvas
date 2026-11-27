@@ -916,7 +916,7 @@ describe('live resize', () => {
     expect(geometry(queueShapes)).not.toBe(geometry(databaseShapes));
   });
 
-  it('draws Generic and API as cards and every other Service kind as its own glyph', () => {
+  it('draws Generic and External as cards and every other Service kind as its own glyph', () => {
     const ctx = describeContext(LIGHT);
     const drawn = (serviceKind: ServiceKind) => {
       const node = createNode({ type: 'service', x: 0, y: 0, text: 'Orders', serviceKind });
@@ -925,20 +925,19 @@ describe('live resize', () => {
     const flat = (shapes: Shape[]): Shape[] => shapes.flatMap((s) => (s.t === 'group' ? flat(s.children) : [s]));
 
     // A card fills its box: its outline starts at the box's own corner.
-    for (const kind of ['generic', 'api'] as const) {
+    for (const kind of ['generic', 'external'] as const) {
       const { node, shapes } = drawn(kind);
       const outline = flat(shapes).find((s) => s.t === 'rect' || s.t === 'path')!;
       if (outline.t === 'rect') expect(outline.w).toBeCloseTo(node.width - 1.5, 1);
     }
-
     // A glyph kind draws nothing as wide as its box, and says its kind under its name.
-    const glyphKinds = SERVICE_KINDS.filter((kind) => kind !== 'generic' && kind !== 'api');
+    const glyphKinds = SERVICE_KINDS.filter((kind) => kind !== 'generic' && kind !== 'external');
     for (const kind of glyphKinds) {
       const { node, shapes } = drawn(kind);
       for (const shape of flat(shapes)) if (shape.t === 'rect') expect(shape.w, kind).toBeLessThan(node.width * 0.6);
       const words = shapes.filter((s) => s.t === 'text').map((s) => (s.t === 'text' ? s.layout.lines.map((line) => line.text).join(' ') : ''));
       expect(words, kind).toContain('Orders');
-      expect(words.some((word) => word === word.toUpperCase() && word.length > 3), kind).toBe(true);
+      expect(words.some((word) => word === word.toUpperCase() && word.length >= 3), kind).toBe(true);
     }
 
     // No two kinds share a drawing.

@@ -4,6 +4,8 @@ import { addNodes } from '../../src/document/operations';
 import { serializeDocument } from '../../src/export/project';
 import { titleOf } from '../../src/desktop/controller';
 import { thumbnailOf } from '../../src/desktop/thumbnails';
+import type { BrowseTile } from '../../src/desktop/ui/DeskBrowse';
+import { sortTiles } from '../../src/desktop/ui/tiles';
 
 const withServices = (title: string, count: number) =>
   serializeDocument(
@@ -46,5 +48,34 @@ describe('a file’s thumbnail on Home', () => {
     expect(thumbnailOf(serializeDocument(createDocument('Empty'))).state).toBe('blank');
     expect(thumbnailOf('{ broken').state).toBe('blank');
     expect(thumbnailOf(null).state).toBe('blank');
+  });
+});
+
+describe('the order of diagrams in Browse', () => {
+  const tile = (name: string, when?: number, kind: BrowseTile['kind'] = 'document'): BrowseTile => ({
+    entryKey: `${kind}:${name}`,
+    kind,
+    name,
+    when,
+    label: name,
+    description: '',
+    haystack: name.toLowerCase(),
+    onOpen: () => {},
+  });
+  const names = (tiles: BrowseTile[]) => tiles.map((t) => t.name);
+  const list = [tile('beta', 10), tile('Alpha', 30), tile('zeta folder', undefined, 'folder'), tile('Step 10', 20), tile('Step 2', 20), tile('archive', undefined, 'folder')];
+
+  it('puts the most recently edited first, folders ahead of them by name', () => {
+    expect(names(sortTiles(list, 'edited'))).toEqual(['archive', 'zeta folder', 'Alpha', 'Step 2', 'Step 10', 'beta']);
+  });
+
+  it('sorts by name, ignoring case and reading numbers as numbers', () => {
+    expect(names(sortTiles(list, 'name'))).toEqual(['archive', 'zeta folder', 'Alpha', 'beta', 'Step 2', 'Step 10']);
+  });
+
+  it('leaves the list it was given as it was', () => {
+    const before = names(list);
+    sortTiles(list, 'name');
+    expect(names(list)).toEqual(before);
   });
 });

@@ -10,6 +10,7 @@ import {
   createReply,
   dropParticipantLinks,
   duplicateItem,
+  editMessageAttachments,
   groupParticipants,
   insertItem,
   leaveGroup,
@@ -328,6 +329,26 @@ describe('in a document', () => {
 });
 
 describe('find and replace', () => {
+  it('counts and replaces attachment text on a nested message', () => {
+    const original = wrapItems(shop(), ['m2'], { id: 'f1', operator: 'opt' });
+    const unchanged = { id: 'untouched', type: 'note' as const, text: 'An unrelated note' };
+    const sequence = editMessageAttachments(original, 'm2', () => [
+      { id: 'note', type: 'note', text: 'Retry on timeout' },
+      { id: 'code', type: 'code', text: 'Retry example', code: 'retry()' },
+      unchanged,
+    ]);
+    const doc = addNodes(createDocument(), [{ ...createNode({ type: 'sequence', x: 0, y: 0 }), sequence }]);
+
+    expect(countLabelMatches(doc, 'retry')).toBe(2);
+    expect(replaceLabels(doc, 'Retry', 'Retry').doc).toBe(doc);
+    const result = replaceLabels(doc, 'retry', 'Backoff');
+    expect(result.count).toBe(2);
+    const attachments = (findItem(result.doc.nodes[0]!.sequence!, 'm2')!.item as SeqMessage).attachments!;
+    expect(attachments[0]?.text).toBe('Backoff on timeout');
+    expect(attachments[1]).toMatchObject({ text: 'Backoff example', code: 'retry()' });
+    expect(attachments[2]).toBe(unchanged);
+  });
+
   it('reaches names, messages, conditions and notes, and leaves the rest untouched', () => {
     let sequence = wrapItems(shop(), ['m2', 'r2'], { id: 'f1', operator: 'opt', guard: 'order is new' });
     sequence = insertItem(sequence, createNote({ id: 'n1', over: ['db'], text: 'one order per row' }), { operandId: null, index: 0 });

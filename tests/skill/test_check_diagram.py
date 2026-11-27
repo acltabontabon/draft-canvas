@@ -116,6 +116,31 @@ class Refuses(unittest.TestCase):
         self.assertIn('relationship r1.to: must be an id (a string)', errors)
         self.assertIn('flow main.spotlight: must be a list of ids (strings)', errors)
 
+    def test_linked_junctions_read_as_one_point(self) -> None:
+        request = minimal()
+        inside = {'nodes': [{'id': 'j_in', 'type': 'junction', 'label': 'A', 'link': 'handoff'}]}
+        request['nodes'] += [
+            {'id': 'j_out', 'type': 'junction', 'label': 'A', 'link': 'handoff'},
+            {'id': 'svc', 'type': 'service', 'label': 'Billing', 'description': 'Bills.', 'technology': 'Go', 'inside': inside},
+        ]
+        result = report(request)
+        self.assertFalse([line for line in result.errors + result.warnings if 'link' in line])
+
+        request['nodes'][-2]['label'] = 'B'
+        self.assertIn('junctions with link "handoff" are one point and read as one label', '\n'.join(report(request).errors))
+
+        request['nodes'][-2]['label'] = 'A'
+        request['nodes'][-1]['inside']['nodes'][0]['link'] = 'elsewhere'
+        warnings = '\n'.join(report(request).warnings)
+        self.assertIn('only one junction has link "handoff"', warnings)
+        self.assertIn('only one junction has link "elsewhere"', warnings)
+
+        request['nodes'][0]['link'] = 'handoff'
+        request['nodes'][-2]['link'] = ''
+        errors = '\n'.join(report(request).errors)
+        self.assertIn('element user: link belongs to a junction', errors)
+        self.assertIn('element j_out: link must be a name of 1 to 64 characters', errors)
+
     def test_notes_and_steps_the_app_refuses(self) -> None:
         request = minimal(
             groups=[{'id': 'g', 'label': 'Platform'}],

@@ -818,12 +818,26 @@ describe('primaryCommandsFor — primary popover quick actions', () => {
   it('kinds with no dedicated shape-native command offer nothing — a graceful empty row', () => {
     const state = useEditorStore.getState();
     const database = state.addNode({ type: 'database', x: 0, y: 0 });
-    const junction = state.addNode({ type: 'ellipse', x: 0, y: 0 });
     const actor = state.addNode({ type: 'actor', x: 0, y: 0 });
     const note = state.addNode({ type: 'note', x: 0, y: 0 });
-    for (const node of [database, junction, actor, note]) {
+    for (const node of [database, actor, note]) {
       expect(primaryIds(node)).toEqual([]);
     }
+  });
+
+  it('a Junction offers a link to start, and the way to where it continues once it has one', () => {
+    const state = useEditorStore.getState();
+    const junction = state.addNode({ type: 'ellipse', x: 0, y: 0 });
+    expect(primaryIds(junction)).toEqual(['junction-add-counterpart']);
+    const counterpart = state.addJunctionCounterpart(junction.id, { x: 900, y: 400 });
+    expect(counterpart).not.toBeNull();
+    expect(primaryIds(junction)).toEqual(['junction-follow', 'junction-add-counterpart']);
+    // Reading a shared diagram: following is the only thing left, and it changes nothing.
+    const shared = stubContext({ ui: { ...useUiStore.getState(), readOnly: { sharedTitle: 'Shared' } } });
+    const linked = useEditorStore.getState().document.nodes.find((n) => n.id === junction.id)!;
+    expect(primaryCommandsFor(shared, linked).map((command) => command.id)).toEqual(['junction-follow']);
+    expect(isReadSafe({ id: 'junction-follow' })).toBe(true);
+    expect(isReadSafe({ id: 'junction-add-counterpart' })).toBe(false);
   });
 });
 

@@ -9,6 +9,7 @@ import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import type { Command, CommandContext } from './types';
 import { fitPadding } from '../lib/fitPadding';
+import { motionMs } from '../lib/motion';
 import { count } from '../lib/plural';
 // A static import although that module imports this one: the cycle is safe (neither runs the
 // other at load), and the old dynamic import was ineffective — the registry and the editor already
@@ -123,7 +124,7 @@ export function focusBoundsInView(camera: Pick<CommandContext['camera'], 'viewWi
   const { viewWidth, viewHeight } = camera;
   if (viewWidth <= 0 || viewHeight <= 0) return;
   const viewport = getViewportForBounds(bounds, viewWidth, viewHeight, 0.1, JUMP_MAX_ZOOM, JUMP_PADDING);
-  void camera.setViewport(viewport, { duration: 320 });
+  void camera.setViewport(viewport, { duration: motionMs(320) });
 }
 
 /**
@@ -193,6 +194,9 @@ function roomJumpCommands(document: DraftDocument, elsewhere: Elsewhere | null):
   for (const node of document.nodes) {
     const name = names.get(node.id)!;
     if (!name.trim()) continue;
+    // A linked Junction is listed by `commands/junctions.ts`, with where it is and what it leads
+    // to, and is travelled to the way following one is.
+    if (node.type === 'ellipse' && node.link) continue;
     commands.push({
       id: `jump-node:${node.id}`,
       title: name,

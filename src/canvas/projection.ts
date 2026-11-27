@@ -119,8 +119,8 @@ export function projectEdges(
   const projected = displayEdges.map((edge) => {
     const selected = options.selectedEdges.has(edge.id);
     const existing = before.get(edge.id);
-    const sourceHandle = handleIdForAnchor(edge.sourceAnchor);
-    const targetHandle = handleIdForAnchor(edge.targetAnchor);
+    const sourceHandle = handleIdForAnchor(edge.sourceAnchor, lookup(edge.source)?.type);
+    const targetHandle = handleIdForAnchor(edge.targetAnchor, lookup(edge.target)?.type);
     const zIndex = edge.sourceAnchor?.participantId || edge.targetAnchor?.participantId
       ? Math.max(lookup(edge.source)?.z ?? 0, lookup(edge.target)?.z ?? 0) + 1
       : undefined;

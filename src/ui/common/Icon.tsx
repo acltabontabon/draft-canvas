@@ -13,6 +13,9 @@ const PATHS = {
   up: 'M5 15l7-7 7 7',
   down: 'M19 9l-7 7-7-7',
   undo: 'M9 14L4 9l5-5 M4 9h11a5 5 0 0 1 0 10h-4',
+  // A clock turning back: Canvas Evolution's timeline. Not `undo`, which is this session's steps.
+  timeline: 'M3.5 12a8.5 8.5 0 1 0 2.5-6 M3.5 4.5V9H8 M12 7.5V12l3 2',
+  branch: 'M6 4v16 M6 14a6 6 0 0 0 6-6V7 M12 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M6 20a2 2 0 1 0 0-4',
   redo: 'M15 14l5-5-5-5 M20 9H9a5 5 0 0 0 0 10h4',
   present: 'M4 5h16v10H4z M9 20l3-5 3 5',
   export: 'M12 4v11 M8 11l4 4 4-4 M4 19h16',

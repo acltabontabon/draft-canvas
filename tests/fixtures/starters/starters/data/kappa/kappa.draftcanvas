@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 31,
+  "version": 34,
   "metadata": {
     "id": "starter-kappa",
     "title": "Kappa",
@@ -12,9 +12,9 @@
       "id": "fraud",
       "type": "group",
       "x": 378,
-      "y": -14,
-      "width": 1342,
-      "height": 740,
+      "y": -31,
+      "width": 1384,
+      "height": 757,
       "z": -2,
       "text": "Fraud Platform",
       "textOrigin": "explicit",
@@ -51,24 +51,24 @@
     {
       "id": "gateway",
       "type": "service",
-      "x": 12,
-      "y": 346,
-      "width": 176,
-      "height": 103,
+      "x": -100,
+      "y": 355,
+      "width": 240,
+      "height": 142,
       "z": 0,
       "text": "Card Gateway",
       "description": "Authorizes card payments for merchants.",
       "technology": "Go",
       "textOrigin": "explicit",
-      "serviceKind": "api"
+      "serviceKind": "gateway"
     },
     {
       "id": "network",
       "type": "service",
-      "x": -20,
-      "y": 504,
-      "width": 240,
-      "height": 126,
+      "x": -68,
+      "y": 518,
+      "width": 176,
+      "height": 99,
       "z": 0,
       "text": "Card Network",
       "description": "Sends chargebacks filed by cardholders.",
@@ -79,9 +79,9 @@
       "id": "log",
       "type": "queue",
       "x": 410,
-      "y": 385,
+      "y": 378,
       "width": 140,
-      "height": 120,
+      "height": 134,
       "z": 0,
       "parentId": "fraud",
       "text": "card-events",
@@ -104,9 +104,9 @@
       "id": "live",
       "type": "service",
       "x": 730,
-      "y": 237,
+      "y": 229,
       "width": 260,
-      "height": 126,
+      "height": 142,
       "z": 0,
       "parentId": "lane-live",
       "text": "Fraud Scoring v7",
@@ -150,7 +150,7 @@
             "x": 465,
             "y": 8,
             "width": 152,
-            "height": 80,
+            "height": 95,
             "z": 0,
             "text": "Key by Card",
             "description": "Sends every event for one card to one task.",
@@ -163,7 +163,7 @@
             "x": 708,
             "y": 8,
             "width": 152,
-            "height": 80,
+            "height": 114,
             "z": 0,
             "text": "Velocity Windows",
             "description": "Counts auths and spend per card over 5 minutes.",
@@ -324,9 +324,9 @@
       "id": "replay",
       "type": "service",
       "x": 730,
-      "y": 527,
+      "y": 519,
       "width": 260,
-      "height": 126,
+      "height": 142,
       "z": 0,
       "parentId": "lane-replay",
       "text": "Fraud Scoring v8",
@@ -349,9 +349,9 @@
       "id": "dlq",
       "type": "queue",
       "x": 790,
-      "y": 38,
+      "y": 21,
       "width": 140,
-      "height": 104,
+      "height": 139,
       "z": 0,
       "parentId": "fraud",
       "text": "card-events-dlq",
@@ -404,10 +404,10 @@
     {
       "id": "api",
       "type": "service",
-      "x": 1512,
-      "y": 394,
-      "width": 176,
-      "height": 103,
+      "x": 1470,
+      "y": 374,
+      "width": 260,
+      "height": 142,
       "z": 0,
       "parentId": "fraud",
       "text": "Risk API",
@@ -417,10 +417,35 @@
       "serviceKind": "api"
     },
     {
+      "id": "j.score.out",
+      "type": "ellipse",
+      "x": 2,
+      "y": 252,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "score"
+    },
+    {
+      "id": "j.score.in",
+      "type": "ellipse",
+      "x": 1582,
+      "y": 282,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "fraud",
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "score"
+    },
+    {
       "id": "title",
       "type": "text",
-      "x": -20,
-      "y": -180,
+      "x": -100,
+      "y": -197,
       "width": 1200,
       "height": 110,
       "z": 0,
@@ -439,6 +464,10 @@
       "routing": "smoothstep",
       "semantic": "publishes",
       "kind": "event",
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.3
+      },
       "semanticsOrigin": "explicit"
     },
     {
@@ -450,6 +479,20 @@
       "routing": "smoothstep",
       "semantic": "publishes",
       "kind": "event",
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.85
+      },
+      "waypoints": [
+        {
+          "x": 250,
+          "y": 567
+        },
+        {
+          "x": 250,
+          "y": 405.2
+        }
+      ],
       "semanticsOrigin": "explicit"
     },
     {
@@ -548,23 +591,17 @@
     {
       "id": "score",
       "source": "gateway",
-      "target": "api",
+      "target": "j.score.out",
       "label": "GET /risk/{card}",
       "directed": true,
-      "routing": "smoothstep",
-      "semantic": "http",
-      "portal": true,
-      "response": "0.82",
-      "hasResponse": true,
-      "sourceAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
+      "routing": "smoothstep"
+    },
+    {
+      "id": "score.in",
+      "source": "j.score.in",
+      "target": "api",
+      "directed": true,
+      "routing": "smoothstep"
     }
   ],
   "viewport": {
@@ -574,13 +611,7 @@
   },
   "settings": {
     "showSequence": true,
-    "grid": "dots",
-    "background": {
-      "enabled": false,
-      "fit": "cover",
-      "dim": 0.55,
-      "blur": 0
-    }
+    "grid": "dots"
   },
   "flows": [
     {
@@ -594,21 +625,26 @@
         },
         {
           "id": "score-payment.s2",
+          "edgeId": "score.in",
+          "caption": "The Risk API answers from the live view."
+        },
+        {
+          "id": "score-payment.s3",
           "edgeId": "serve",
           "caption": "The Risk API reads the card's latest score from risk_v7."
         },
         {
-          "id": "score-payment.s3",
+          "id": "score-payment.s4",
           "edgeId": "publish",
           "caption": "The authorization is appended to the log, whatever the decision."
         },
         {
-          "id": "score-payment.s4",
+          "id": "score-payment.s5",
           "edgeId": "consume-live",
           "caption": "The live job reads it within a second, in order per card."
         },
         {
-          "id": "score-payment.s5",
+          "id": "score-payment.s6",
           "edgeId": "write-live",
           "caption": "The card's new score replaces the old one in the view."
         }

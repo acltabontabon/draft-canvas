@@ -80,7 +80,8 @@ describe('MCP tool definitions', () => {
     expect(Buffer.byteLength(JSON.stringify(PLANNING_ENTRY_TOOLS))).toBeLessThanOrEqual(1_200);
     // The checked-in file is indented; tools/list serializes compact JSON for clients.
     // Includes what `set` takes for each kind of target, once, on update_diagram.
-    expect(Buffer.byteLength(JSON.stringify(TOOLS))).toBeLessThanOrEqual(16_500);
+    // 16,500 until diagram_history (Canvas Evolution, about 740 bytes): the catalog was already at 16,496.
+    expect(Buffer.byteLength(JSON.stringify(TOOLS))).toBeLessThanOrEqual(17_300);
   });
 
   it('keep the companion’s own tools apart from the published ones', () => {
@@ -107,6 +108,7 @@ describe('MCP tool definitions', () => {
       'submit_proposal',
       'get_proposal',
       'list_proposals',
+      'diagram_history',
     ]);
     for (const tool of TOOLS) {
       expect(tool.inputSchema.type).toBe('object');

@@ -87,6 +87,7 @@ const TOOLS: &[&str] = &[
     "submit_proposal",
     "get_proposal",
     "list_proposals",
+    "diagram_history",
     "read_conversation",
     "ask_to_read_code",
     "list_code",
@@ -201,6 +202,7 @@ pub async fn call(agent: &Agent, tool: &str, args: Value, calls: &CallRegistry) 
         "read_attachment" => read_attachment(agent, &app, &projects, &args, calls).await,
         "read_diagram" => read(agent, &app, &projects, &args, calls).await,
         "read_selection" => read_selection(agent, &app, &projects, &args, calls).await,
+        "diagram_history" => diagram_history(agent, &app, &projects, &args, calls).await,
         "get_implementation_context" => {
             implementation_context(agent, &app, &projects, &args, calls).await
         }
@@ -854,6 +856,24 @@ async fn read_selection(
     let diagram = locate(agent, projects, &id)?;
     let context = diagram_context(agent, &diagram, false)?;
     to_page(agent, app, "read_selection", args, context, calls).await
+}
+
+// ─── diagram_history ───────────────────────────────────────────────────────────────────────────
+
+/// History is kept by the page that has the diagram open (its history service): like
+/// `read_selection`, only the open diagram answers, and the page refuses (`NOT_ACTIVE`) otherwise.
+/// Read-only by construction: every action is a read or a preview; naming a milestone only asks.
+async fn diagram_history(
+    agent: &Agent,
+    app: &AppHandle,
+    projects: &[Project],
+    args: &Value,
+    calls: &CallRegistry,
+) -> ToolResult {
+    let id = diagram_id(args)?;
+    let diagram = locate(agent, projects, &id)?;
+    let context = diagram_context(agent, &diagram, false)?;
+    to_page(agent, app, "diagram_history", args, context, calls).await
 }
 
 // ─── get_implementation_context ────────────────────────────────────────────────────────────────

@@ -1317,6 +1317,8 @@ test('Settings moves between pages by keyboard, shows one agent setup at a time,
   await page.keyboard.press('ArrowDown');
   await expect(settings.getByRole('tab', { name: 'Canvas' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
+  await expect(settings.getByRole('tab', { name: 'History' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
   const agents = settings.getByRole('tab', { name: 'AI agents' });
   await expect(agents).toBeFocused();
   await expect(agents).toHaveAttribute('aria-selected', 'true');
@@ -1352,7 +1354,20 @@ test('Settings moves between pages by keyboard, shows one agent setup at a time,
   const toml = settings.getByText(/\[mcp_servers\.draft-canvas\]/);
   await expect(toml).toBeHidden();
   await settings.getByRole('button', { name: 'Add to Codex' }).click();
-  await expect(settings.getByRole('status').filter({ hasText: 'Set up in ~/.codex/config.toml. Start a new Codex chat to use it.' })).toBeVisible();
+  await expect(settings.getByRole('status').filter({ hasText: 'Set up in ~/.codex/config.toml.' })).toBeVisible();
+  // The same three steps for every agent. The first is ticked off, the agent is marked in the picker, and the
+  // last says what "set up" can't: whether an agent has actually got through.
+  const steps = settings.getByRole('list', { name: 'Steps to connect Codex' }).getByRole('listitem');
+  await expect(steps).toHaveCount(3);
+  await expect(steps.nth(0).getByRole('heading', { name: 'Connect Codex (done)' })).toBeVisible();
+  await expect(settings.getByRole('radio', { name: 'Codex, set up' })).toBeChecked();
+  await expect(steps.nth(2).getByText('Start a new Codex chat, then ask it to list your Draft Canvas diagrams.')).toBeVisible();
+  await expect(steps.nth(2).getByRole('status')).toHaveText('No agent connected yet.');
+  await page.evaluate(() => window.__shell.setAgent({ connections: 1 }));
+  await expect(steps.nth(2).getByRole('status')).toHaveText('1 agent connected.');
+  await expect(steps.nth(2).getByRole('heading', { name: 'Try it (done)' })).toBeVisible();
+  await page.evaluate(() => window.__shell.setAgent({ connections: 0 }));
+  await expect(steps.nth(2).getByRole('heading', { name: 'Try it', exact: true })).toBeVisible();
   await expect(settings.getByRole('button', { name: 'Add to Codex' })).toHaveCount(0);
   const connects = await page.evaluate(() => window.__shell.calls().filter((call) => call.command === 'agent_connect_client').map((call) => call.args));
   expect(connects).toEqual([{ client: 'codex' }]);
@@ -1362,12 +1377,26 @@ test('Settings moves between pages by keyboard, shows one agent setup at a time,
   await settings.getByRole('radio', { name: 'Gemini CLI' }).check({ force: true });
   await expect(settings.getByText(/^gemini mcp add --scope user draft-canvas/)).toBeHidden();
   await settings.getByRole('button', { name: 'Add to Gemini CLI' }).click();
-  await expect(settings.getByRole('status').filter({ hasText: 'Set up in ~/.gemini/settings.json. Start a new Gemini CLI session in a trusted folder to use it.' })).toBeVisible();
+  await expect(settings.getByRole('status').filter({ hasText: 'Set up in ~/.gemini/settings.json.' })).toBeVisible();
+  await expect(settings.getByText('Start a new Gemini CLI session in a trusted folder, then ask it to list your Draft Canvas diagrams.')).toBeVisible();
   await settings.getByRole('radio', { name: 'Junie' }).check({ force: true });
   await settings.getByRole('button', { name: 'Add to Junie' }).click();
-  await expect(settings.getByRole('status').filter({ hasText: 'Set up in ~/.junie/mcp/mcp.json. Start a new Junie session to use it.' })).toBeVisible();
+  await expect(settings.getByRole('status').filter({ hasText: 'Set up in ~/.junie/mcp/mcp.json.' })).toBeVisible();
+  // OpenCode's file is written by the shell too. "Set up" is all that claims: the last step asks for a first
+  // request, and OpenCode's own check is a click away, before the file is written and after.
+  await settings.getByRole('radio', { name: 'OpenCode' }).check({ force: true });
+  const check = settings.getByRole('button', { name: 'Check from a terminal instead' });
+  await expect(check).toHaveAttribute('aria-expanded', 'false');
+  await settings.getByRole('button', { name: 'Add to OpenCode' }).click();
+  await expect(settings.getByRole('status').filter({ hasText: 'Set up in ~/.config/opencode/opencode.json.' })).toBeVisible();
+  await expect(settings.getByText('Restart OpenCode, then ask it to list your Draft Canvas diagrams.')).toBeVisible();
+  await check.click();
+  await expect(settings.getByText('opencode mcp list', { exact: true })).toBeVisible();
+  // Junie has no command that reports a connection, so it isn't offered one.
+  await settings.getByRole('radio', { name: 'Junie' }).check({ force: true });
+  await expect(settings.getByRole('button', { name: 'Check from a terminal instead' })).toHaveCount(0);
   const allConnects = await page.evaluate(() => window.__shell.calls().filter((call) => call.command === 'agent_connect_client').map((call) => call.args));
-  expect(allConnects).toEqual([{ client: 'codex' }, { client: 'gemini' }, { client: 'junie' }]);
+  expect(allConnects).toEqual([{ client: 'codex' }, { client: 'gemini' }, { client: 'junie' }, { client: 'opencode' }]);
   await settings.getByRole('radio', { name: 'Cursor' }).check({ force: true });
   await expect(command).toHaveCount(0);
   await expect(settings.getByRole('link', { name: 'Add to Cursor' })).toHaveAttribute('href', /^cursor:\/\/anysphere\.cursor-deeplink\/mcp\/install/);
@@ -1434,15 +1463,17 @@ test('Settings installs the agent skill where the chosen agent reads skills, and
   await expect(settings.getByRole('status').filter({ hasText: 'Skill installed in ~/.claude/skills/draft-canvas.' })).toBeVisible();
   expect(await installs()).toEqual([{ target: 'claude-code' }]);
 
-  // Codex, Cursor, Gemini CLI and Junie share ~/.agents/skills: installed from one, it shows as installed in the others.
+  // Codex, Cursor, Gemini CLI, Junie and OpenCode share ~/.agents/skills: installed from one, it shows as installed in the others.
   await settings.getByRole('radio', { name: 'Codex' }).check({ force: true });
-  await expect(settings.getByText(/Teaches Codex, Cursor, Gemini CLI and Junie to draw a repository well/)).toBeVisible();
+  await expect(settings.getByText(/Teaches Codex, Cursor, Gemini CLI, Junie and OpenCode to draw a repository well/)).toBeVisible();
   await settings.getByRole('button', { name: 'Install skill' }).click();
   await expect(settings.getByRole('status').filter({ hasText: 'Skill installed in ~/.agents/skills/draft-canvas.' })).toBeVisible();
   expect(await installs()).toEqual([{ target: 'claude-code' }, { target: 'agents' }]);
   await settings.getByRole('radio', { name: 'Gemini CLI' }).check({ force: true });
   await expect(settings.getByRole('status').filter({ hasText: 'Skill installed in ~/.agents/skills/draft-canvas.' })).toBeVisible();
   await settings.getByRole('radio', { name: 'Junie' }).check({ force: true });
+  await expect(settings.getByRole('status').filter({ hasText: 'Skill installed in ~/.agents/skills/draft-canvas.' })).toBeVisible();
+  await settings.getByRole('radio', { name: 'OpenCode' }).check({ force: true });
   await expect(settings.getByRole('status').filter({ hasText: 'Skill installed in ~/.agents/skills/draft-canvas.' })).toBeVisible();
   await settings.getByRole('radio', { name: 'Cursor' }).check({ force: true });
   await expect(settings.getByRole('status').filter({ hasText: 'Skill installed in ~/.agents/skills/draft-canvas.' })).toBeVisible();

@@ -9,7 +9,7 @@ import {
   type EdgeRouting,
   type Side,
 } from '../document/types';
-import { anchorBandOf, type AnchorBand } from '../document/queueGeometry';
+import { anchorBandOf, anchorOnShape, bandReach, bandSpan, middlePointsOnly, type AnchorBand } from '../document/queueGeometry';
 import { centerOf, clamp } from '../lib/math';
 import { longestRunMidpoint, orthogonalThrough, polylineMidpoint, polylinePath, responseWaypoints, smoothPath, stepPolyline } from './waypoints';
 import { edgeLabelSize, LABEL_PADDING_X, LABEL_PADDING_Y } from './labelLayout';
@@ -68,15 +68,25 @@ export function rectOf(node: DraftNode): Rect {
 
 /** The vertical run a left/right anchor is distributed over — the band when the rect has one. */
 function verticalSpan(rect: Rect): { start: number; length: number } {
-  return rect.anchorBand
-    ? { start: rect.anchorBand.top, length: rect.anchorBand.bottom - rect.anchorBand.top }
-    : { start: rect.y, length: rect.height };
+  return bandSpan(rect, rect.anchorBand, 'left');
+}
+
+/** The horizontal run a top/bottom anchor is distributed over — a glyph's own width when it has one. */
+function horizontalSpan(rect: Rect): { start: number; length: number } {
+  return bandSpan(rect, rect.anchorBand, 'top');
+}
+
+/** Where along a top or bottom side `offset` falls: on its span, and never off what is drawn. */
+function acrossAt(rect: Rect, offset: number): number {
+  const span = horizontalSpan(rect);
+  const reach = bandReach(rect, rect.anchorBand);
+  return clamp(span.start + span.length * offset, reach.min, reach.max);
 }
 
 /** The stretch of a side its anchors are spread along: where it starts and how long it is, on the
  *  axis the side runs along (a tube's or a Data Store's band for its left and right). */
 export function sideSpan(rect: Rect, side: Side): { start: number; length: number } {
-  return side === 'left' || side === 'right' ? verticalSpan(rect) : { start: rect.x, length: rect.width };
+  return bandSpan(rect, rect.anchorBand, side);
 }
 
 /**
@@ -90,9 +100,9 @@ export function anchorPoint(rect: Rect, side: Side, offset = 0.5): { x: number; 
   const t = clamp(offset, 0, 1);
   switch (side) {
     case 'top':
-      return { x: rect.x + rect.width * t, y: rect.anchorBand?.glyphTop ?? rect.y };
+      return { x: acrossAt(rect, t), y: rect.anchorBand?.glyphTop ?? rect.y };
     case 'bottom':
-      return { x: rect.x + rect.width * t, y: rect.y + rect.height };
+      return { x: acrossAt(rect, t), y: rect.y + rect.height };
     case 'left': {
       const span = verticalSpan(rect);
       return { x: rect.anchorBand?.left ?? rect.x, y: span.start + span.length * t };
@@ -140,20 +150,22 @@ export function chooseSides(source: Rect, target: Rect): { source: Side; target:
  * distance-per-side comparison whether the point is within bounds or not.
  */
 export function anchorAt(rect: Rect, point: { x: number; y: number }): EdgeAnchor {
+  // Measured to where each side's anchors are, which for a shape drawn as a glyph is the glyph and
+  // not its box. Against the box, a drop on the middle of a glyph's left edge was nearer the box's
+  // top (the glyph stands at the top of it) than its left (the glyph is narrower than it), and the
+  // connector took the top's first point, up at the corner.
+  const band = rect.anchorBand;
   const distanceToSide: Record<Side, number> = {
-    top: point.y - rect.y,
-    right: rect.x + rect.width - point.x,
+    top: point.y - (band?.glyphTop ?? rect.y),
+    right: (band?.right ?? rect.x + rect.width) - point.x,
     bottom: rect.y + rect.height - point.y,
-    left: point.x - rect.x,
+    left: point.x - (band?.left ?? rect.x),
   };
   const side = SIDES.reduce((nearest, candidate) =>
     distanceToSide[candidate] < distanceToSide[nearest] ? candidate : nearest,
   );
-  const span = verticalSpan(rect);
-  const offset =
-    side === 'top' || side === 'bottom'
-      ? (point.x - rect.x) / rect.width
-      : (point.y - span.start) / span.length;
+  const span = sideSpan(rect, side);
+  const offset = side === 'top' || side === 'bottom' ? (point.x - span.start) / span.length : (point.y - span.start) / span.length;
   return { side, offset: clamp(offset, 0, 1) };
 }
 
@@ -178,9 +190,14 @@ const CENTER_DROP_TOLERANCE = 0.35;
  * would have chosen.
  */
 export function anchorForDrop(rect: Rect, point: { x: number; y: number }): EdgeAnchor | undefined {
-  const center = centerOf(rect);
-  const dx = Math.abs(point.x - center.x) / (rect.width / 2);
-  const dy = Math.abs(point.y - center.y) / (rect.height / 2);
+  // "Dead centre" of a glyph is the middle of the glyph, not of the box its name hangs in.
+  const band = rect.anchorBand;
+  const body = band?.left !== undefined && band.right !== undefined
+    ? { x: band.left, y: band.glyphTop ?? band.top, width: band.right - band.left, height: band.bottom - (band.glyphTop ?? band.top) }
+    : rect;
+  const center = centerOf(body);
+  const dx = Math.abs(point.x - center.x) / (body.width / 2);
+  const dy = Math.abs(point.y - center.y) / (body.height / 2);
   if (Math.max(dx, dy) <= CENTER_DROP_TOLERANCE) return undefined;
   return anchorAt(rect, point);
 }
@@ -220,7 +237,8 @@ export function anchorOnSide(rect: Rect, side: Side, point: { x: number; y: numb
     const span = verticalSpan(rect);
     return { side, offset: clamp(span.length ? (point.y - span.start) / span.length : 0.5, 0, 1) };
   }
-  return { side, offset: clamp(rect.width ? (point.x - rect.x) / rect.width : 0.5, 0, 1) };
+  const across = horizontalSpan(rect);
+  return { side, offset: clamp(across.length ? (point.x - across.start) / across.length : 0.5, 0, 1) };
 }
 
 export interface RoutedEdge {
@@ -387,7 +405,9 @@ const NEAR_LEVEL_INSET = 14;
  *  `NEAR_LEVEL`, or would push the endpoint out toward a corner of the shape. */
 function levelOnto(rect: Rect, side: Side, coordinate: number, current: number): number {
   if (Math.abs(coordinate - current) > NEAR_LEVEL) return current;
-  const span = isHorizontalSide(side) ? verticalSpan(rect) : { start: rect.x, length: rect.width };
+  // Along a top or bottom side an end may slide as far as what is drawn there reaches, and no further.
+  const reach = bandReach(rect, rect.anchorBand);
+  const span = isHorizontalSide(side) ? verticalSpan(rect) : { start: reach.min, length: reach.max - reach.min };
   const low = span.start + NEAR_LEVEL_INSET;
   const high = span.start + span.length - NEAR_LEVEL_INSET;
   if (low > high || coordinate < low || coordinate > high) return current;
@@ -853,7 +873,7 @@ const MIN_SPINE_BRANCH = 28;
  */
 function laneNudge(rect: Rect, side: Side, lane: number): { x: number; y: number } {
   if (!lane) return { x: 0, y: 0 };
-  const sideLength = isHorizontalSide(side) ? verticalSpan(rect).length : rect.width;
+  const sideLength = sideSpan(rect, side).length;
   const span = Math.sign(lane) * Math.min(Math.abs(lane) * LANE_SPACING, sideLength * 0.35);
   return isHorizontalSide(side) ? { x: 0, y: span } : { x: span, y: 0 };
 }
@@ -876,7 +896,8 @@ function clampToBoundary(
     const span = verticalSpan(rect);
     return { x: point.x, y: clamp(point.y, span.start, span.start + span.length) };
   }
-  return { x: clamp(point.x, rect.x, rect.x + rect.width), y: point.y };
+  const reach = bandReach(rect, rect.anchorBand);
+  return { x: clamp(point.x, reach.min, reach.max), y: point.y };
 }
 
 /**
@@ -2073,7 +2094,7 @@ const PIN_SPREAD = 0.375 * 0.25;
 
 /** A pinned end's nudge: its share of a shared point, kept within `PIN_SPREAD`, plus its reply step. */
 function pinNudge(rect: Rect, side: Side, lane: number, replyStep: number): { x: number; y: number } {
-  const sideLength = isHorizontalSide(side) ? verticalSpan(rect).length : rect.width;
+  const sideLength = sideSpan(rect, side).length;
   const limit = sideLength * PIN_SPREAD;
   const spread = laneNudge(rect, side, lane);
   const reply = laneNudge(rect, side, replyStep);
@@ -2084,7 +2105,7 @@ function pinNudge(rect: Rect, side: Side, lane: number, replyStep: number): { x:
 function endsFor(
   sourceRect: Rect,
   targetRect: Rect,
-  options: Pick<RouteOptions, 'anchors' | 'waypoints' | 'lane' | 'replyStep' | 'spread' | 'mode'> | undefined,
+  options: Pick<RouteOptions, 'anchors' | 'waypoints' | 'lane' | 'replyStep' | 'spread' | 'mode' | 'avoid' | 'spine'> | undefined,
 ): ConnectorEnds {
   const anchors = options?.anchors;
   const waypoints = options?.waypoints?.length ? options.waypoints : undefined;
@@ -2135,8 +2156,69 @@ function endsFor(
       if (from.x !== to.x && !sourcePinned && !sourcePlaced) from.x = levelOnto(sourceRect, sourceSide, to.x, from.x);
       alignFacingEnds(from, to, sourceRect, targetRect, sourceSide, targetSide, sourcePinned || sourcePlaced, targetPinned || targetPlaced);
     }
+    if (replyStep && options?.avoid && !options.spine) keepReplyApart(from, to, sourceRect, targetRect, sourceSide, targetSide, options.avoid, replyStep);
   }
   return { from, to, sourceSide, targetSide };
+}
+
+/** Closer than this along a side, a reply's end reads as its request's: one line, both arrowheads. */
+const REPLY_APART = 8;
+
+/**
+ * Keeps a reply's ends off the points its request holds. A reply is stepped out from its request
+ * and then clamped to the side, and straightened within what the two sides share: on a short side
+ * (a glyph's is 54px) with the request already at the end of it, both of those bring the reply back
+ * to the request's own point, and the pair was drawn as one line with an arrowhead at each end.
+ * When that happens the reply takes the step on whichever side of the request has room for it, at
+ * both ends together so the two lines still never cross: the same way at both ends of a line between
+ * facing sides, and round the same side of the corner when the line turns one.
+ */
+function keepReplyApart(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  source: Rect,
+  target: Rect,
+  sourceSide: Side,
+  targetSide: Side,
+  request: readonly { x: number; y: number }[],
+  replyStep: number,
+): void {
+  const first = request[0];
+  const last = request[request.length - 1];
+  if (!first || !last) return;
+  // The reply leaves where its request arrived, and arrives where it left.
+  const ends = [
+    { point: from, rect: source, side: sourceSide, held: last },
+    { point: to, rect: target, side: targetSide, held: first },
+  ].map((end) => {
+    const axis = isHorizontalSide(end.side) ? ('y' as const) : ('x' as const);
+    const cross = axis === 'y' ? ('x' as const) : ('y' as const);
+    const reach = bandReach(end.rect, end.rect.anchorBand);
+    const span = axis === 'y' ? verticalSpan(end.rect) : { start: reach.min, length: reach.max - reach.min };
+    const same = Math.abs(end.point[cross] - end.held[cross]) < REPLY_APART;
+    return { ...end, axis, low: span.start, high: span.start + span.length, same, hidden: same && Math.abs(end.point[axis] - end.held[axis]) < REPLY_APART };
+  });
+  if (!ends.some((end) => end.hidden) || !ends.every((end) => end.same)) return;
+  const step = Math.abs(replyStep) * LANE_SPACING;
+  // Round a corner, the reply stays outside the request's bend or inside it at both ends: which way
+  // that is along the second side depends on which way the line turns.
+  const [a, b] = ends as [(typeof ends)[number], (typeof ends)[number]];
+  const turn = a.axis === b.axis ? 1 : a.axis === 'x' ? Math.sign((b.held.x - a.held.x) * (a.held.y - b.held.y)) || 1 : Math.sign((a.held.x - b.held.x) * (b.held.y - a.held.y)) || 1;
+  const sense = (end: (typeof ends)[number]) => (end === b ? turn : 1);
+  const fits = (sign: number) => ends.every((end) => end.held[end.axis] + sign * sense(end) * step >= end.low - 0.5 && end.held[end.axis] + sign * sense(end) * step <= end.high + 0.5);
+  const out = Math.sign(replyStep) || 1;
+  const sign = fits(out) ? out : fits(-out) ? -out : 0;
+  if (sign) {
+    for (const end of ends) end.point[end.axis] = clamp(end.held[end.axis] + sign * sense(end) * step, end.low, end.high);
+    return;
+  }
+  // No room for a whole step on either side at both ends: each hidden end goes as far from the
+  // request as its own side lets it.
+  for (const end of ends) {
+    if (!end.hidden) continue;
+    const at = end.held[end.axis];
+    end.point[end.axis] = at - end.low > end.high - at ? Math.max(end.low, at - step) : Math.min(end.high, at + step);
+  }
 }
 
 /**
@@ -2525,6 +2607,13 @@ export const HANDLE_ANCHORS: readonly HandleAnchor[] = OFFSET_INDEX_ORDER.flatMa
   })),
 );
 
+/** The connection points a shape of `type` renders: all twelve, or a Junction's four midpoints
+ *  (`middlePointsOnly`). `handleIdForAnchor` names only these, so the two cannot disagree. */
+const MIDDLE_HANDLE_ANCHORS = HANDLE_ANCHORS.filter((anchor) => anchor.offset === 0.5);
+export function handleAnchorsOf(type: DraftNode['type'] | undefined): readonly HandleAnchor[] {
+  return middlePointsOnly(type) ? MIDDLE_HANDLE_ANCHORS : HANDLE_ANCHORS;
+}
+
 /** Decodes a `HANDLE_ANCHORS` id (e.g. `"top@1"`) back into the `EdgeAnchor` it represents. */
 export function parseAnchorId(value: unknown): EdgeAnchor | undefined {
   if (typeof value !== 'string') return undefined;
@@ -2538,8 +2627,11 @@ export function parseAnchorId(value: unknown): EdgeAnchor | undefined {
  *  snapping to the nearest of the three offsets a stored anchor doesn't land exactly on. `undefined`
  *  in, `undefined` out: an edge with no explicit anchor has no specific handle to point React Flow
  *  at either, and should keep resolving dynamically. */
-export function handleIdForAnchor(anchor: EdgeAnchor | undefined): string | undefined {
+export function handleIdForAnchor(anchor: EdgeAnchor | undefined, type?: DraftNode['type']): string | undefined {
   if (!anchor) return undefined;
+  // Only a handle the shape renders: a Junction end stored off its middle once named "left@2",
+  // which React Flow could not find (error 008), and the connector vanished.
+  if (type !== undefined) anchor = anchorOnShape(type, anchor);
   const index = ANCHOR_OFFSETS.reduce(
     (best, candidate, i) => (Math.abs(candidate - anchor.offset) < Math.abs(ANCHOR_OFFSETS[best]! - anchor.offset) ? i : best),
     0,
