@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { makeRoomBand, viewAcross } from '../src/canvas/makeRoomBand';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { LIMITS } from '../src/document/limits';
 import { makeRoom, roomToClose } from '../src/document/makeRoom';
@@ -72,5 +73,34 @@ describe('making room', () => {
     const doc = makeRoom(base, { axis: 'x', at: 300, delta: 60 });
     expect(doc.edges.find((e) => e.id === 'bc')!.waypoints).toEqual([{ x: 200, y: 150 }, { x: 760, y: 150 }]);
     expect(doc.edges.find((e) => e.id === 'ab')).toBe(base.edges.find((e) => e.id === 'ab'));
+  });
+});
+
+describe('the band a drag draws', () => {
+  const covers = (band: ReturnType<typeof makeRoomBand>, x: number, y: number) =>
+    x >= band.left && x <= band.left + band.width && y >= band.top && y <= band.top + band.height;
+
+  it('spans the room made along its axis, and closed room the same way', () => {
+    expect(makeRoomBand({ axis: 'x', at: 300, delta: 120 }, 0)).toMatchObject({ left: 300, width: 120 });
+    expect(makeRoomBand({ axis: 'x', at: 300, delta: -80 }, 0)).toMatchObject({ left: 220, width: 80 });
+    expect(makeRoomBand({ axis: 'y', at: 200, delta: 60 }, 0)).toMatchObject({ top: 200, height: 60 });
+  });
+
+  // Coordinates go to a million either way; the band ran 200,000 either side of the origin, so a
+  // diagram placed further out than that showed no band at all.
+  it('runs through where the view is, however far out the diagram is', () => {
+    const viewport = { width: 1600, height: 1000 };
+    // A view whose middle is at (900 000, 650 000), at half zoom.
+    const transform = [viewport.width / 2 - 900_000 * 0.5, viewport.height / 2 - 650_000 * 0.5, 0.5] as const;
+    const across = makeRoomBand({ axis: 'x', at: 900_000, delta: 40 }, viewAcross('x', transform, viewport.width, viewport.height));
+    expect(covers(across, 900_020, 650_000)).toBe(true);
+    const down = makeRoomBand({ axis: 'y', at: 650_000, delta: 40 }, viewAcross('y', transform, viewport.width, viewport.height));
+    expect(covers(down, 900_000, 650_020)).toBe(true);
+  });
+
+  it('holds still while the view does, and moves on only once the view has gone a long way', () => {
+    const at = (y: number) => viewAcross('x', [0, -y, 1], 1600, 1000);
+    expect(at(10_000)).toBe(at(10_400));
+    expect(at(10_000)).not.toBe(at(90_000));
   });
 });
