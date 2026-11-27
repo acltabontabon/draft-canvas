@@ -79,6 +79,7 @@ import {
   Reader,
   type LayoutSpec,
   type Lightable,
+  type RoomContext,
   type RoomSpec,
 } from './input';
 import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, flowFromSpec, lineOf, measureContext, noteNode, placeBlock, placeRoom, sizeToFit } from './place';
@@ -290,6 +291,9 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   const explicit = new Set<string>();
   const counts: PatchResult['counts'] = { added: 0, updated: 0, removed: 0 };
   const advisories: string[] = [];
+  // One request, one label per new group, whichever of its adds a junction comes in: read per add,
+  // a group split over two adds was made reading two ways, which one add is refused for.
+  const junctionLabels: NonNullable<RoomContext['junctionLabels']> = new Map();
 
   ops.forEach((raw, i) => {
     const at = `/ops/${i}`;
@@ -363,7 +367,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
         pairs: pairsOf(view.edges),
         flows: new Map(view.flows.map((f) => [f.id, f.variantOf])),
       };
-      const room = readRoom(r, op, at, { taken, depth: path.length, existing });
+      const room = readRoom(r, op, at, { taken, depth: path.length, existing, junctionLabels });
       const anchorable = new Set([...existing.elements, ...existing.relationships, ...room.nodes.map((n) => n.id), ...room.relationships.map((e) => e.id)]);
       const newPoints = readOpenPoints(r, op.openPoints, `${at}/openPoints`, taken, anchorable);
       // One flow per title: a second "Main flow" is almost always the first one asked for again.

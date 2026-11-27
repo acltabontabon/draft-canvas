@@ -206,7 +206,8 @@ the same `link`, and give both the same short label.
   [{id, view}]}]` for every group with a member on the page: where each is drawn, by view path.
   `query` finds junctions by their link as well as their label.
 - A group reads as one label, as it does for a person:
-  - Junctions sharing a `link` in one create or `add` need the same label (`INVALID_INPUT` otherwise).
+  - Junctions sharing a `link` in one create, or in the `add` ops of one update, need the same label
+    (`INVALID_INPUT` otherwise).
   - `set.label` on any junction of a group renames every member, in every view. The receipt says
     how many others changed, and a review or proposal lists each with its view.
   - A junction joining an existing group (`add` with `link`, or `set.link` alone) takes the

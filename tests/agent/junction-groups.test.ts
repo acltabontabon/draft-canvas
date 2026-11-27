@@ -82,6 +82,22 @@ describe('one request, one label per group', () => {
     );
     expect(error.code).toBe('INVALID_INPUT');
   });
+
+  it('refuses the same two labels split across two adds of one request', () => {
+    const error = refusal(() =>
+      applyUpdate(spread(), [], [
+        { op: 'add', nodes: [{ id: 'x1', type: 'junction', label: 'C', link: 'fresh' }] },
+        { op: 'add', nodes: [{ id: 'x2', type: 'junction', label: 'D', link: 'fresh' }] },
+      ], undefined),
+    );
+    expect(error.code).toBe('INVALID_INPUT');
+    expect(said(error)).toMatch(/junctions with link "fresh" are one point and read as one label: \/ops\/0\/nodes\/0 says "C", this one "D"/);
+    const same = applyUpdate(spread(), [], [
+      { op: 'add', nodes: [{ id: 'x1', type: 'junction', label: 'C', link: 'fresh' }] },
+      { op: 'add', nodes: [{ id: 'x2', type: 'junction', label: 'C', link: 'fresh' }] },
+    ], undefined);
+    expect(labels(same.file, 'fresh')).toEqual([['x1', 'C'], ['x2', 'C']]);
+  });
 });
 
 describe('a label set on one junction of a group', () => {
