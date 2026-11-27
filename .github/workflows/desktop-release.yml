@@ -292,7 +292,9 @@ jobs:
             echo "::notice::macOS build will be signed as $APPLE_SIGNING_IDENTITY."
           elif [[ "$RUNNER_OS" == "Windows" && -n "$WINDOWS_CERTIFICATE" ]]; then
             echo "$WINDOWS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/signing.pfx"
-            thumbprint="$(powershell -NoProfile -Command "(Import-PfxCertificate -FilePath '$RUNNER_TEMP\\signing.pfx' -CertStoreLocation Cert:\\CurrentUser\\My -Password (ConvertTo-SecureString -String '$WINDOWS_CERTIFICATE_PASSWORD' -AsPlainText -Force)).Thumbprint")"
+            # PowerShell reads the password from the environment itself: spliced into the command as
+            # '…', one with a quote in it ended the string and the import failed.
+            thumbprint="$(powershell -NoProfile -Command "(Import-PfxCertificate -FilePath '$RUNNER_TEMP\\signing.pfx' -CertStoreLocation Cert:\\CurrentUser\\My -Password (ConvertTo-SecureString -String \$env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force)).Thumbprint")"
             rm -f "$RUNNER_TEMP/signing.pfx"
             config="$(THUMB="$thumbprint" node -e 'console.log(JSON.stringify({ bundle: { windows: { certificateThumbprint: process.env.THUMB, digestAlgorithm: "sha256", timestampUrl: "http://timestamp.digicert.com" } } }))')"
             echo "::notice::Windows build will be signed with certificate $thumbprint."
