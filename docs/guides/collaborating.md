@@ -64,7 +64,9 @@ there later.
 
 - **Edits** reach everyone when committed. Changes from others wait while you drag or resize.
 - **Undo** takes back only your own edits. If someone changed or built on the same thing since,
-  their work stays and Draft Canvas says why.
+  their work stays and Draft Canvas says why. An undo that, with what others have added since,
+  would take the diagram past its [size limits](../reference/schema.md#limits) is refused until
+  there is room.
 - **People column** (top right): everyone in the session, each in a colour. Hover a face to see where
   they are; **Find** takes you there.
 - **Pointers and selections** show for people inside the same shape (level) as you.
