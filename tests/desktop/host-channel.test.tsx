@@ -184,6 +184,17 @@ describe('the desktop channel', () => {
     await waitFor(() => expect(messages('draft-canvas:closed')).toHaveLength(1));
   });
 
+  it('says which load was on screen when it closes, so the shell can tell an old close from a new one', async () => {
+    mount();
+    const file = createDocument('Payments');
+    host.link.deliver({ type: 'draft-canvas:load', text: serializeDocument(file), seq: 3 });
+    await waitFor(() => expect(sessionOf().openId).toBe(file.metadata.id));
+
+    host.link.deliver({ type: 'draft-canvas:command', command: 'close' });
+
+    await waitFor(() => expect(messages('draft-canvas:closed')).toEqual([{ type: 'draft-canvas:closed', seq: 3 }]));
+  });
+
   it('says that Home is showing when the app closes the document itself', async () => {
     mount();
     const file = createDocument('Payments');

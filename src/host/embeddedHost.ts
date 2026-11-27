@@ -11,8 +11,9 @@ export type ToHostMessage =
   | { type: 'draft-canvas:save'; saveAs: boolean }
   /** A link the host opens in the system browser. */
   | { type: 'draft-canvas:open-external'; url: string }
-  /** The open document was closed — Home is showing. */
-  | { type: 'draft-canvas:closed' }
+  /** The open document was closed — Home is showing. `seq`: the load that was on screen, so the host
+   *  can tell a close of contents it has since replaced from a close of what it has open now. */
+  | { type: 'draft-canvas:closed'; seq?: number }
   /** The answer to a `flush` command, once the app has posted every edit still pending. */
   | { type: 'draft-canvas:flushed'; id: number }
   /** The answer to an `agent` command (see `host/agentBridge.ts`). */

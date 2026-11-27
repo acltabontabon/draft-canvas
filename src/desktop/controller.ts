@@ -669,6 +669,10 @@ export class DesktopController {
         this.agentReplies.get(message.id)?.(message.reply);
         return;
       case 'draft-canvas:closed':
+        // A close of a load this has since replaced is not about what is open now. Heard anyway, the
+        // close Back made, drawn slowly, emptied the session under the Quick Draft ⌘N had opened since:
+        // its edits were dropped, ⌘S and Back did nothing, and quitting lost it without a word.
+        if (message.seq !== undefined && message.seq !== this.seq) return;
         this.onClosed();
         return;
       default:

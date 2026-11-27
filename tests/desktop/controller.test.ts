@@ -840,6 +840,21 @@ describe('going back to Home', () => {
     h.link.onMessage({ type: 'draft-canvas:closed' });
     expect(doc()).toEqual({ kind: 'none' });
   });
+
+  it('hears a close of the load on screen, not of one it has since replaced', async () => {
+    await openFile();
+    await h.controller.newQuickDraft();
+    await h.settle();
+
+    // Back's close of `payments` (load 1), drawn slowly, arriving after ⌘N sent the Quick Draft (load 2).
+    h.link.onMessage({ type: 'draft-canvas:closed', seq: 1 });
+    expect(doc()).toEqual({ kind: 'quick', dirty: false });
+    h.edit(edited('Quick Draft'), 2);
+    expect(doc()).toEqual({ kind: 'quick', dirty: true });
+
+    h.link.onMessage({ type: 'draft-canvas:closed', seq: 2 });
+    expect(doc()).toEqual({ kind: 'none' });
+  });
 });
 
 describe('quitting', () => {

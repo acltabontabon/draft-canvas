@@ -502,6 +502,8 @@ export function createHarness() {
     historyProjectPush: vi.fn(noHistory),
   } satisfies DesktopApi;
 
+  // The load the stand-in app last showed, which its `closed` names, as the app's does.
+  let shownSeq: number | undefined;
   const link: HostLink = {
     deliver: (message) => {
       delivered.push(message);
@@ -510,8 +512,10 @@ export function createHarness() {
       if (typed.type === 'draft-canvas:command' && typed.command === 'flush') {
         queueMicrotask(() => link.onMessage({ type: 'draft-canvas:flushed', id: typed.id! }));
       } else if (typed.type === 'draft-canvas:command' && typed.command === 'close') {
-        queueMicrotask(() => link.onMessage({ type: 'draft-canvas:closed' }));
+        const seq = shownSeq;
+        queueMicrotask(() => link.onMessage({ type: 'draft-canvas:closed', ...(seq !== undefined ? { seq } : {}) }));
       } else if (typed.type === 'draft-canvas:load') {
+        shownSeq = typed.seq;
         queueMicrotask(() => link.onOpened({ text: typed.text!, seq: typed.seq }));
       }
     },

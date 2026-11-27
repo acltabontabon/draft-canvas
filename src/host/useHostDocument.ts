@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createDocument } from '../document/factory';
 import { deserializeDocument, serializeDocument } from '../export/project';
 import { logDiagnostic } from '../lib/diagnostics';
@@ -46,14 +46,23 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
     sessionRef.current = session;
   });
 
+  // The `seq` of the load the canvas is showing, echoed on every change and on `closed` so the host
+  // can drop what was said about contents it has since replaced (see `LoadMessage.seq`).
+  const shownSeq = useRef<number | undefined>(undefined);
+
   // Only the desktop shell needs to hear that Home is showing again (its own Back button is one way
-  // there, an error screen another): it settles what it holds for the file that was open.
+  // there, an error screen another): it settles what it holds for the file that was open. Said in the
+  // commit that takes the canvas away, with the load it was showing. As a passive effect it ran a
+  // task or more after that commit on a big diagram, by when ⌘N's new Quick Draft could already be
+  // sent and shown: the shell took the draft for what was closed, and dropped every edit made to it.
   const openId = session.openId;
   const shownOpenId = useRef<string | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const was = shownOpenId.current;
     shownOpenId.current = openId;
-    if (host?.kind === 'desktop' && was && !openId) host.post({ type: 'draft-canvas:closed' });
+    if (host?.kind !== 'desktop' || !was || openId) return;
+    const seq = shownSeq.current;
+    host.post({ type: 'draft-canvas:closed', ...(seq !== undefined ? { seq } : {}) });
   }, [openId, host]);
 
   useEffect(() => {
@@ -64,9 +73,6 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
 
     // The text the host holds right now, so reopening or echoing it back never dirties the file.
     let hostText: string | null = null;
-    // The `seq` of the load the canvas is showing, echoed on every change so the host can drop an
-    // edit made to contents it has since replaced (see `LoadMessage.seq`).
-    let shownSeq: number | undefined;
     // The document on screen. A host that opens file after file (the desktop's Home) would otherwise
     // leave every earlier one in memory for as long as the app runs.
     let shownId: string | null = null;
@@ -93,7 +99,8 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
       const text = serializeDocument(fileWithLiveViewport(useEditorStore.getState()));
       if (text === hostText) return;
       hostText = text;
-      post({ type: 'draft-canvas:change', text, ...(shownSeq !== undefined ? { baseSeq: shownSeq } : {}) });
+      const baseSeq = shownSeq.current;
+      post({ type: 'draft-canvas:change', text, ...(baseSeq !== undefined ? { baseSeq } : {}) });
     };
 
     const sendChange = () => {
@@ -138,7 +145,7 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
       }
       opened = true;
       invalid = false;
-      shownSeq = seq;
+      shownSeq.current = seq;
       setState({ error: null, invalidWhileOpen: false });
       // Said out loud, as an import in the Library does: the file itself still holds the original,
       // and the first edit writes the repaired document over it.
@@ -196,7 +203,7 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
       // Only while a document is open: after Home has been showing, the same text is a file to open again.
       if (data.text === hostText && !queued && !invalid && sessionRef.current.openId !== null) {
         // Already showing it (the host re-sent what it got from here): only the numbering moves on.
-        shownSeq = seq;
+        shownSeq.current = seq;
         host.opened?.({ text: hostText, seq });
         return;
       }
