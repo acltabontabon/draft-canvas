@@ -62,9 +62,10 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Editor** — Opening another diagram puts down Make room, the Pencil and a Junction counterpart in
   hand, and closes Appearance.
 - **Keyboard** — Backspace or Delete on a toolbar or status bar button reached with Tab no longer
-  deletes the selected shapes. Finishing a shape's name, editing a connector's words on the canvas,
-  and closing a toolbar, the Outline or Open points put focus back on the canvas, and Escape closes
-  just the popover, flyout or panel it was pressed in.
+  deletes the selected shapes, and after clicking a toolbar button, shape keys such as S work again
+  in Chrome, Edge and the Windows app. Finishing a shape's name, editing a connector's words on the
+  canvas, and closing a toolbar, the Outline or Open points put focus back on the canvas, and
+  Escape closes just the popover, flyout or panel it was pressed in.
 - **Connectors and the keyboard** — Connectors are no longer separate, invisible Tab stops; the
   Outline reaches every connector. A shape or technology chosen with the keyboard, such as kafka,
   is put on the canvas ready to name.
@@ -90,7 +91,11 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   everything beyond a loop quiet, and a connector inside a loop can be taken down. The list of what
   each outage would do opens at once on large diagrams and keeps up while you edit. With one
   instance of a Service down, the note says the drawing doesn't show whether the rest can take all
-  the work. Keep as open point keeps a question once, and says so when the canvas holds 200.
+  the work. Keep as open point keeps a question once, and says so when the canvas holds 200. A
+  question's answers are offered only where the diagram takes edits, not in a read-only share,
+  history or a flow trace.
+- **Create rail** — The Shapes word reads clearly on light canvases and the Paper and Blueprint
+  palettes.
 - **Attachments** — On a glyph Service, a glyph Component or an Artifact, the attachment and
   open-point tabs sit at the corner.
 - **Depth** — Flying into or out of a room shows its latest sketches.
