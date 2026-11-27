@@ -326,14 +326,17 @@ export function checkQuality(
 }
 
 /**
- * What to say about problems only another view has, where no op of a request to this one reaches:
- * which view, and the request that arranges it. Undefined when a problem is in this view.
+ * What to say about problems only other views have, where no op of a request to this one reaches:
+ * each view, and the request that arranges it. Undefined when a problem is in this view.
  */
 export function elsewhereFix(issues: readonly QualityIssue[]): string | undefined {
-  const view = issues.every((issue) => issue.view) ? issues[0]?.view : undefined;
-  if (!view) return undefined;
-  const request = view.length ? `a request with view: {inside: ${JSON.stringify(view)}}` : 'a request to the top view (no view)';
-  return `That view isn't the one this request changes, so no op here can make room there: arrange it first with {op:"arrange"} in ${request}, or shorten the text that grew there, then send this change again.`;
+  if (!issues.length || !issues.every((issue) => issue.view)) return undefined;
+  // Every view a problem is in, once each: naming only the first left the agent arranging one view
+  // and refused again over the other.
+  const views = [...new Map(issues.map((issue) => [JSON.stringify(issue.view), issue.view!])).values()];
+  const requests = views.map((view) => (view.length ? `a request with view: {inside: ${JSON.stringify(view)}}` : 'a request to the top view (no view)'));
+  const one = views.length === 1;
+  return `${one ? "That view isn't" : "Those views aren't"} the one this request changes, so no op here can make room there: arrange ${one ? 'it' : 'each'} first with {op:"arrange"} in ${requests.join(', and ')}, or shorten the text that grew there, then send this change again.`;
 }
 
 /**

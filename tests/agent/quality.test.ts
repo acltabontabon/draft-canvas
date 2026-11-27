@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { compose } from '../../src/agent/compile';
 import { measureContext } from '../../src/agent/place';
-import { checkFit, checkQuality, isBetterCandidate, isBetterReport, isClean, isCleanCandidate, renderedBoundsOf, smallestFontPresent, type QualityReport } from '../../src/agent/quality';
+import { checkFit, checkQuality, elsewhereFix, isBetterCandidate, isBetterReport, isClean, isCleanCandidate, renderedBoundsOf, smallestFontPresent, type QualityReport } from '../../src/agent/quality';
 import { createNode } from '../../src/document/factory';
 import { describeContext } from '../../src/nodes/describe';
 import { LIGHT } from '../../src/render/theme/tokens';
@@ -189,5 +189,18 @@ describe('isBetterCandidate / isCleanCandidate', () => {
     const fewerErrorsBadFit = { report: report(1, 0), fit: checkFit({ width: 2000, height: 2000 }, 10, [200, 200]) };
     const moreErrorsGoodFit = { report: report(2, 0), fit: checkFit({ width: 100, height: 100 }, 10, [200, 200]) };
     expect(isBetterCandidate(fewerErrorsBadFit, moreErrorsGoodFit)).toBe(true);
+  });
+});
+
+describe('a problem a change made in another view', () => {
+  it('names every view it is in, each with the request that arranges it', () => {
+    const overlap = (view: string[]) => ({ kind: 'overlap' as const, ids: ['a', 'b'], message: 'a and b overlap.', view });
+    const said = elsewhereFix([overlap(['orders']), overlap(['orders']), overlap(['billing', 'ledger']), overlap([])]);
+    expect(said).toContain('view: {inside: ["orders"]}');
+    expect(said).toContain('view: {inside: ["billing","ledger"]}');
+    expect(said).toContain('the top view');
+    expect(said?.match(/"orders"/g)).toHaveLength(1);
+    // A problem in this view leaves the request's own fix to say.
+    expect(elsewhereFix([overlap(['orders']), { kind: 'overlap', ids: ['c', 'd'], message: 'c and d overlap.' }])).toBeUndefined();
   });
 });
