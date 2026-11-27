@@ -155,6 +155,27 @@ describe('drawing and erasing', () => {
     expect(useUiStore.getState().inkSelection).toEqual([]);
   });
 
+  /** A selection named by the edit itself, or put back by undo, skipped that rule: Delete then took the strokes too. */
+  it('a shape added, or a selection undo puts back, puts chosen strokes down as well', () => {
+    const a = draw(c.line({ x: 0, y: 200 }, { x: 300, y: 200 }, c.hand(1))[0]!);
+    useUiStore.getState().setInkSelection([a.id]);
+    const made = store.getState().addNode({ type: 'service', x: 0, y: 600 });
+    expect(useUiStore.getState().inkSelection).toEqual([]);
+    store.getState().deleteSelection();
+    expect(nodeIds()).not.toContain(made.id);
+    expect(strokes()).toBe(1);
+
+    store.getState().setSelection({ nodes: ['n_api'], edges: [] });
+    store.getState().nudgeSelection(10, 0);
+    store.getState().setSelection({ nodes: [], edges: [] });
+    useUiStore.getState().setInkSelection([a.id]);
+    store.getState().undo();
+    expect(store.getState().selection.nodes).toEqual(['n_api']);
+    expect(useUiStore.getState().inkSelection).toEqual([]);
+    store.getState().deleteSelection();
+    expect(strokes()).toBe(1);
+  });
+
   it('a stroke a collaborator erased is no longer chosen, and one they left still is', () => {
     const a = draw(c.line({ x: 0, y: 200 }, { x: 300, y: 200 }, c.hand(1))[0]!);
     const b = draw(c.line({ x: 0, y: 260 }, { x: 300, y: 260 }, c.hand(2))[0]!);

@@ -1068,6 +1068,25 @@ function linksInStep(before: DraftDocument, after: DraftDocument): DraftDocument
   return synced.shapes.reduce((doc, id) => growArchitectureToFit(doc, id), synced.doc);
 }
 
+/**
+ * One selection at a time: what is chosen beside the selection is put down when the selection no
+ * longer leaves room for it. `setSelection` and every place the store installs a selection itself
+ * (an edit that names one, undo and redo, a gesture given up) go through here. Those used to skip
+ * it, and the next Delete or arrow key acted on a message inside a sequence that was no longer
+ * selected, or erased chosen strokes along with the shape just added. Writes the UI store, so it is
+ * called outside updaters.
+ */
+function settleSubSelections(selection: Selection): void {
+  const ui = useUiStore.getState();
+  // What is selected inside a sequence belongs to a selection of that sequence alone.
+  const inside = ui.sequenceFocus;
+  if (inside && !(selection.nodes.length === 1 && selection.edges.length === 0 && selection.nodes[0] === inside.nodeId)) {
+    useUiStore.setState({ sequenceFocus: null, sequenceEdit: null });
+  }
+  // Choosing shapes or connectors puts any chosen sketch strokes down.
+  if (selection.nodes.length > 0 || selection.edges.length > 0) ui.setInkSelection([]);
+}
+
 /** After an edit, an undo or someone else's change: what was selected inside a sequence may be gone. */
 function closeStaleSequenceFocus(doc: DraftDocument): void {
   const ui = useUiStore.getState();
@@ -1571,6 +1590,7 @@ function restoreSnapshot(
     selection: restored.selection,
     ...(restored.flowSession ?? {}),
   }));
+  settleSubSelections(get().selection);
   closeStaleAttachmentDetail(get().document);
   pruneInkSelection(get().document);
 }
@@ -1681,6 +1701,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         revision: s.revision + 1,
         ...focusThatSurvives(next, s),
       }));
+      settleSubSelections(get().selection);
       return;
     }
 
@@ -1702,6 +1723,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ...focusThatSurvives(next, s),
       history: pushEntry(s.history, entry),
     }));
+    settleSubSelections(selectionAfter);
     closeStaleAttachmentDetail(next);
   },
 
@@ -1822,6 +1844,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Only in the room it began in; anywhere else the baseline is no longer ours to put back.
     if (get().document === active.document || !samePath(active.path, get().path)) return;
     set((s) => ({ document: active.document, selection: active.selection, revision: s.revision + 1 }));
+    settleSubSelections(active.selection);
     closeStaleAttachmentDetail(active.document);
   },
 
@@ -3856,15 +3879,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (quiet !== null && !(selection.nodes.length === 0 && selection.edges.length === 1 && selection.edges[0] === quiet)) {
       useUiStore.getState().setQuietEdge(null);
     }
+    settleSubSelections(selection);
     // A tap on empty canvas with nothing selected, or a click on what is already selected, writes
     // nothing: every subscriber would otherwise run for a selection that did not change.
-    // What is selected inside a sequence belongs to a selection of that sequence alone.
-    const inside = useUiStore.getState().sequenceFocus;
-    if (inside && !(selection.nodes.length === 1 && selection.edges.length === 0 && selection.nodes[0] === inside.nodeId)) {
-      useUiStore.setState({ sequenceFocus: null, sequenceEdit: null });
-    }
-    // Choosing shapes or connectors puts any chosen sketch strokes down: one selection at a time.
-    if (selection.nodes.length > 0 || selection.edges.length > 0) useUiStore.getState().setInkSelection([]);
     const current = get().selection;
     if (sameIdList(current.nodes, selection.nodes) && sameIdList(current.edges, selection.edges)) return;
     set({ selection });
