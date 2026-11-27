@@ -49,6 +49,11 @@ export interface GuestEnvironment {
   readFile(): DraftDocument;
   applyRemote(file: DraftDocument): boolean;
   isBusy(): boolean;
+  /**
+   * Whether the canvas on screen is this session's copy: not while `open` is still opening it, when
+   * `readFile` is whatever was there before — perhaps this person's own diagram. Always, if absent.
+   */
+  onCopy?(): boolean;
   /** The owner's file, the first time it arrives: opened in the editor with this person's access. */
   open(file: DraftDocument, access: Role): void;
   /** The owner changed what this person may do. */
@@ -253,7 +258,8 @@ export class GuestSession {
 
   /** This person edited the file. */
   localChanged(): void {
-    if (!this.replica || this.ended || this.access !== 'editor') return;
+    // Some other canvas on screen (this copy still opening) holds nothing of this session's to send.
+    if (!this.replica || this.ended || this.access !== 'editor' || this.env.onCopy?.() === false) return;
     // Mid-gesture, what is sent is only for watching: past its pace, this moment of it is skipped.
     if (this.env.isBusy() && this.waitLive()) return;
     if (this.liveTimer !== null) this.clock.clearTimeout(this.liveTimer);
@@ -462,7 +468,9 @@ export class GuestSession {
     const unconfirmed: Change[][] = [];
     if (this.replica && !resuming) {
       for (const patch of this.replica.pending) unconfirmed.push(patch.changes);
-      const unsent = diffFile(this.replica.local, this.env.readFile());
+      // Only what is on this session's copy: welcomed again while it was still opening, the canvas on
+      // screen was the one before it, and the difference would have gone to the owner as an edit.
+      const unsent = this.env.onCopy?.() === false ? [] : diffFile(this.replica.local, this.env.readFile());
       if (unsent.length > 0) unconfirmed.push(unsent);
     }
     this.selfId = message.peer;

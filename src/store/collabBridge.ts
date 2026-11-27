@@ -404,6 +404,7 @@ export function joinSession(transport: CollabTransport, options: JoinOptions): G
       readFile,
       applyRemote,
       isBusy,
+      onCopy: onSharedCanvas,
       appVersion: PRODUCT.version,
       name: options.name,
       open(file) {
