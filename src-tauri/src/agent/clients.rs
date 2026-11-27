@@ -496,6 +496,14 @@ pub(crate) fn run(mut command: Command, limit: Duration) -> std::io::Result<Outp
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    // A probe runs in the person's home folder unless its caller chose a folder, never wherever this
+    // app was started: a double-clicked diagram starts the app in the diagram's own folder, and a CLI
+    // installed by npm is a `.cmd` whose `node` cmd.exe looked for in that folder first.
+    if command.get_current_dir().is_none() {
+        if let Some(home) = home() {
+            command.current_dir(home);
+        }
+    }
     #[cfg(windows)]
     let (mut child, tree) = crate::process_tree::spawn(&mut command)?;
     #[cfg(not(windows))]
