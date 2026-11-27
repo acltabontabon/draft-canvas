@@ -166,6 +166,7 @@ export function chooseEdgeSides(
   }
 
   const drawn = [...lines];
+  const grid = gridOf(lines);
   let trials = 0;
   for (let pass = 0; pass < PASSES && trials < MAX_TRIALS; pass += 1) {
     let moved = false;
@@ -173,10 +174,11 @@ export function chooseEdgeSides(
       if (!free[i]) continue;
       const line = lines[i]!;
       const memo = memoOf[i]!;
-      const crossings = crossingsOf(line, lines);
+      const near = nearby(grid, line, lines);
+      const crossings = crossingsOf(line, lines, near);
       // Nothing wrong with it: left exactly as drawn.
       if (!line.blocked && !line.searched && crossings === 0) continue;
-      const current = line.cost + crossings * CROSS_COST + sharedRunsOf(line, lines) * SHARED_COST + (line.blocked ? BLOCKED_COST : 0);
+      const current = line.cost + crossings * CROSS_COST + sharedRunsOf(line, lines, near) * SHARED_COST + (line.blocked ? BLOCKED_COST : 0);
       let best: Line | null = null;
       let bestScore = current - MARGIN;
       // A pinned end has its one side; an automatic end may take any. One turned away from the other
@@ -191,9 +193,10 @@ export function chooseEdgeSides(
           const candidate = trial(memo, line.edge, sourceSide, targetSide);
           // A candidate is only ever a clear, quick line: never one that needs a search of its own.
           if (!candidate || candidate.cost >= bestScore) continue;
-          const shared = sharedRunsOf(candidate, lines) * SHARED_COST;
+          const around = nearby(grid, candidate, lines);
+          const shared = sharedRunsOf(candidate, lines, around) * SHARED_COST;
           if (candidate.cost + shared >= bestScore) continue;
-          const score = candidate.cost + shared + crossingsOf(candidate, lines) * CROSS_COST;
+          const score = candidate.cost + shared + crossingsOf(candidate, lines, around) * CROSS_COST;
           if (score < bestScore) {
             best = candidate;
             bestScore = score;
@@ -202,6 +205,7 @@ export function chooseEdgeSides(
       }
       if (best) {
         lines[i] = best;
+        place(grid, i, best);
         moved = true;
       }
     }
@@ -357,17 +361,137 @@ function trial(memo: Memo, edge: DraftEdge, sourceSide: Side, targetSide: Side):
   return line;
 }
 
-/** How many places `line` crosses the other connectors' lines. */
-function crossingsOf(line: Line, lines: readonly Line[]): number {
+/**
+ * Cell size for the grid the lines are bucketed in, as `crossings.ts` buckets segments: about the gap
+ * between two shapes, so most segments sit in one or two cells.
+ */
+const CELL = 256;
+/** How far round a segment its cells reach: past `SAME_LINE`, and past the pixel a "level" run may
+ *  slope by, so a run another one is drawn along always shares a cell with it. */
+const CELL_PAD = SAME_LINE + 2;
+
+/**
+ * Every line's segments by grid cell, so "which lines could this one cross, or run along" reads the
+ * cells it passes through instead of every line in the diagram. On a large diagram that question was
+ * asked of every line, for each line and for each other pair of sides one tried — most of what a
+ * drop cost, and it grew with the square of the connectors.
+ *
+ * It only narrows the question. Two segments that cross, or one drawn along the other, are within
+ * `CELL_PAD` of each other, so each is filed in a cell the other passes through; and every line it
+ * names is then counted whole, exactly as before — the same crossings and runs, the same sides chosen.
+ * A line the plan moves is filed again under a new version, and its old entries are passed over.
+ */
+interface LineGrid {
+  /** Per cell, in threes: a line's number, the number of one of its segments, and the line's version. */
+  cells: Map<number, number[]>;
+  version: number[];
+  /** Which query last named each line, so a line met in several cells is named once. */
+  seen: number[];
+  query: number;
+}
+
+/** Grid cells as one number, so a lookup allocates no string. Cells are far inside ±32768. */
+const cellKey = (cx: number, cy: number) => (cx + 32768) * 65536 + (cy + 32768);
+
+/**
+ * How many times a line was asked which lines it could cross or run along, and how many it was then
+ * compared with — counted, not timed, so `tests/edge-sides.test.ts` can hold the plan to comparing a
+ * line with its neighbours as a diagram grows, on any machine.
+ */
+export const sidePlanWork = { queries: 0, compared: 0 };
+
+function gridOf(lines: readonly Line[]): LineGrid {
+  const grid: LineGrid = { cells: new Map(), version: lines.map(() => 0), seen: lines.map(() => -1), query: 0 };
+  lines.forEach((line, index) => enter(grid, index, line));
+  return grid;
+}
+
+/** Files each segment of line `index` in every cell its box, grown by `CELL_PAD`, covers. */
+function enter(grid: LineGrid, index: number, line: Line): void {
+  const version = grid.version[index]!;
+  const { points } = line;
+  for (let i = 1; i < points.length; i += 1) {
+    const p = points[i - 1]!;
+    const q = points[i]!;
+    const x0 = Math.floor((Math.min(p.x, q.x) - CELL_PAD) / CELL);
+    const x1 = Math.floor((Math.max(p.x, q.x) + CELL_PAD) / CELL);
+    const y0 = Math.floor((Math.min(p.y, q.y) - CELL_PAD) / CELL);
+    const y1 = Math.floor((Math.max(p.y, q.y) + CELL_PAD) / CELL);
+    for (let cx = x0; cx <= x1; cx += 1) {
+      for (let cy = y0; cy <= y1; cy += 1) {
+        const key = cellKey(cx, cy);
+        const cell = grid.cells.get(key);
+        if (cell) cell.push(index, i, version);
+        else grid.cells.set(key, [index, i, version]);
+      }
+    }
+  }
+}
+
+/** Line `index` is now `line`: its old entries go stale, and it is filed where it runs now. */
+function place(grid: LineGrid, index: number, line: Line): void {
+  grid.version[index] = grid.version[index]! + 1;
+  enter(grid, index, line);
+}
+
+/** The lines `line` could cross or be drawn along: those with a segment that comes within `CELL_PAD`
+ *  of one of its own — its own line too, which every count leaves out. */
+function nearby(grid: LineGrid, line: Line, lines: readonly Line[]): number[] {
+  const query = (grid.query += 1);
+  const found: number[] = [];
+  const { points } = line;
+  for (let i = 1; i < points.length; i += 1) {
+    const p = points[i - 1]!;
+    const q = points[i]!;
+    const left = Math.min(p.x, q.x);
+    const right = Math.max(p.x, q.x);
+    const top = Math.min(p.y, q.y);
+    const bottom = Math.max(p.y, q.y);
+    for (let cx = Math.floor(left / CELL); cx <= Math.floor(right / CELL); cx += 1) {
+      for (let cy = Math.floor(top / CELL); cy <= Math.floor(bottom / CELL); cy += 1) {
+        const cell = grid.cells.get(cellKey(cx, cy));
+        if (!cell) continue;
+        for (let k = 0; k < cell.length; k += 3) {
+          const index = cell[k]!;
+          if (cell[k + 2] !== grid.version[index] || grid.seen[index] === query) continue;
+          const other = lines[index]!.points;
+          const b0 = other[cell[k + 1]! - 1]!;
+          const b1 = other[cell[k + 1]!]!;
+          if (Math.max(b0.x, b1.x) + CELL_PAD < left || Math.min(b0.x, b1.x) - CELL_PAD > right) continue;
+          if (Math.max(b0.y, b1.y) + CELL_PAD < top || Math.min(b0.y, b1.y) - CELL_PAD > bottom) continue;
+          grid.seen[index] = query;
+          found.push(index);
+        }
+      }
+    }
+  }
+  sidePlanWork.queries += 1;
+  sidePlanWork.compared += found.length;
+  return found;
+}
+
+/** How many places `line` crosses the other connectors' lines — of `near`, the ones it could. */
+function crossingsOf(line: Line, lines: readonly Line[], near: readonly number[]): number {
   const { points, left, top, right, bottom } = line;
   let count = 0;
   let grouped: Set<string> | null = null;
-  for (const other of lines) {
+  for (const index of near) {
+    const other = lines[index]!;
     if (other.edge === line.edge) continue;
     if (other.left > right || other.right < left || other.top > bottom || other.bottom < top) continue;
     for (let i = 1; i < points.length; i += 1) {
+      const a = points[i - 1]!;
+      const b = points[i]!;
+      const minX = Math.min(a.x, b.x);
+      const maxX = Math.max(a.x, b.x);
+      const minY = Math.min(a.y, b.y);
+      const maxY = Math.max(a.y, b.y);
       for (let j = 1; j < other.points.length; j += 1) {
-        const at = crossing(points[i - 1]!, points[i]!, other.points[j - 1]!, other.points[j]!);
+        const c = other.points[j - 1]!;
+        const d = other.points[j]!;
+        // Segments whose boxes don't meet cannot cross: the rest are tested exactly.
+        if (Math.max(c.x, d.x) < minX || Math.min(c.x, d.x) > maxX || Math.max(c.y, d.y) < minY || Math.min(c.y, d.y) > maxY) continue;
+        const at = crossing(a, b, c, d);
         if (!at) continue;
         if (!other.group) {
           count += 1;
@@ -387,13 +511,15 @@ function crossingsOf(line: Line, lines: readonly Line[]): number {
 }
 
 /**
- * How many other lines `candidate` runs along. Two lines leaving one side of one shape share their
- * first stretch only until `endpoints.ts` spreads them, so that stretch is not counted.
+ * How many other lines `candidate` runs along — of `near`, the ones it could. Two lines leaving one
+ * side of one shape share their first stretch only until `endpoints.ts` spreads them, so that stretch
+ * is not counted.
  */
-function sharedRunsOf(candidate: Line, lines: readonly Line[]): number {
+function sharedRunsOf(candidate: Line, lines: readonly Line[], near: readonly number[]): number {
   const points = candidate.points;
   let count = 0;
-  for (const other of lines) {
+  for (const index of near) {
+    const other = lines[index]!;
     if (other.edge === candidate.edge) continue;
     if (other.left > candidate.right + SAME_LINE || other.right < candidate.left - SAME_LINE || other.top > candidate.bottom + SAME_LINE || other.bottom < candidate.top - SAME_LINE) continue;
     const firstTogether = sameEnd(candidate, 'source', other);
@@ -443,6 +569,8 @@ function crossing(a: Point, b: Point, c: Point, d: Point): Point | null {
   if (Math.abs(denom) < 1e-9) return null;
   const t = ((c.x - a.x) * sy - (c.y - a.y) * sx) / denom;
   const u = ((c.x - a.x) * ry - (c.y - a.y) * rx) / denom;
+  // Off either segment altogether: no crossing, as the margins below would also say.
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
   const lenR = Math.hypot(rx, ry);
   const lenS = Math.hypot(sx, sy);
   if (t * lenR < TOUCH || (1 - t) * lenR < TOUCH || u * lenS < TOUCH || (1 - u) * lenS < TOUCH) return null;

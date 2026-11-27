@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { buildScaleDocument, SCALE_SPECS } from '../benchmark/workloads/scale';
 import { createEdge, createNode } from '../src/document/factory';
 import type { DraftEdge, DraftNode } from '../src/document/types';
 import { endpointPlan } from '../src/edges/endpoints';
 import { anchorPoint, rectOf, resolveSides } from '../src/edges/routing';
-import { chooseEdgeSides } from '../src/edges/sides';
+import { chooseEdgeSides, sidePlanWork } from '../src/edges/sides';
 import { routingCorpus } from './fixtures/routing/corpus';
 import { drawnConnectors } from './fixtures/routing/drawn';
 import { measure } from './fixtures/routing/measure';
@@ -26,6 +27,19 @@ function aroundTheMiddle(ab: Partial<DraftEdge> = {}) {
 }
 
 describe('side plan', () => {
+  // Every line it judged, and every other pair of sides it tried, was compared with every line in the
+  // diagram: on 1,000 shapes a drop spent most of a third of a second here.
+  it('compares a line only with the lines near it, however large the diagram', () => {
+    for (const spec of [SCALE_SPECS.medium, SCALE_SPECS.large]) {
+      const { document } = buildScaleDocument(spec);
+      sidePlanWork.queries = 0;
+      sidePlanWork.compared = 0;
+      endpointPlan(document.nodes, document.edges, 'transient');
+      expect(sidePlanWork.queries, spec.name).toBeGreaterThan(100);
+      expect(sidePlanWork.compared / sidePlanWork.queries, spec.name).toBeLessThan(document.edges.length / 6);
+    }
+  }, 30_000);
+
   it('leaves connectors with nothing wrong exactly as the shapes alone draw them', () => {
     const nodes = [box('a', 0, 0), box('b', 300, 0), box('c', 0, 200), box('d', 300, 200)];
     const edges = [createEdge({ id: 'ab', source: 'a', target: 'b' }), createEdge({ id: 'cd', source: 'c', target: 'd' }), createEdge({ id: 'ac', source: 'a', target: 'c' })];
