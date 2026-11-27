@@ -20,8 +20,12 @@ const parsed = parseDocument(
 if (!parsed.ok) throw new Error(parsed.error);
 const starter = parsed.document;
 
-/** Nothing an outage says may claim a rate, a latency or a likelihood: the drawing holds none. */
-const INVENTED = /\b\d+(\.\d+)?\s*(%|ms|rps|\/min|\/s|per (second|minute))|\bp9\d\b|\blikely\b|\bprobab/i;
+/**
+ * Nothing an outage says may claim a rate, a latency, a likelihood or a capacity: the drawing holds
+ * none. Words too, not only numbers: "slower, not stopped" and "with less room than before" are a
+ * latency and a capacity. (The names in these drawings use none of these words.)
+ */
+const INVENTED = /\b\d+(\.\d+)?\s*(%|ms|rps|\/min|\/s|per (second|minute))|\bp9\d\b|\blikely\b|\bprobab|\bslow(er|s|ly)?\b|\bfast(er)?\b|\bquick(er|ly)?\b|\b(less|more|no) room\b|\bheadroom\b|\bcapacity\b|\bthroughput\b|\blatenc|\boverload|\bunder load\b|\bbottleneck/i;
 
 describe('outage walk — the Event-Driven starter', () => {
   it('follows a failing dependency back to the queue, the dead-letter queue and the missing replay', () => {
@@ -557,7 +561,18 @@ describe('outage walk — instances', () => {
     expect(one.edges.size).toBe(0);
     expect(one.notes).toHaveLength(1);
     expect(one.notes[0]).toMatchObject({ tone: 'shield', note: '2 of 3 still running' });
-    expect(one.notes[0]?.text).toMatch(/the other 2 keep taking work from Orders — slower, not stopped/);
+    expect(one.notes[0]?.text).toBe('Fulfilment is drawn with 3 instances, so the other 2 keep taking work from Orders. Nothing drawn says whether they can take all the work.');
+  });
+
+  it('says nothing of speed or room when one instance of several is down', () => {
+    // Fed by a queue, and called: the two ways the note is worded.
+    const called = [node('web', 'service', { text: 'Storefront' }), { ...node('api', 'service', { text: 'Catalog' }), replicas: 2 }, node('db', 'database', { text: 'Products' })];
+    const calls = [edge('a', 'web', 'api', { semantic: 'calls' }), edge('b', 'api', 'db', { semantic: 'reads' })];
+    const answering = walk(called, calls, 'api');
+    expect(answering.notes[0]?.text).toBe('Catalog is drawn with 2 instances, so the other keeps answering. Nothing drawn says whether it can take all the work.');
+    for (const outage of [walk(nodes, edges, 'worker'), answering]) {
+      for (const line of outageSummary(outage)) expect(line).not.toMatch(INVENTED);
+    }
   });
 
   it('takes every instance when asked, and never asks for more of something already replicated', () => {

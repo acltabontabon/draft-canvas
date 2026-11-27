@@ -556,13 +556,16 @@ function readOutage(graph: Graph, flows: readonly FlowSteps[], target: OutageTar
     const left = instanceCount - 1;
     const others = left === 1 ? 'the other keeps' : `the other ${left} keep`;
     const feeds = (into.get(target.id) ?? []).filter((item) => item.class === 'deliver').map((item) => item.from);
+    // What the rest can take is a capacity, which the drawing never holds: it used to say "slower,
+    // not stopped" and "with less room than before".
+    const all = `Nothing drawn says whether ${left === 1 ? 'it' : 'they'} can take all the work.`;
     notes.push({
       id: `instances:${target.id}`,
       tone: 'shield',
       note: `${left} of ${instanceCount} still running`,
       text: feeds.length > 0
-        ? `${targetName} is drawn with ${instanceCount} instances, so ${others} taking work from ${listOf(feeds.map(name))} — slower, not stopped.`
-        : `${targetName} is drawn with ${instanceCount} instances, so ${others} answering — with less room than before.`,
+        ? `${targetName} is drawn with ${instanceCount} instances, so ${others} taking work from ${listOf(feeds.map(name))}. ${all}`
+        : `${targetName} is drawn with ${instanceCount} instances, so ${others} answering. ${all}`,
       focus: [target.id],
     });
     const instances = { down: 1, of: instanceCount };

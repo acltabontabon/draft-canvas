@@ -118,9 +118,10 @@ can't reach Orders and Billing".
 ### Instances
 
 A Service drawn with several instances (`Fulfilment ×3`) loses **one** first: the rest keep
-running and nothing else changes. Switch to **All 3** in the card at the bottom left, or choose
-**Take all 3 instances down** from the shape's menu, to lose them all. A Service drawn as a single
-instance that something depends on raises the question itself.
+running and nothing else changes, though the drawing can't say whether they can take all the
+work. Switch to **All 3** in the card at the bottom left, or choose **Take all 3 instances down**
+from the shape's menu, to lose them all. A Service drawn as a single instance that something
+depends on raises the question itself.
 
 ![One of two Checkout instances down: a single stroke, "1 of 2 still running", and the One instance / All 2 switch.](../media/guides/outage-instances.png)
 
