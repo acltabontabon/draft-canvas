@@ -51,7 +51,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
   // The one row in the Tab order: wherever focus last was on a row, else the chosen flow. '' is the
   // "Whole diagram" row.
   const [activeRow, setActiveRow] = useState<string | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLElement>(null);
   const stepsIdBase = useId();
 
   // A "new flow" made elsewhere (palette, a connector's chip) asks to be named here. One-shot:
@@ -127,7 +127,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
   const rowElements = () =>
     Array.from(rootRef.current?.querySelectorAll<HTMLElement>('.dc-flow-row') ?? []);
 
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     const target = event.target as HTMLElement;
     if (isEditableTarget(target)) return; // the rename field owns its own keys
     // A flow's steps sit beside its row, not inside it: a key pressed among them is still that flow's.
@@ -195,7 +195,9 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
   };
 
   return (
-    <div className="dc-flow-panel" role="region" aria-label="Flows" tabIndex={-1} ref={rootRef} onKeyDown={onKeyDown}>
+    // A named `<section>`, not a `div role="region"`: only a sectioning element keeps the header and
+    // footer inside it from becoming banner and contentinfo landmarks of the whole page.
+    <section className="dc-flow-panel" aria-label="Flows" tabIndex={-1} ref={rootRef} onKeyDown={onKeyDown}>
       <header className="dc-flow-panel-header">
         <strong>Flows</strong>
         {!readOnly && document.flows.length > 0 && (
@@ -420,7 +422,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
           )}
         </footer>
       )}
-    </div>
+    </section>
   );
 }
 

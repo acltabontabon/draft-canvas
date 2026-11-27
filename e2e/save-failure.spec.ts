@@ -66,7 +66,7 @@ test('a failed save names its reason, exports what is on screen, retries, and le
 
   await failWrites(page, false);
   await page.reload();
-  await page.getByRole('button', { name: 'Open Disk full', exact: true }).click();
+  await page.getByRole('button', { name: /^Disk full\b/ }).click();
   await expect(page.locator('.dc-editor')).toBeVisible();
   // One shape: the second one was given up.
   await expect(page.locator('.react-flow__node').filter({ has: page.locator('.dc-node-surface') })).toHaveCount(1);

@@ -43,6 +43,7 @@ import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { SegmentedControl } from '../common/SegmentedControl';
 import { ChoiceRow, CompactPrefs, SettingRow, SettingsPage, SettingsSection } from './layout';
+import { SectionHeadingLevel } from './sectionHeading';
 import { CanvasLook } from './CanvasLook';
 import { NextShapeSuggestions } from './CanvasSettings';
 import { CORNER_ART, EDGE_COLOUR_ART, HAND_ART, HEAD_ART, SHADOW_ART, STEADY_ART, WEIGHT_ART } from './lookArt';
@@ -339,6 +340,8 @@ export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { d
     const subject = active ? null : <p className="dc-look-subject">A change here makes {HAND_LABELS[preset]} a style of your own.</p>;
     return (
       <CompactPrefs value>
+      {/* Its sections sit right under the cover's h2: no page title between (`SectionHeadingLevel`). */}
+      <SectionHeadingLevel value={3}>
       <div className="dc-prefs-page dc-look-column">
         <div className="dc-look-tabs" role="tablist" aria-label="Appearance">
           {PANEL_TABS.map((entry, index) => (
@@ -390,6 +393,7 @@ export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { d
           )}
         </div>
       </div>
+      </SectionHeadingLevel>
       </CompactPrefs>
     );
   }

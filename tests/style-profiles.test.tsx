@@ -526,4 +526,24 @@ describe('Settings → Appearance', () => {
     // Back on a built-in style: the one for the drawing hand this device prefers.
     expect(mine(/^Clean/)).toBeChecked();
   });
+
+  it('keeps its headings in order: h4 under a Settings page, h3 in the panel under its cover', () => {
+    // The panel beside the canvas has no page title between its cover's h2 and its sections, which
+    // were h4s there too: the outline skipped a level.
+    const { unmount } = page();
+    expect(screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual(['Appearance']);
+    expect(screen.getAllByRole('heading', { level: 4 }).length).toBeGreaterThan(0);
+    unmount();
+    for (const tab of ['styles', 'canvas', 'drawing'] as const) {
+      useUiStore.setState({ stylePanelTab: tab });
+      const panel = render(
+        <PersonalityProvider>
+          <AppearanceSettings layout="panel" />
+        </PersonalityProvider>,
+      );
+      expect(screen.queryAllByRole('heading', { level: 4 }), tab).toHaveLength(0);
+      expect(screen.getAllByRole('heading', { level: 3 }).length, tab).toBeGreaterThan(0);
+      panel.unmount();
+    }
+  });
 });

@@ -9,6 +9,7 @@ import { useUiStore } from '../../store/uiStore';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { CompactPrefs, Hint, SettingsSection } from './layout';
+import { SectionHeadingLevel } from './sectionHeading';
 import { StylePreview } from './StylePreview';
 
 const FAILURES = {
@@ -32,6 +33,7 @@ export function StylePacks({ theme, onAdded }: { theme: ThemeName; onAdded: (han
   const packs = useGalleryStore((state) => state.snapshot?.styles);
   const id = useId();
   const compact = useContext(CompactPrefs);
+  const Heading = useContext(SectionHeadingLevel) === 3 ? 'h3' : 'h4';
 
   // The copy already on this device, and a fresh one when it is a day old. Never before consent.
   useEffect(() => {
@@ -64,9 +66,9 @@ export function StylePacks({ theme, onAdded }: { theme: ThemeName; onAdded: (han
     <section className="dc-prefs-section" aria-labelledby={`${id}-title`} aria-busy={busy || undefined}>
       {/* The heading, and beside it the two small things to do with the whole list. */}
       <div className="dc-look-section-head">
-        <h4 id={`${id}-title`} className="dc-prefs-section-title">
+        <Heading id={`${id}-title`} className="dc-prefs-section-title">
           Style packs
-        </h4>
+        </Heading>
         {compact && <Hint about="Style packs">Ready-made styles from the starters gallery. Adding one makes it yours to change.</Hint>}
         <span className="dc-look-section-space" />
         <a className="dc-prefs-link" href={`${GALLERY_PAGE}/tree/main/styles`} target="_blank" rel="noreferrer noopener">

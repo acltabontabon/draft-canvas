@@ -125,7 +125,7 @@ describe('LibraryScreen — Home', () => {
     await userEvent.keyboard('{ArrowDown}');
     expect(screen.getByRole('tab', { name: 'Drafts' })).toHaveFocus();
     await userEvent.keyboard('{ArrowRight}{ArrowDown}');
-    expect(screen.getByRole('button', { name: 'Open Checkout' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: /^Checkout\b/ })).toHaveFocus();
     rerender(<LibraryScreen session={stubSession()} />);
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Find a diagram' })).not.toBeInTheDocument();
@@ -136,7 +136,7 @@ describe('LibraryScreen — Home', () => {
     await userEvent.click(screen.getByRole('button', { name: /View all/ }));
     expect(screen.getByRole('searchbox', { name: 'Search diagrams' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Home' }));
-    expect(screen.getByRole('button', { name: 'Open Checkout' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Checkout\b/ })).toBeInTheDocument();
   });
 
   it('creates a browser project from the empty invitation', async () => {

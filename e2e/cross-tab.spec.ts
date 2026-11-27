@@ -34,7 +34,8 @@ test('looking around in one tab does not make the other tab conflict on its next
 
   const two = await context.newPage();
   await two.goto('/');
-  await two.getByRole('button', { name: 'Open Two tabs', exact: true }).click();
+  // Home's card is named by what it shows: the title, then when it was last edited.
+  await two.getByRole('button', { name: /^Two tabs\b/ }).click();
   await two.waitForSelector('.dc-editor');
   await expect(two.locator('.dc-save')).toContainText('Saved locally');
 

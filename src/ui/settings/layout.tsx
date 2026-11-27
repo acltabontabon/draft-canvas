@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState, type CSS
 import { Tooltip } from '../common/Tooltip';
 import { Icon } from '../common/Icon';
 import { useEditorStore } from '../../store/editorStore';
+import { SectionHeadingLevel } from './sectionHeading';
 
 /**
  * The few pieces every Settings page is built from, on the desktop and the web, so a new setting is a row in an existing section and a new page is one entry in
@@ -82,6 +83,7 @@ interface SectionProps {
 export function SettingsSection({ title, description, group, disabled, apart, list, busy, children }: SectionProps) {
   const id = useId();
   const compact = useContext(CompactPrefs);
+  const Heading = useContext(SectionHeadingLevel) === 3 ? 'h3' : 'h4';
   const descriptionId = description ? `${id}-description` : undefined;
   const head = description && (
     <p id={descriptionId} className={compact ? 'dc-sr-only' : 'dc-prefs-section-description'}>
@@ -116,9 +118,9 @@ export function SettingsSection({ title, description, group, disabled, apart, li
     >
       {/* Beside the heading, not in it: the heading's name is the section's, and stays just that. */}
       <div className="dc-prefs-section-head">
-        <h4 id={`${id}-title`} className="dc-prefs-section-title">
+        <Heading id={`${id}-title`} className="dc-prefs-section-title">
           {title}
-        </h4>
+        </Heading>
         {hint}
       </div>
       {head}
