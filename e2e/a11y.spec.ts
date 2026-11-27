@@ -59,7 +59,7 @@ test.describe('accessibility (axe)', () => {
     await dialog.getByRole('button', { name: 'Load starters', exact: true }).click();
     await expect(dialog.locator('.dc-starters-grid .dc-starter').first()).toBeVisible();
     await scan(page, 'Starters, browsing');
-    await dialog.getByRole('button', { name: 'CQRS', exact: true }).click();
+    await dialog.getByRole('button', { name: /^CQRS\b/ }).click();
     await expect(dialog.getByRole('img', { name: 'The CQRS starter' })).toBeVisible();
     await scan(page, 'Starters, one starter');
   });
@@ -82,7 +82,7 @@ test.describe('accessibility (axe)', () => {
     await page.keyboard.press('Alt+o');
     await expect(page.getByRole('complementary', { name: 'Outline' })).toBeHidden();
 
-    // The Flows panel is a tree (a treeitem per flow, its steps a nested group), scanned open on a
+    // The Flows panel is a tree (a treeitem per flow, its steps a group it owns), scanned open on a
     // flow so the nested level is in the page: axe checks the required owned/parent roles.
     await toggleFlows(page);
     const flows = page.getByRole('tree', { name: 'Flows' });

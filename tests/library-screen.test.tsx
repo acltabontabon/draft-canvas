@@ -100,9 +100,10 @@ describe('LibraryScreen — Home', () => {
     await userEvent.keyboard('{Enter}');
     fireEvent.keyDown(document.body, { key: 'Enter', metaKey: true });
     expect(session.newDocument).not.toHaveBeenCalled();
-    // The accessible name contains the visible text, and the hint is its description.
-    const start = screen.getByRole('button', { name: 'Quick Draft' });
-    expect(start).toHaveAccessibleDescription('No title needed. Just begin.');
+    // Named by everything it shows, the hint included: a name that left out words on the button is
+    // one a person speaking what they see cannot use.
+    const start = screen.getByRole('button', { name: /^Quick Draft\b/ });
+    expect(start).toHaveAccessibleName('Quick Draft No title needed. Just begin.');
     start.focus();
     await userEvent.keyboard('{Enter}');
     expect(session.newDocument).toHaveBeenCalledTimes(1);
@@ -120,7 +121,7 @@ describe('LibraryScreen — Home', () => {
     const { rerender } = render(<LibraryScreen session={stubSession()} />);
     rerender(<LibraryScreen session={stubSession({ library: [shaped()] })} />);
     expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Drafts', 'Recent', 'Projects']);
-    screen.getByRole('button', { name: 'Quick Draft' }).focus();
+    screen.getByRole('button', { name: /^Quick Draft\b/ }).focus();
     await userEvent.keyboard('{ArrowDown}');
     expect(screen.getByRole('tab', { name: 'Drafts' })).toHaveFocus();
     await userEvent.keyboard('{ArrowRight}{ArrowDown}');
@@ -141,7 +142,7 @@ describe('LibraryScreen — Home', () => {
   it('creates a browser project from the empty invitation', async () => {
     const session = stubSession();
     render(<LibraryScreen session={session} />);
-    screen.getByRole('button', { name: 'Quick Draft' }).focus();
+    screen.getByRole('button', { name: /^Quick Draft\b/ }).focus();
     await userEvent.keyboard('{ArrowDown}');
     expect(screen.getByRole('button', { name: 'New project' })).toHaveFocus();
     await userEvent.keyboard('{Enter}');

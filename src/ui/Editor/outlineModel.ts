@@ -31,6 +31,34 @@ export interface OutlineRow {
   direction?: 'out' | 'in' | 'both';
 }
 
+/** The words of a text, as a listener or a speech command would match them: letters and digits only. */
+function wordsOf(text: string): string[] {
+  return text.toLowerCase().normalize('NFKD').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+}
+
+function saysInOrder(reading: string, shown: string): boolean {
+  const said = wordsOf(reading);
+  const words = wordsOf(shown);
+  for (let start = 0; start + words.length <= said.length; start += 1) {
+    if (words.every((word, index) => said[start + index] === word)) return true;
+  }
+  return false;
+}
+
+/**
+ * What a connector's row says. The sentence ("Shopper places order Orders API") where it holds the
+ * words the row shows, in their order: a row's name has to contain its visible text, or someone
+ * speaking what they see cannot reach it. A row under the connector's source shows the far end
+ * before the caption, which the sentence has the other way round, so that row names both ends and
+ * then the caption: "Orders API to Orders, writes to".
+ */
+function edgeRowReading(sentence: string, here: string, other: string, detail: string | undefined, outgoing: boolean, directed: boolean): string {
+  const shown = detail ? `${other} ${detail}` : other;
+  if (saysInOrder(sentence, shown)) return sentence;
+  const ends = outgoing || !directed ? `${here} ${directed ? 'to' : 'and'} ${other}` : `${here} from ${other}`;
+  return detail ? `${ends}, ${detail}` : ends;
+}
+
 function readingOrder(a: DraftNode, b: DraftNode): number {
   return a.y - b.y || a.x - b.x || a.id.localeCompare(b.id);
 }
@@ -87,6 +115,7 @@ export function buildOutline(room: { nodes: readonly DraftNode[]; edges: readonl
       const otherId = outgoing ? edge.target : edge.source;
       const other = lookup(otherId);
       const otherName = other ? displayNameFor(other) : 'somewhere';
+      const detail = connectorText(edge, lookup(edge.source), lookup(edge.target));
       const edgeRow: OutlineRow = {
         key: edgeKey(edge.id, node.id),
         kind: 'edge',
@@ -95,8 +124,8 @@ export function buildOutline(room: { nodes: readonly DraftNode[]; edges: readonl
         parentKey: key,
         childKeys: [],
         label: otherName,
-        detail: connectorText(edge, lookup(edge.source), lookup(edge.target)),
-        reading: connectorReading(edge, lookup),
+        detail,
+        reading: edgeRowReading(connectorReading(edge, lookup), displayNameFor(node), otherName, detail, outgoing, edge.directed),
         direction: !edge.directed ? 'both' : outgoing ? 'out' : 'in',
       };
       row.childKeys.push(edgeRow.key);

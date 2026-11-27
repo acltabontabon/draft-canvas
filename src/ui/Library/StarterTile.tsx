@@ -59,8 +59,11 @@ export function StarterTile({
       className="dc-starter"
       data-starter={starter.id}
       data-unavailable={starter.unavailable ? 'true' : undefined}
-      aria-label={`${verb ? `${verb} ` : ''}${starter.name}${markLabel ? `, ${markLabel.toLowerCase()}` : ''}`}
-      aria-describedby={descriptionId}
+      // A tile that shows its description is named by all it shows: a shorter name of its own would
+      // leave out words on the tile, and a name has to contain them. One that keeps the description
+      // for a screen reader alone is named for what a click does, and described by the rest.
+      aria-label={describe ? undefined : `${verb ? `${verb} ` : ''}${starter.name}${markLabel ? `, ${markLabel.toLowerCase()}` : ''}`}
+      aria-describedby={describe ? undefined : descriptionId}
       style={{ '--i': index } as CSSProperties}
       onClick={() => onStart(starter.id)}
     >
@@ -81,10 +84,13 @@ export function StarterTile({
         {glyph ? <StarterGlyph starter={glyph} /> : <span className="dc-starter-glyph dc-starter-glyph-empty" aria-hidden="true" />}
         <SelectionChrome />
       </span>
+      {describe && verb && <span className="dc-sr-only">{verb} </span>}
       <span className="dc-starter-name">
         {starter.name}
+        {markLabel && ' '}
         {markLabel && <span className="dc-starter-mark" data-mark={starter.mark}>{markLabel}</span>}
       </span>
+      {describe && ' '}
       <span id={descriptionId} className={describe ? 'dc-starter-description' : 'dc-sr-only'}>
         {starter.unavailable ?? starter.summary}
       </span>
