@@ -190,12 +190,7 @@ pub fn create_folder(
             "That folder name is too long. Use up to 120 characters.",
         ));
     }
-    let stem = name.split('.').next().unwrap_or(name).to_ascii_uppercase();
-    if matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-        || ((stem.starts_with("COM") || stem.starts_with("LPT"))
-            && stem.len() == 4
-            && matches!(stem.as_bytes()[3], b'1'..=b'9'))
-    {
+    if crate::paths::is_reserved_device_name(name) {
         return Err(AppError::invalid_path(
             "That name is reserved by the system. Choose another folder name.",
         ));

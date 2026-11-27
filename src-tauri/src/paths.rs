@@ -62,9 +62,33 @@ pub fn sanitize_stem(name: &str) -> String {
     let cleaned = cleaned.trim_matches(|c: char| c == '.' || c.is_whitespace());
     if cleaned.is_empty() {
         DEFAULT_STEM.to_string()
+    } else if is_reserved_device_name(cleaned) {
+        // Windows reads the device name up to the first dot, so that is where the name changes.
+        let at = cleaned.find('.').unwrap_or(cleaned.len());
+        format!("{}_{}", &cleaned[..at], &cleaned[at..])
     } else {
         cleaned.to_string()
     }
+}
+
+/// A name Windows keeps for a device — `CON`, `nul`, `COM1`, `LPT²`, with or without an extension or
+/// trailing spaces before it. Such a name opens the device rather than a file on some versions of
+/// Windows and is refused on others, so no file or folder Draft Canvas names is given one, on any
+/// platform: a diagram saved on a Mac must still copy to a Windows machine.
+pub fn is_reserved_device_name(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or(name).trim_end();
+    let upper = stem.to_ascii_uppercase();
+    if matches!(
+        upper.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) {
+        return true;
+    }
+    let mut chars = upper.chars();
+    let prefix: String = chars.by_ref().take(3).collect();
+    let rest: Vec<char> = chars.collect();
+    (prefix == "COM" || prefix == "LPT")
+        && matches!(rest.as_slice(), [c] if c.is_ascii_digit() || matches!(c, '¹' | '²' | '³'))
 }
 
 /// A name a person typed for "Rename file…": unlike `sanitize_stem`, which quietly rewrites whatever an
@@ -96,6 +120,11 @@ pub fn validate_rename_stem(stem: &str) -> Result<String, AppError> {
         return Err(AppError::invalid_path(format!(
             "That name is too long (the limit is {MAX_STEM_CHARS} characters)."
         )));
+    }
+    if is_reserved_device_name(cleaned) {
+        return Err(AppError::invalid_path(
+            "That name is reserved by the system. Choose another name.",
+        ));
     }
     Ok(cleaned.to_string())
 }
@@ -188,6 +217,9 @@ mod tests {
         assert_eq!(sanitize_stem("notes.draftcanvas"), "notes");
         assert_eq!(sanitize_stem(""), "Untitled canvas");
         assert_eq!(sanitize_stem(" ... "), "Untitled canvas");
+        assert_eq!(sanitize_stem("CON"), "CON_");
+        assert_eq!(sanitize_stem("nul.v2"), "nul_.v2");
+        assert_eq!(sanitize_stem("Console"), "Console");
         assert_eq!(
             sanitize_stem(&"x".repeat(400)).chars().count(),
             MAX_STEM_CHARS
@@ -237,6 +269,24 @@ mod tests {
             validate_rename_stem(".draftcanvas").err().unwrap().kind,
             ErrorKind::InvalidPath
         );
+        for reserved in [
+            "CON",
+            "con.draftcanvas",
+            "Nul.v2",
+            "AUX ",
+            "com1",
+            "LPT9",
+            "COM²",
+        ] {
+            assert_eq!(
+                validate_rename_stem(reserved).err().unwrap().kind,
+                ErrorKind::InvalidPath,
+                "{reserved}"
+            );
+        }
+        for fine in ["Console", "COM10", "LPT", "auxiliary", "nul-hypothesis"] {
+            assert!(validate_rename_stem(fine).is_ok(), "{fine}");
+        }
         assert_eq!(
             validate_rename_stem(&"x".repeat(MAX_STEM_CHARS + 1))
                 .err()
