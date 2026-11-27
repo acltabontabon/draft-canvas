@@ -90,6 +90,9 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
     let queued: LoadMessage | null = null;
     let loading = false;
     let loads = Promise.resolve();
+    // How many times the host has asked for the canvas to close: a close that arrives while a load
+    // is being read takes the screen from it (`open`).
+    let closeRequests = 0;
 
     const post = (message: ToHostMessage) => host.post(message);
 
@@ -137,16 +140,27 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
         pending ||= window.setTimeout(() => void sendChange(), CHANGE_POST_MS);
       });
       await repository.save(document);
+      const closes = closeRequests;
       await openDocument(document.metadata.id);
       if (disposed) return;
+      // Back pressed while this was still being read (⌘N, then Back at once): the close is the newer
+      // navigation, so the canvas was never shown and Home is. That close was said with the number of
+      // the load shown before this one, which the host had already replaced, so the host never heard
+      // it and kept this one for open over Home. Said again here, with this load's number.
+      const superseded = closeRequests !== closes;
+      // Numbered at once otherwise, before anything else is awaited: a close from here on is this load's.
+      if (!superseded) shownSeq.current = seq;
       const previousId = shownId;
       shownId = document.metadata.id;
       if (previousId && previousId !== shownId) {
         await repository.remove(previousId).catch((error: unknown) => logDiagnostic(error, { operation: 'host-forget' }));
       }
+      if (superseded) {
+        post({ type: 'draft-canvas:closed', ...(seq !== undefined ? { seq } : {}) });
+        return;
+      }
       opened = true;
       invalid = false;
-      shownSeq.current = seq;
       setState({ error: null, invalidWhileOpen: false });
       // Said out loud, as an import in the Library does: the file itself still holds the original,
       // and the first edit writes the repaired document over it.
@@ -185,6 +199,7 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
             .then(() => post({ type: 'draft-canvas:flushed', id }))
             .catch((error: unknown) => logDiagnostic(error, { operation: 'host-flush-ack' }));
         } else if (command.command === 'close') {
+          closeRequests += 1;
           void sessionRef.current.closeDocument();
         } else if (__DESKTOP__ && command.command === 'agent' && host.kind === 'desktop' && typeof command.id === 'number' && command.request) {
           const id = command.id;

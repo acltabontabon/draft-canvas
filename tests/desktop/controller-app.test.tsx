@@ -15,6 +15,7 @@ import { useHostDocument } from '../../src/host/useHostDocument';
 import { useDocumentSession } from '../../src/store/useDocumentSession';
 import { useEditorStore } from '../../src/store/editorStore';
 import { __setRepository } from '../../src/storage';
+import { MemoryRepository } from '../../src/storage/MemoryRepository';
 import { createHarness, documentText } from './harness';
 
 afterEach(() => {
@@ -84,6 +85,50 @@ it('keeps the Quick Draft ⌘N opened while Back’s close of the last file was 
   app.h.hostEvent({ type: 'quit-requested' });
   await waitFor(() => expect(app.h.api.quitAck).toHaveBeenLastCalledWith('ready'));
   expect([...app.h.recovery.values()].map((held) => held.entry.title)).toEqual(['My architecture']);
+});
+
+it.each([
+  ['read', 0],
+  ['read', 5],
+  ['read', 10],
+  ['remove', 0],
+  ['remove', 5],
+  ['remove', 10],
+] as const)('ends on Home on both sides when Back comes after ⌘N, while storage is slow to %s (%i ms)', async (step, gap) => {
+  // Storage takes a moment, as it does on a real machine: to read the draft back, or to forget the
+  // file it replaces once the draft is on screen.
+  const repository = new MemoryRepository();
+  const load = repository.load.bind(repository);
+  const remove = repository.remove.bind(repository);
+  let slow = false;
+  const pause = () => (slow ? new Promise((resolve) => setTimeout(resolve, 30)) : Promise.resolve());
+  if (step === 'read') {
+    repository.load = async (id: string) => {
+      await pause();
+      return load(id);
+    };
+  } else {
+    repository.remove = async (id: string) => {
+      await pause();
+      return remove(id);
+    };
+  }
+  __setRepository(repository);
+  const app = await connect();
+  await app.open('payments');
+  await waitFor(() => expect(app.session().openId).not.toBeNull());
+
+  slow = true;
+  void app.controller.newQuickDraft();
+  await new Promise((resolve) => setTimeout(resolve, gap));
+  await app.controller.returnHome();
+
+  // Back's close took the screen from the draft still being read. Said only about the file shown
+  // before it, the close went unheard, and the shell held a Quick Draft open over Home.
+  await waitFor(() => expect(app.store.getSnapshot().doc).toEqual({ kind: 'none' }));
+  for (let i = 0; i < 10; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(app.session().openId).toBeNull();
+  expect(app.store.getSnapshot().doc).toEqual({ kind: 'none' });
 });
 
 it('shows the file itself, and says why, when its recovered changes can’t be read', async () => {
