@@ -204,6 +204,25 @@ describe('looksAlreadyApplied (crash-recovery Case B)', () => {
     }
   });
 
+  it('end to end: reads a declared label as the request was read, trimmed and (a relationship\'s or a group\'s) on one line', () => {
+    const file = base();
+    const ops = [{
+      op: 'add',
+      groups: [{ id: 'team', label: '  Fulfilment   team ' }],
+      nodes: [{ id: 'ow', type: 'worker', label: ' Orders Worker ', group: 'team' }],
+      relationships: [{ id: 'aw', from: 'api', to: 'ow', label: 'Enqueues  jobs ' }],
+    }];
+    const { file: applied } = applyUpdate(file, [], ops, undefined, undefined);
+    let conflictingIds: unknown;
+    try {
+      applyUpdate(applied, [], ops, undefined, undefined);
+    } catch (error) {
+      conflictingIds = (error as AgentError).details?.conflictingIds;
+    }
+    expect(conflictingIds).toEqual(['team', 'ow', 'aw']);
+    expect(looksAlreadyApplied(ops, conflictingIds as string[], applied)).toBe(true);
+  });
+
   it('end to end: a coincidental id collision from something else entirely is never mistaken for this proposal', () => {
     const file = base();
     const ops = [{ op: 'add', nodes: [{ id: 'cache', type: 'redis', label: 'Cache' }] }];
