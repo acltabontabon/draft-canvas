@@ -69,9 +69,12 @@ export function sequenceToMermaid(node: DraftNode): string {
       working.start(item.to);
       starts = '+';
     }
-    out.push(`${pad}${of(item.from)}${arrow}${starts || ends}${of(item.to)}${said(messageText(item.label))}`);
+    // Mermaid reads arrows case-blind: a `-` mark before a receiver named X… is its lost-message
+    // arrow `-x`, and `BillingAPI-->>-Xero` failed the whole text. That end goes on its own line.
+    const crossed = !starts && ends && /^x/i.test(of(item.to));
+    out.push(`${pad}${of(item.from)}${arrow}${starts || (crossed ? '' : ends)}${of(item.to)}${said(messageText(item.label))}`);
     // Mermaid takes one mark per arrow; a message that both ends and starts work says the other on its own line.
-    if (starts && ends) out.push(`${pad}deactivate ${of(item.from)}`);
+    if ((starts && ends) || crossed) out.push(`${pad}deactivate ${of(item.from)}`);
     return out;
   };
 

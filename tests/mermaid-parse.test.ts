@@ -222,6 +222,22 @@ describe('a sequence drawn on the canvas, as Mermaid reads it', () => {
     expect(await parses(fresh)).toBe(true);
   });
 
+  it('ends work on its own line before a receiver whose name starts with x, which Mermaid reads as "-x"', async () => {
+    // Mermaid reads arrows case-blind, so `BillingAPI-->>-Xero` held the lost-message arrow `-X` and
+    // the whole text failed to parse ("got 'SOLID_CROSS'").
+    const call = createMessage({ id: 'c', from: 'xero', to: 'api', label: 'GET /invoices' });
+    const reply = { ...createReply(call, '200 OK'), id: 'r' };
+    const gone = { ...createMessage({ id: 'd', from: 'api', to: 'xero', kind: 'destroy', label: 'close' }), deactivate: true as const };
+    for (const items of [[call, reply], [call, gone]]) {
+      const sequence: DraftSequence = { participants: [who('xero', 'Xero'), who('api', 'Billing API')], items };
+      const text = sequenceToMermaid(asNode(sequence));
+      expect(text).not.toMatch(/-X/);
+      expect(await parses(text)).toBe(true);
+      const back = parseMermaidSequence(text);
+      expect(back.ok && messagesOf(back.sequence).map((message) => [message.kind, Boolean(message.deactivate)])).toEqual([['sync', false], [items[1]!.kind, true]]);
+    }
+  });
+
   it('writes a critical section’s branches as the options Mermaid reads', async () => {
     const read = parseMermaidSequence('sequenceDiagram\n  critical Connect\n    A->>B: open\n  option Timeout\n    A->>A: log\n  end\n');
     expect(read.ok).toBe(true);
