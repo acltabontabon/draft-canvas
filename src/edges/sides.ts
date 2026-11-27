@@ -394,11 +394,12 @@ interface LineGrid {
 const cellKey = (cx: number, cy: number) => (cx + 32768) * 65536 + (cy + 32768);
 
 /**
- * How many times a line was asked which lines it could cross or run along, and how many it was then
- * compared with — counted, not timed, so `tests/edge-sides.test.ts` can hold the plan to comparing a
- * line with its neighbours as a diagram grows, on any machine.
+ * How many times a line was asked which lines it could cross or run along, how many it was then
+ * compared with, and how many cell entries the lines were filed under — counted, not timed, so
+ * `tests/edge-sides.test.ts` can hold the plan to comparing a line with its neighbours as a diagram
+ * grows, and a long line to the cells along it, on any machine.
  */
-export const sidePlanWork = { queries: 0, compared: 0 };
+export const sidePlanWork = { queries: 0, compared: 0, filed: 0 };
 
 function gridOf(lines: readonly Line[]): LineGrid {
   const grid: LineGrid = { cells: new Map(), version: lines.map(() => 0), seen: lines.map(() => -1), query: 0 };
@@ -406,23 +407,54 @@ function gridOf(lines: readonly Line[]): LineGrid {
   return grid;
 }
 
-/** Files each segment of line `index` in every cell its box, grown by `CELL_PAD`, covers. */
+/**
+ * How many pieces a segment is filed in: one, its whole box, unless it spans more than a cell both
+ * ways. A slanted segment's box is mostly cells it never comes near: a straight connector between
+ * far-apart shapes was filed in every one of them, (width / CELL) × (height / CELL) cells, and a drop
+ * with one 100,000 units across spent most of its time and 20 MB on it. In pieces no longer than a
+ * cell it is filed only along its length.
+ *
+ * Nothing is missed. A segment that spans a cell both ways is neither level nor upright, so it never
+ * runs along another line (`sharedRunsOf`); it can only cross one, at a point on one of its pieces and
+ * far inside that piece's box grown by `CELL_PAD`, so in a cell the piece is filed in. Level and
+ * upright runs are filed by their whole box, exactly as before.
+ */
+function piecesOf(p: Point, q: Point): number {
+  const dx = Math.abs(q.x - p.x);
+  const dy = Math.abs(q.y - p.y);
+  return dx > CELL && dy > CELL ? Math.ceil(Math.max(dx, dy) / CELL) : 1;
+}
+
+/** Files each segment of line `index` in every cell its box, or each of its pieces' boxes (`piecesOf`),
+ *  grown by `CELL_PAD`, covers. */
 function enter(grid: LineGrid, index: number, line: Line): void {
   const version = grid.version[index]!;
   const { points } = line;
   for (let i = 1; i < points.length; i += 1) {
     const p = points[i - 1]!;
     const q = points[i]!;
-    const x0 = Math.floor((Math.min(p.x, q.x) - CELL_PAD) / CELL);
-    const x1 = Math.floor((Math.max(p.x, q.x) + CELL_PAD) / CELL);
-    const y0 = Math.floor((Math.min(p.y, q.y) - CELL_PAD) / CELL);
-    const y1 = Math.floor((Math.max(p.y, q.y) + CELL_PAD) / CELL);
-    for (let cx = x0; cx <= x1; cx += 1) {
-      for (let cy = y0; cy <= y1; cy += 1) {
-        const key = cellKey(cx, cy);
-        const cell = grid.cells.get(key);
-        if (cell) cell.push(index, i, version);
-        else grid.cells.set(key, [index, i, version]);
+    const pieces = piecesOf(p, q);
+    for (let piece = 0; piece < pieces; piece += 1) {
+      // The first piece starts and the last ends exactly where the segment does.
+      const ax = piece === 0 ? p.x : p.x + ((q.x - p.x) * piece) / pieces;
+      const ay = piece === 0 ? p.y : p.y + ((q.y - p.y) * piece) / pieces;
+      const bx = piece === pieces - 1 ? q.x : p.x + ((q.x - p.x) * (piece + 1)) / pieces;
+      const by = piece === pieces - 1 ? q.y : p.y + ((q.y - p.y) * (piece + 1)) / pieces;
+      const x0 = Math.floor((Math.min(ax, bx) - CELL_PAD) / CELL);
+      const x1 = Math.floor((Math.max(ax, bx) + CELL_PAD) / CELL);
+      const y0 = Math.floor((Math.min(ay, by) - CELL_PAD) / CELL);
+      const y1 = Math.floor((Math.max(ay, by) + CELL_PAD) / CELL);
+      for (let cx = x0; cx <= x1; cx += 1) {
+        for (let cy = y0; cy <= y1; cy += 1) {
+          const key = cellKey(cx, cy);
+          const cell = grid.cells.get(key);
+          if (!cell) grid.cells.set(key, [index, i, version]);
+          // Neighbouring pieces' boxes overlap, and the pieces that reach a cell come one after
+          // another: the segment is filed in it once.
+          else if (cell[cell.length - 3] === index && cell[cell.length - 2] === i && cell[cell.length - 1] === version) continue;
+          else cell.push(index, i, version);
+          sidePlanWork.filed += 1;
+        }
       }
     }
   }
@@ -435,7 +467,9 @@ function place(grid: LineGrid, index: number, line: Line): void {
 }
 
 /** The lines `line` could cross or be drawn along: those with a segment that comes within `CELL_PAD`
- *  of one of its own — its own line too, which every count leaves out. */
+ *  of one of its own — its own line too, which every count leaves out. Only a stepped line is ever
+ *  asked (`isFree`, `trial`): its segments are level or upright, so each one's box is the cells it
+ *  passes through. */
 function nearby(grid: LineGrid, line: Line, lines: readonly Line[]): number[] {
   const query = (grid.query += 1);
   const found: number[] = [];

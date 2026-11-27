@@ -26,6 +26,17 @@ function aroundTheMiddle(ab: Partial<DraftEdge> = {}) {
   return { nodes, edges };
 }
 
+/**
+ * `aroundTheMiddle` with `c`'s line traded for a straight connector from `far` down and left to `far`
+ * up and right: it crosses a→b's run round `d`'s left halfway along, and passes clear of the run
+ * round `d`'s right. Moved by `shift` both ways, it misses a→b's line altogether.
+ */
+function acrossTheMiddle(far: number, shift = 0) {
+  const nodes = [box('a', 800, 520), box('b', 800, 0), box('d', 800, 260), box('s', 410 - far + shift, 425 + far + shift), box('t', 410 + far + shift, 425 - far + shift)];
+  const edges = [createEdge({ id: 'ab', source: 'a', target: 'b' }), createEdge({ id: 'st', source: 's', target: 't', routing: 'straight' })];
+  return { nodes, edges };
+}
+
 describe('side plan', () => {
   // Every line it judged, and every other pair of sides it tried, was compared with every line in the
   // diagram: on 1,000 shapes a drop spent most of a third of a second here.
@@ -39,6 +50,20 @@ describe('side plan', () => {
       expect(sidePlanWork.compared / sidePlanWork.queries, spec.name).toBeLessThan(document.edges.length / 6);
     }
   }, 30_000);
+
+  // A straight connector between far-apart shapes was filed in every cell of its box: sixteen times
+  // the cells for four times the length, and a drop with one 300,000 units across took 200 MB.
+  it('files a long slanted line only in the cells along it', () => {
+    const filed = (far: number) => {
+      const { nodes, edges } = acrossTheMiddle(far);
+      sidePlanWork.filed = 0;
+      chosen(nodes, edges);
+      return sidePlanWork.filed;
+    };
+    const short = filed(20_000);
+    const long = filed(80_000);
+    expect(long).toBeLessThan(short * 4.5);
+  });
 
   it('leaves connectors with nothing wrong exactly as the shapes alone draw them', () => {
     const nodes = [box('a', 0, 0), box('b', 300, 0), box('c', 0, 200), box('d', 300, 200)];
@@ -64,6 +89,15 @@ describe('side plan', () => {
     const ab = drawn(nodes, edges).ab!;
     expect(ab.status).toBe('clear');
     expect({ source: ab.source.side, target: ab.target.side }).toEqual({ source: sides!.source ?? 'top', target: sides!.target ?? 'bottom' });
+  });
+
+  it('sees where a long straight connector crosses a line, however far away its ends are', () => {
+    for (const far of [1_000, 100_000]) {
+      const across = acrossTheMiddle(far);
+      expect(chosen(across.nodes, across.edges).get('ab'), `${far}`).toEqual({ source: 'right', target: 'right' });
+      const clear = acrossTheMiddle(far, 1_000);
+      expect(chosen(clear.nodes, clear.edges).size, `${far}`).toBe(0);
+    }
   });
 
   it('never moves a pinned end, and leaves a connector pinned at both ends alone', () => {
