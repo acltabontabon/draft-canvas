@@ -40,7 +40,7 @@ async function show(settings: Locator, tab: 'Styles' | 'Canvas' | 'Drawing') {
 test('Appearance tabs share one tab stop and switch with the arrow keys', async ({ page }) => {
   await newCanvas(page, 'Keyboard appearance');
   const settings = await openAppearance(page);
-  await settings.getByRole('button', { name: 'Close appearance' }).focus();
+  await settings.getByRole('button', { name: 'Done', exact: true }).focus();
   await page.keyboard.press('Tab');
   await expect(settings.getByRole('tab', { name: 'Styles', selected: true })).toBeFocused();
   await page.keyboard.press('ArrowRight');
@@ -83,7 +83,7 @@ test('a style is made beside the canvas, kept on this device, and the open diagr
   await expect.poll(async () => (await documentStyle(page))?.general).toEqual({ weight: 'bold', corners: 'round' });
   await show(settings, 'Styles');
   await expect(mine.getByRole('radio', { name: /^My style/ })).toBeChecked();
-  await settings.getByRole('button', { name: 'Close appearance', exact: true }).click();
+  await settings.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(settings).toBeHidden();
 
   // Everything changed in that visit is one step, which undo takes back.
@@ -146,7 +146,7 @@ test('the diagram is framed again in the canvas the panel leaves it', async ({ p
   expect(Math.min(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().left))))).toBeGreaterThan(0);
 
   // Done puts the view back where it was before the panel took its room.
-  await settings.getByRole('button', { name: 'Close appearance', exact: true }).click();
+  await settings.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(settings).toBeHidden();
   await expect
     .poll(async () => Math.max(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().right)))))
@@ -159,7 +159,7 @@ test('the diagram is framed again in the canvas the panel leaves it', async ({ p
     .toBeLessThan(edge);
   await page.mouse.move(300, 600);
   await page.mouse.wheel(0, 40);
-  await panel.getByRole('button', { name: 'Close appearance', exact: true }).click();
+  await panel.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(panel).toBeHidden();
   await page.waitForTimeout(900);
   expect(Math.max(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().right))))).toBeLessThan(edge);
@@ -224,7 +224,7 @@ test('closing Appearance after changing rooms keeps the current room in view', a
   await expect(room).toBeVisible();
   await expect.poll(viewport).not.toBe(panelCamera);
   const roomCamera = await viewport();
-  await settings.getByRole('button', { name: 'Close appearance' }).click();
+  await settings.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(settings).toBeHidden();
   await nextFrames(page);
   expect(await viewport()).toBe(roomCamera);
@@ -322,7 +322,7 @@ test('a shape is drawn with a picture of the person’s own, and stays the shape
   );
   await settings.getByRole('button', { name: 'Use this', exact: true }).click();
   await expect(settings.getByRole('status')).toContainText('left out');
-  await settings.getByRole('button', { name: 'Close appearance', exact: true }).click();
+  await settings.getByRole('button', { name: 'Done', exact: true }).click();
 
   // Two paths where the cylinder was; the same box; the same name.
   await expect.poll(() => node.locator('path').count()).toBe(2);
@@ -400,7 +400,7 @@ test('a style pack is loaded from the gallery on request, added, and draws the o
   await expect(pack.getByRole('button', { name: 'High seas is in your styles', exact: true })).toBeDisabled();
   await expect(settings.getByRole('group', { name: 'My style' }).getByRole('radio', { name: /^High seas/ })).toBeChecked();
   await expect.poll(async () => (await documentStyle(page))?.name).toBe('High seas');
-  await settings.getByRole('button', { name: 'Close appearance', exact: true }).click();
+  await settings.getByRole('button', { name: 'Done', exact: true }).click();
 
   // The barrel where the cylinder was: the same box, the same name, the pack's own canvas.
   await expect.poll(drawing).not.toBe(builtIn);

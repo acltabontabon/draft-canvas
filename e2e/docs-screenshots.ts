@@ -995,7 +995,7 @@ async function appearanceScreenshots(page: Page) {
       await panel.getByRole('heading', { name: 'Style packs', exact: true }).evaluate((heading) => heading.scrollIntoView({ block: 'start' }));
       await shot(page, 'style-packs');
     }
-    await panel.getByRole('button', { name: 'Close appearance', exact: true }).click();
+    await panel.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(panel).toBeHidden();
     await frame();
     await shot(page, file);

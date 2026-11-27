@@ -106,7 +106,7 @@ test('Appearance opens beside the canvas from the status bar and the right-click
   await expect(page.locator('.dc-status')).toBeHidden();
   await expect(page.locator('.dc-toolbar-lead')).toBeVisible();
   // Done brings it all back.
-  await panel.getByRole('button', { name: 'Close appearance', exact: true }).click();
+  await panel.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(panel).toBeHidden();
   await expect(page.getByRole('button', { name: 'Share', exact: true })).toBeVisible();
   await expect(button).toHaveAttribute('aria-pressed', 'false');

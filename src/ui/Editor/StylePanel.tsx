@@ -231,8 +231,10 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
         >
           <div className="dc-style-cover-top">
             <span className="dc-style-cover-kicker">Appearance</span>
-            {/* The one way out that is always in view: the bars round the canvas step back while this is open. */}
-            <Button variant="quiet" className="dc-style-panel-done" aria-label="Close appearance" onClick={close}>
+            {/* The one way out that is always in view: the bars round the canvas step back while this is open.
+                Named by the word it shows (WCAG 2.5.3): "Close appearance" gave someone saying "Done"
+                nothing to press, and the panel round it already says it is Appearance. */}
+            <Button variant="quiet" className="dc-style-panel-done" onClick={close}>
               Done
             </Button>
           </div>
