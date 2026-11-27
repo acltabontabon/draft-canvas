@@ -223,7 +223,7 @@ describe('localStorage holds preferences only', () => {
     // unloads and read back once by the page that replaces it — the tab's own work, gone with the
     // tab (`src/storage/reloadStash.ts`, and `docs/reference/privacy.md` says so). Anything else
     // here is a new place a document could end up.
-    expect(users.map((file) => relative(ROOT, file))).toEqual(['src/storage/reloadStash.ts']);
+    expect(users.map((file) => relative(ROOT, file).split(sep).join('/'))).toEqual(['src/storage/reloadStash.ts']);
   });
 
   it('stores no canvas content, only short named preferences', () => {

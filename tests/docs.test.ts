@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -63,10 +63,12 @@ function anchorsOf(file: string): Set<string> {
 }
 
 const FILES = markdownFiles(ROOT);
+/** A file's path from the root with `/` on every platform: the checks below are written that way. */
+const rel = (file: string) => relative(ROOT, file).split(sep).join('/');
 
 describe('documentation links', () => {
   it('finds the docs', () => {
-    expect(FILES.map((f) => relative(ROOT, f))).toEqual(expect.arrayContaining(['README.md', 'docs/index.md']));
+    expect(FILES.map(rel)).toEqual(expect.arrayContaining(['README.md', 'docs/index.md']));
   });
 
   it('every relative link resolves to a file, and every #anchor to a heading', () => {
@@ -78,9 +80,9 @@ describe('documentation links', () => {
         const [pathPart, anchor] = target!.split('#') as [string, string | undefined];
         const dest = pathPart === '' ? file : resolve(dirname(file), pathPart);
         if (!existsSync(dest)) {
-          broken.push(`${relative(ROOT, file)} → ${target} (no such file)`);
+          broken.push(`${rel(file)} → ${target} (no such file)`);
         } else if (anchor && dest.endsWith('.md') && !anchorsOf(dest).has(anchor)) {
-          broken.push(`${relative(ROOT, file)} → ${target} (no such heading)`);
+          broken.push(`${rel(file)} → ${target} (no such heading)`);
         }
       }
     }
@@ -88,7 +90,7 @@ describe('documentation links', () => {
   });
 
   it('keeps docs filenames lowercase kebab-case', () => {
-    const offenders = FILES.map((f) => relative(ROOT, f)).filter(
+    const offenders = FILES.map(rel).filter(
       (f) => f.startsWith(`docs${'/'}`) && !/^docs\/([a-z0-9-]+\/)*[a-z0-9-]+\.md$/.test(f),
     );
     expect(offenders).toEqual([]);

@@ -173,7 +173,9 @@ describe('a reused plan equals a plan built from nothing', () => {
     // Both paths ran — an edit that moves only a far-off stray shape reuses, any other builds.
     expect(reused).toBeGreaterThan(20);
     expect(built).toBeGreaterThan(20);
-  });
+    // About a thousand endpoint plans: 3 s alone, past vitest's 5 s default under a full local run
+    // (CI's coverage run allows 30 s, so it never saw this).
+  }, 20_000);
 
   it('holds on a larger diagram, connectors budgeted too', () => {
     const { document } = buildScaleDocument(SCALE_SPECS.small);
