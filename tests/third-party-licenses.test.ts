@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { BUNDLED_DEV, LICENSE_FILES } from '../scripts/third-party-licenses.mjs';
 
 /**
  * THIRD_PARTY_LICENSES.txt is generated (`npm run licenses`) and committed, so the build can ship it
@@ -43,5 +44,27 @@ describe('THIRD_PARTY_LICENSES.txt', () => {
     expect(text).toMatch(/MIT License/);
     expect(text).toMatch(/^## Rust crates/m);
     expect(text).not.toContain('cargo was not available');
+  });
+
+  // Most crates ship LICENSE-MIT and LICENSE-APACHE rather than a bare LICENSE; matching only the
+  // bare name left 385 of them, and the npm package `ignore`, without their text.
+  it('reads the licence files packages and crates actually ship', () => {
+    for (const name of ['LICENSE', 'LICENSE.md', 'LICENCE', 'COPYING', 'NOTICE', 'LICENSE-MIT', 'LICENSE-APACHE', 'LICENSE_APACHE-2.0', 'license-mit']) {
+      expect(LICENSE_FILES.test(name), name).toBe(true);
+    }
+    for (const name of ['README.md', 'licensing.js', 'unlicensed', 'package.json']) {
+      expect(LICENSE_FILES.test(name), name).toBe(false);
+    }
+    const serde = text.match(/^### serde \S+ — [^\n]*\n\n([\s\S]*?)(?=^### )/m)?.[1];
+    expect(serde).toMatch(/^#### LICENSE-MIT$/m);
+    expect(serde).not.toContain('no licence file in the package');
+  });
+
+  // A build copies their code into what ships, though nothing installs them at run time: Workbox's
+  // service-worker runtime in the web app, the Tauri API in the desktop front end.
+  it('names the development packages whose code ships in a build', () => {
+    for (const name of BUNDLED_DEV) {
+      expect(text, name).toMatch(new RegExp(`^### ${name.replace(/[.*+?^${}()|[\]\\/@]/g, '\\$&')} `, 'm'));
+    }
   });
 });

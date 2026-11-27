@@ -75,7 +75,9 @@ Add credits and notices in the same change that adds or updates a dependency or 
 1. Add a row above: upstream repository and what Draft Canvas uses it for.
 2. For packages, run `npm run licenses` (needs installed npm dependencies and a working Cargo
    toolchain), review the output for missing license text, commit `THIRD_PARTY_LICENSES.txt`, then
-   run `npm run licenses:check`.
+   run `npm run licenses:check`. A development dependency whose code a build copies into what ships
+   (the Tauri API, Workbox's service-worker runtime) is listed in `BUNDLED_DEV` in
+   [`scripts/third-party-licenses.mjs`](../../scripts/third-party-licenses.mjs); add any new one there.
 3. For copied code, SVGs, fonts or other assets, record the upstream version or commit, source,
    license and modifications next to the files, and keep required notices with them. The generator
    does not find these.
