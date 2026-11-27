@@ -5,6 +5,7 @@
  * vertical one on the reply's side.
  */
 import { describe, expect, it } from 'vitest';
+import { captionSizer, edgeLabelSize, measureContext } from '../../src/agent/place';
 import { drawnRoute } from '../../src/agent/route';
 import { createDocument, createEdge, createNode } from '../../src/document/factory';
 import { addEdges, addNodes } from '../../src/document/operations';
@@ -39,5 +40,23 @@ describe('agent caption side', () => {
     const { line, text, chip } = pair({ x: 0, y: 320 });
     expect(text.x).toBeLessThan(line.labelX);
     expect(chip.x + chip.width / 2).toBeLessThan(line.labelX);
+  });
+
+  // Its chip shows the action's name, which every renderer routes (`routedLabel`); the checks sized and
+  // placed its relationship caption instead, a box no renderer draws.
+  it('judges a named recovery action by the name its chip shows, where the renderers place it', () => {
+    const orders = createNode({ id: 'orders', type: 'service', x: 0, y: 0, text: 'Orders' });
+    const pay = createNode({ id: 'pay', type: 'service', x: 500, y: 0, text: 'Payments' });
+    const charge = createEdge({ id: 'charge', source: 'orders', target: 'pay', semantic: 'command' });
+    const refund = { ...createEdge({ id: 'refund', source: 'orders', target: 'pay', semantic: 'compensates' }), compensationFor: 'charge', compensationName: 'Refund the payment' };
+    const nodes = [orders, pay];
+    const ctx = measureContext();
+    // The same words as its own label: what the chip shows, routed and drawn the same way.
+    const labelled = { ...refund, compensationName: undefined, label: 'Refund the payment' };
+    const size = edgeLabelSize(refund, orders, pay, ctx);
+    expect(size).toEqual(edgeLabelSize(labelled, orders, pay, ctx));
+    expect(size.width).toBeGreaterThan(edgeLabelSize({ ...refund, compensationName: undefined }, orders, pay, ctx).width);
+    const drawn = drawnRoute(refund, nodes, [charge, refund], captionSizer(nodes, ctx));
+    expect(drawn).toMatchObject({ ownChip: true, chip: drawnRoute(labelled, nodes, [charge, labelled], captionSizer(nodes, ctx))!.chip });
   });
 });

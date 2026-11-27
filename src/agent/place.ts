@@ -20,6 +20,7 @@ import { roomOf } from '../depth/tree';
 import { layoutGraph, LayoutError, type Direction, type LayoutEdge } from '../layout/layered';
 import { assignAnchors, MIN_LABELLED_FAN, type AnchorRect, type TitleSpan } from '../layout/anchors';
 import { compatibilityKey } from '../edges/bundles';
+import { routedLabel } from '../edges/edgeRoutes';
 import { boundaryHeaderTextBox, nameLineCount, naturalArchitectureSize, naturalCodeSize, naturalNoteHeight, naturalTextSize, type DescribeContext, sizingContext } from '../nodes/describe';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
@@ -375,9 +376,13 @@ export function connectorFor(spec: RelationshipSpec, source: DraftNode, target: 
   return edge;
 }
 
-/** The size a connector's words take on the canvas — its own label, or the relationship caption. */
+/**
+ * The size a connector's words take on the canvas: what its chip shows (`routedLabel`: a named
+ * recovery action's name, else its own label), or the relationship caption. Sized from the label
+ * alone, a named action with none was judged as its caption, a box no renderer draws.
+ */
 export function edgeLabelSize(edge: DraftEdge, source: DraftNode, target: DraftNode, ctx: DescribeContext): { width: number; height: number } {
-  const text = edge.label ?? (edge.semantic ? relationshipCaptionLabel(edge.semantic, { source: categoryOf(source), target: categoryOf(target) }) : '');
+  const text = routedLabel(edge) ?? (edge.semantic ? relationshipCaptionLabel(edge.semantic, { source: categoryOf(source), target: categoryOf(target) }) : '');
   if (!text) return { width: 0, height: 0 };
   const layout = layoutText(text, {
     font: FONTS.edgeLabel,

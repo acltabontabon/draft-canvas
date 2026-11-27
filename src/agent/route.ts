@@ -20,6 +20,7 @@ import { routingPlan } from '../edges/bundles';
 import { labelChipBox, labelGroupPlan } from '../edges/labelGroups';
 import { obstaclesForEdge } from '../edges/obstacles';
 import { connectorRoutes } from '../edges/connectorRoutes';
+import { routedLabel } from '../edges/edgeRoutes';
 import { stepPolyline } from '../edges/waypoints';
 import { boundaryHeaderTextBox, sizingContext } from '../nodes/describe';
 import { getMeasurer } from '../render/text/measure';
@@ -233,6 +234,7 @@ export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: 
   if (!routes) return null;
   const route = routes.request;
   let chip: Box | null = null;
+  const words = routedLabel(edge);
   const size = caption?.(edge);
   if (size && size.width > 0) {
     const group = labelGroupPlan(nodes, edges, 'transient').groupFor(edge.id);
@@ -241,7 +243,9 @@ export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: 
     } else {
       const lane = laneIndex(edges).get(edge.id)?.offset ?? 0;
       const nudge = labelLaneOffset(route.source.side, route.target.side, lane);
-      if (edge.label) {
+      // What the chip shows (`routedLabel`): a named recovery action's name is a chip like a label,
+      // placed by the chip rule, where it was judged by the caption rule for want of a label.
+      if (words) {
         // The side the renderers draw it on: away from the reply line, when there is one.
         const side = labelChipSide(route.labelSide, responseAwayAt(route, routes.response, lane));
         chip = labelChipBox(side, route.labelX + nudge.x, route.labelY + nudge.y, size.width, size.height);
@@ -262,7 +266,7 @@ export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: 
     }
   }
   const unresolved = route.status === 'blocked' || route.status === 'budget' ? { status: route.status } : {};
-  return { points: pathPoints(route.d), chip, ...(chip && edge.label ? { ownChip: true } : {}), ...(spine ? { spine: spine.id } : {}), ...unresolved };
+  return { points: pathPoints(route.d), chip, ...(chip && words ? { ownChip: true } : {}), ...(spine ? { spine: spine.id } : {}), ...unresolved };
 }
 
 /** Two captions that may legitimately share a spot: one label drawn for a group, or one relationship
