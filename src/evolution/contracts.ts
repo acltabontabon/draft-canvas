@@ -4,8 +4,8 @@
  * Draft Canvas owns the architectural meaning of history — what a revision is, which changes it
  * records, how two architectures merge. It does not own Git: the browser backend is isomorphic-git
  * in the history worker, the desktop backend is gix behind the desktop shell. Both implement
- * `VersionStore`, and `tests/evolution/contract.test.ts` plus the Rust tests hold both to the same
- * fixtures (docs/reference/evolution.md, ADR-1).
+ * `VersionStore`, and `tests/evolution/igit-store.test.ts` plus the Rust tests hold both to the same
+ * fixtures, `tests/fixtures/evolution/contract.json` (docs/reference/evolution.md, ADR-1).
  *
  * Everything here is plain data: it crosses a worker boundary and an IPC boundary unchanged.
  */

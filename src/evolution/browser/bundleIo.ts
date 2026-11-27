@@ -4,12 +4,12 @@
  * Export writes everything the chosen refs reach into one pack behind a v2 header (`bundle.ts`), so
  * `git clone history.bundle` gives the same branches, revisions and milestones.
  *
- * Import is isolated (ADR-16): the bundle is scanned within limits (`packScan.ts`) before anything
- * inflates it, indexed into a brand-new repository that nothing is bound to yet, and every revision
- * any accepted ref reaches is checked — tree exactly `{ diagram.draftcanvas }`, blob a diagram that
- * `validate` accepts. Only then does the repository get its refs; on any failure it is removed
- * whole. Existing history is never touched by an import: reconciling the two is a separate,
- * explicit merge.
+ * Import is isolated (docs/reference/evolution.md, "Threats and mitigations"): the bundle is
+ * scanned within limits (`packScan.ts`) before anything inflates it, indexed into a brand-new
+ * repository that nothing is bound to yet, and every revision any accepted ref reaches is checked —
+ * tree exactly `{ diagram.draftcanvas }`, blob a diagram that `validate` accepts. Only then does the
+ * repository get its refs; on any failure it is removed whole. Existing history is never touched by
+ * an import: reconciling the two is a separate, explicit merge.
  */
 import git from 'isomorphic-git';
 import { acceptedRefs, encodeBundle, parseBundle } from '../bundle';

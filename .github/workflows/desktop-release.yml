@@ -13,7 +13,7 @@ name: Desktop Release
 #                                       source — for a release whose desktop builds failed.
 #
 # The installers are signed for the operating system only when the repository has the secrets for
-# it (see "Prepare OS signing" below and docs/reference/desktop-updates.md). Without them — the case
+# it (see "Prepare OS signing" below and docs/reference/releases.md#signing). Without them — the case
 # today — they are ad-hoc signed on macOS and unsigned on Windows, the release notes say how to open
 # them anyway, and checksums plus a build attestation let them be verified regardless.
 on:
@@ -107,13 +107,13 @@ jobs:
           fi
       # Every release is also an update installed copies will be offered. That takes the update signing
       # key in the repository's secrets and its public half in tauri.conf.json; a release without them
-      # isn't a smaller release, it's one nobody can update from. See docs/reference/desktop-updates.md.
+      # isn't a smaller release, it's one nobody can update from. See docs/reference/releases.md#update-key-setup.
       - name: The updater can ship
         env:
           KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           if [ -z "$KEY" ]; then
-            echo '::error::TAURI_SIGNING_PRIVATE_KEY is not set as a repository secret. See docs/reference/desktop-updates.md.'
+            echo '::error::TAURI_SIGNING_PRIVATE_KEY is not set as a repository secret. See docs/reference/releases.md#update-key-setup.'
             exit 1
           fi
           node scripts/update-manifest.mjs check-config

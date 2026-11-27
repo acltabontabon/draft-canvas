@@ -5,6 +5,6 @@
     "package": "glib",
     "reason": "Tauri's Linux-only GTK dependency. cargo tree for aarch64-apple-darwin, x86_64-apple-darwin and x86_64-pc-windows-msvc contains no glib. Distributed desktop targets are macOS and Windows only; adding Linux requires resolving this advisory first. Rechecked 2026-11-27: the latest Tauri 2 (2.12.7) still needs wry 0.57, whose webkit2gtk 2.0 and gtk 0.18 hold glib at 0.18.5. The fix (glib 0.20 and later) comes with wry 0.58 (gtk 0.19, webkit2gtk 3.0, glib 0.22), which only Tauri 3, still in alpha, uses.",
     "expires": "2027-01-09",
-    "tracking": "docs/reference/reliability.md#dependency-triage"
+    "tracking": "docs/reference/releases.md#dependency-triage"
   }
 ]

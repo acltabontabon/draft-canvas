@@ -6,7 +6,7 @@
  * object's deflate stream to its exact end and counting what it produces against what the object
  * declares, so a bomb, an object larger than any diagram, a delta chain deeper than Git itself would
  * write, or a pack that claims more objects than it holds is refused while it is still a byte array
- * (docs/reference/evolution-security.md).
+ * (docs/reference/evolution.md#threats-and-mitigations).
  *
  * It does not hash objects, check zlib's checksums or resolve deltas — that is the library's job,
  * and it happens next. A pack this accepts may still be refused there; nothing this refuses is ever
