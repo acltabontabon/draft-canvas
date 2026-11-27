@@ -110,6 +110,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Mermaid** — Importing a very long or deeply nested sequence diagram no longer freezes the tab.
   A sequence's `title:` line, a `%%` inside a message and `par_over` are read as Mermaid reads
   them, and a flowchart name that starts with a backtick no longer breaks the export.
+- **Mermaid sequence import** — `box Aqua Payments` becomes a group called Payments, a `;` ends a
+  statement, `A->>()B` is a message from A to B, and `accTitle` and `accDescr` are no longer read
+  as messages, all as Mermaid reads them.
 - **Structurizr export** — External systems are declared as software systems outside yours, and
   nested boundaries load in Structurizr.
 - **Third-party notices** — The notices carry the licence text of every Rust crate and bundled
@@ -164,7 +167,11 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   id prefix, and an id clash names the id. Boundaries nested deeper than a diagram keeps are
   refused, and changes to the open diagram get the same reopen check as other agent writes.
 - **Agent skill** — The refusal table says what the app's message says to do, and the request
-  checker reports wrongly typed fields instead of crashing.
+  checker reports wrongly typed fields instead of crashing. Installing the skill, and its update at
+  launch, work again when the agent's skills folder is a link to a folder on another drive.
+- **Nodi's code access** — Everything the project's `.gitignore` ignores stays out, including
+  patterns such as `[Bb]in/` and `*.py[cod]`, and names match regardless of case on Windows and
+  macOS, as Git matches them there.
 - **Proposals** — A proposal that landed before a crash is recognised even when its labels had
   extra spaces.
 - **History** — Import history… accepts bundles with named revisions, including the app's own
