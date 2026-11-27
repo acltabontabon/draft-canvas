@@ -34,6 +34,13 @@ on:
       verified-commit:
         type: string
         default: ''
+    # Only what the deploy step uses. Callers pass exactly these two: `secrets: inherit` handed this
+    # workflow, and the third-party code it builds with, the update signing key and every other secret.
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        required: false
+      CLOUDFLARE_ACCOUNT_ID:
+        required: false
 
 permissions:
   contents: read
