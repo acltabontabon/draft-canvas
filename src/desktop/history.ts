@@ -7,11 +7,11 @@
  */
 import type { HistoryBackend, ImportedHistory } from '../evolution/backend';
 import { acceptedRefs, encodeBundle, parseBundle } from '../evolution/bundle';
-import { HistoryError, type Binding, type RefEntry, type RepoMeta, type VersionStore } from '../evolution/contracts';
+import { HistoryError, type Binding, type Oid, type RefEntry, type RepoMeta, type VersionStore } from '../evolution/contracts';
 import type { CopyKey } from '../evolution/identity';
 import { verifyImported } from '../evolution/importCheck';
 import { PackRejected, scanPack } from '../evolution/packScan';
-import { MAIN_REF } from '../evolution/refs';
+import { MAIN_REF, MILESTONE_PREFIX } from '../evolution/refs';
 import { readHistoryText } from '../evolution/snapshot';
 import { installHistoryBackend } from '../store/evolution/bridge';
 import type { DesktopApi } from './api';
@@ -74,6 +74,11 @@ export class DesktopHistoryBackend implements HistoryBackend {
    * Scanned here within limits, indexed by the shell into a staging repository nothing is bound to,
    * checked revision by revision, and only then given its refs. Anything wrong removes the staging
    * repository whole.
+   *
+   * The shell reads a tag only through its ref, and the staging repository has none, so looking a
+   * milestone up there refused every bundle that had one, the desktop's own exports included.
+   * Milestones are checked right after the commit gives them refs instead, while the new history is
+   * still bound to nothing and its documentId unset, and anything wrong removes it whole.
    */
   async importBundle(bytes: Uint8Array, meta: RepoMeta): Promise<ImportedHistory> {
     const { header, packStart } = parseBundle(bytes);
@@ -88,15 +93,35 @@ export class DesktopHistoryBackend implements HistoryBackend {
       if (error instanceof PackRejected) throw new HistoryError('corrupt', error.message);
       throw error;
     }
+    const validate = (text: string) => void readHistoryText(text);
+    const checked = new Set<Oid>();
     const staging = await importBegin(this.api, meta, pack);
+    let store: VersionStore;
+    let documentId: string;
     try {
-      const revisions = await verifyImported(staging, accepted, (text) => void readHistoryText(text));
-      const documentId = readHistoryText(await staging.readSnapshot(main.oid)).document.metadata.id;
-      const store = await importCommit(this.api, staging, accepted);
-      await store.writeMeta({ ...(await store.meta()), documentId });
-      return { repoId: store.repoId, refs: accepted, ignored, revisions, documentId };
+      await verifyImported(
+        staging,
+        accepted.filter((entry) => !entry.ref.startsWith(MILESTONE_PREFIX)),
+        validate,
+        checked,
+      );
+      documentId = readHistoryText(await staging.readSnapshot(main.oid)).document.metadata.id;
+      store = await importCommit(this.api, staging, accepted);
     } catch (error) {
       await importAbort(this.api, staging).catch(() => undefined);
+      throw error;
+    }
+    try {
+      await verifyImported(
+        store,
+        accepted.filter((entry) => entry.ref.startsWith(MILESTONE_PREFIX)),
+        validate,
+        checked,
+      );
+      await store.writeMeta({ ...(await store.meta()), documentId });
+      return { repoId: store.repoId, refs: accepted, ignored, revisions: checked.size, documentId };
+    } catch (error) {
+      await removeHistory(this.api, store.repoId).catch(() => undefined);
       throw error;
     }
   }
