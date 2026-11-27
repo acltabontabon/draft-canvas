@@ -16,6 +16,7 @@
  * all place the marks from this one function. The rail never changes a shape's size, its handles or
  * routing.
  */
+import { isGlyphShape } from './dataStoreGeometry';
 
 /** Every mark in the rail is this tall; the technology mark and a lone tab are this wide too. */
 export const RAIL_SIZE = 16;
@@ -50,15 +51,32 @@ export interface MarkerRail {
 /** A boundary's open-point tab sits inside its corner; see `openPoints/marker.ts`. */
 const BOUNDARY_TAB_INSET = 8;
 
+/** What the rail needs to know of a shape: its width, and what decides where its marks go. */
+export interface RailShape {
+  type: string;
+  width: number;
+  serviceKind?: string;
+  componentKind?: string;
+}
+
+/**
+ * Whether the shape's technology mark stands in the rail. A Data Store, an Artifact, and a Service
+ * or Component drawn as a glyph wear theirs beside the glyph, inside their own box
+ * (`nodes/technology.ts`'s `technologyMarkBounds`), so it takes no room here. The rail used to keep
+ * that room for all but the Data Store, and every tab stood one slot in from an empty corner.
+ */
+export function technologyInRail(node: Pick<RailShape, 'type' | 'serviceKind' | 'componentKind'>): boolean {
+  return node.type !== 'database' && node.type !== 'artifact' && !isGlyphShape(node);
+}
+
 /**
  * Where each mark the shape carries sits, as top-left corners in the shape's own coordinates.
  *
- * Two shapes keep a mark out of the rail. A data store's technology mark belongs beside its
- * compact glyph, inside its own box, so it takes no room here. A boundary's open-point tab sits
- * inside its corner, which is empty and says "this area" more plainly than a tab above a dashed
- * line would.
+ * Some shapes keep a mark out of the rail. A technology mark drawn beside a glyph takes no room
+ * here (`technologyInRail`). A boundary's open-point tab sits inside its corner, which is empty and
+ * says "this area" more plainly than a tab above a dashed line would.
  */
-export function markerRail(node: { type: string; width: number }, contents: RailContents): MarkerRail {
+export function markerRail(node: RailShape, contents: RailContents): MarkerRail {
   const y = -(RAIL_SIZE + RAIL_LIFT);
   const rail: MarkerRail = {};
   let right = node.width;
@@ -67,7 +85,7 @@ export function markerRail(node: { type: string; width: number }, contents: Rail
     right = x - RAIL_GAP;
     return x;
   };
-  if (contents.technology && node.type !== 'database') rail.technology = { x: take(RAIL_SIZE), y };
+  if (contents.technology && technologyInRail(node)) rail.technology = { x: take(RAIL_SIZE), y };
   const count = contents.attachments ?? 0;
   if (count > 0) {
     const width = attachmentTabWidth(count);

@@ -498,7 +498,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const insideCount = node.inside?.nodes.length ?? 0;
   // One row for every mark the shape carries above its corner, so none lands on another.
   const rail = markerRail(
-    { type: node.type, width: effectiveWidth },
+    // Its kind decides whether its technology mark stands in the rail or by its glyph.
+    { type: node.type, width: effectiveWidth, serviceKind: node.serviceKind, componentKind: node.componentKind },
     {
       technology: Boolean(liveNode && nodeTechnologyIcon(liveNode)),
       attachments: attachmentCount,
