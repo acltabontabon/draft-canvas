@@ -76,8 +76,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   repairs", from a file, a share link or the desktop.
 - **Live collaboration** — Collaborators stay connected when the owner's clock is set back or jumps
   forward, and someone asking to join then isn't told the owner is busy. Someone let in just as the
-  owner's relay connection dropped gets in when let in again. A collaborator using Make room on a large diagram stays in the session. Cursors and
-  selection rings stay visible when the canvas and the device differ in light or dark.
+  owner's relay connection dropped gets in when let in again. A collaborator using Make room on a
+  large diagram stays in the session. Cursors and selection rings stay visible when the canvas and
+  the device differ in light or dark.
 - **Shared undo** — Undo after others' edits is refused with a message when it would take the
   diagram past its size limits. It no longer takes away the level someone gave a shape's inside,
   and undoing a deleted shape brings its inside back at its level. A connector ending on a point a
