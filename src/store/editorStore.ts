@@ -208,6 +208,7 @@ import {
   type Selection,
 } from '../history/HistoryStack';
 import type { SaveState } from '../storage/autosave';
+import { idsUnique, withinLimits } from '../collab/limits';
 import { changeKeys, revertKeys } from '../collab/selective';
 import { withLocalView } from '../collab/localView';
 import { isSharedEditing, useCollabStore } from './collabStore';
@@ -1529,7 +1530,8 @@ function selectiveStep(set: SetEditorState, get: GetEditorState, direction: 'und
   const keys = entry.keys ?? changeKeys(entry.before, entry.after);
   const result = direction === 'undo' ? revertKeys(current, entry.after, entry.before, keys) : revertKeys(current, entry.before, entry.after, keys);
   const notify = useUiStore.getState().notify;
-  if (result.blocked) {
+  // What the step puts back meets an id somebody else has used since: it can't come back as it was.
+  if (result.blocked || !idsUnique(result.file)) {
     // Dropped rather than kept: left on the stack it would block every step behind it.
     const { past, future } = state.history;
     set({ history: direction === 'undo' ? { past: past.slice(0, -1), future } : { past, future: future.slice(1) } });
@@ -1539,6 +1541,14 @@ function selectiveStep(set: SetEditorState, get: GetEditorState, direction: 'und
   if (result.file === current) {
     set({ history: step.history });
     notify(`Nothing left to ${direction} in "${entry.label}" — someone else changed it since.`);
+    return;
+  }
+  // Alone, the step and what others added since each fit the file's limits; together they may not.
+  // Committed anyway, the file went to everyone past them: their copies refused it and resynced to a
+  // cut-down one, and it reopened with a repair. The same check `undoChangesOf` makes. Left on the
+  // stack, since it can be taken once there is room again.
+  if (!withinLimits(result.file)) {
+    notify(`Couldn’t ${direction} "${entry.label}" — that would make this diagram too large.`, 'error');
     return;
   }
   restoreSnapshot(set, get, {
