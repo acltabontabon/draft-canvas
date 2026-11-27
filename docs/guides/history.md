@@ -146,6 +146,11 @@ alternative's name. Click it to switch, start one, or bring one in.
 Alternatives cannot be switched, started or merged during a live session, because everyone in it
 would change diagram. End the session first.
 
+While recording is paused for the diagram, or history is off on this device, changes made since the
+last revision are not in history, and switching would replace them. So switching, starting an
+alternative and bringing one in wait until you turn recording back on. When the diagram has nothing
+unrecorded, they work as usual.
+
 ## Bring one alternative into another
 
 Click the timeline's title and choose **Bring in “X”…** to combine X's changes with the architecture

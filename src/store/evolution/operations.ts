@@ -20,7 +20,7 @@ import { archivedBranchOf, branchOf } from '../../evolution/refs';
 import { formatMessage } from '../../evolution/trailers';
 import { isSharedEditing } from '../collabStore';
 import { fileOf, isInteracting, useEditorStore } from '../editorStore';
-import { historyService, historySignature } from './bridge';
+import { historyEnabled, historyService, historySignature } from './bridge';
 import { historyCompute } from './client';
 import { useEvolutionStore } from './evolutionStore';
 import { closeLens, loadTimeline, snapshotOf } from './historyView';
@@ -188,6 +188,19 @@ function sharedRefusal(): Outcome | null {
 }
 
 /**
+ * Exploring, switching and bringing an alternative in replace what is on screen with a recorded
+ * revision (a switch starts undo afresh), so it must be in history first. `flush` records it, but not
+ * while recording is paused for this diagram or off on this device: they once went ahead anyway, lost
+ * every edit made meanwhile and said the architecture left was unchanged. Refused instead, rather than
+ * recording what the person paused; once what is on screen is the recorded tip, they go ahead.
+ */
+export function unrecordedRefusal(doing: string): Outcome {
+  const why = historyService().paused ? ['Recording is paused for this diagram', 'Record this diagram’s history'] : !historyEnabled() ? ['History is off on this device', 'Keep a history of every diagram'] : null;
+  if (!why) return refused('Your latest changes aren’t in history yet. Try again in a moment.');
+  return refused(`${why[0]}, so your latest changes aren’t in history and ${doing} would replace them. Turn on “${why[1]}” in History settings first.`);
+}
+
+/**
  * Moves the working copy onto another alternative: what is pending is recorded on the one being
  * left, the copy's binding moves, and the diagram becomes that alternative's latest revision. A
  * change of context, not an edit: undo starts afresh, as when opening a diagram.
@@ -207,6 +220,7 @@ export async function switchAlternative(altId: string | null): Promise<Outcome> 
     const next = withLiveBookkeeping(await snapshotOf(target), live);
     const compute = historyCompute();
     const [before, after] = await Promise.all([compute.prepare(live), compute.prepare(next)]);
+    if (before.blobId !== context.tipBlob) return unrecordedRefusal('switching');
     const opId = randomId('o');
     const data = opData(context, store.repoId, { kind: 'binding', copyId: context.copyId, fromAlt, toAlt: altId }, before.blobId, after.blobId, target);
     // Read again before anything moves: an edit (the person's, an agent's) or another diagram opened
@@ -246,6 +260,7 @@ export async function createAlternative(name: string, from?: Oid): Promise<Outco
     const { service, context, store } = await begin();
     const start = from ?? context.tip;
     if (!start) return refused('Draw something first: an alternative starts from a recorded version.');
+    if ((await historyCompute().prepare(fileOf(useEditorStore.getState()))).blobId !== context.tipBlob) return unrecordedRefusal('exploring an alternative');
     const altId = randomId('a');
     const created = await store.updateRef({ ref: branchOf(altId), expected: null, next: start });
     if (!created.ok) return refused('That alternative could not be created; try again.');

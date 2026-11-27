@@ -168,6 +168,69 @@ describe('alternatives', { timeout: 30_000 }, () => {
   });
 });
 
+describe('alternatives while recording is paused or off', { timeout: 30_000 }, () => {
+  const ids = () => fileOf(useEditorStore.getState()).nodes.map((node) => node.id).sort();
+  const addDatabase = (file: Parameters<typeof addNodes>[0]) => addNodes(file, [createNode({ type: 'database', x: 0, y: 200, id: 'n_db', text: 'Orders DB' })]);
+
+  // Exploring, switching and bringing in all replace what is on screen with a recorded revision. They
+  // once went ahead with edits recording had not taken, clearing undo and saying nothing was lost.
+  it('refuses to explore an alternative while edits made with recording paused are not in history', async () => {
+    await start();
+    const recorded = await tipOf();
+    await historyService().setPaused(true);
+    await edit(addDatabase);
+    expect(await tipOf()).toBe(recorded);
+    const outcome = await createAlternative('Try events');
+    expect(outcome).toMatchObject({ ok: false, message: expect.stringMatching(/paused/) });
+    expect(ids()).toEqual(['n_api', 'n_db']);
+    expect(useEditorStore.getState().history.past.length).toBeGreaterThan(0);
+    expect(useEvolutionStore.getState().altId).toBeNull();
+    expect((await historyService().store!.meta()).alternatives).toEqual([]);
+  });
+
+  it('refuses to switch while edits made with recording paused are not in history, and switches once they are gone', async () => {
+    await start();
+    expect((await createAlternative('Other')).ok).toBe(true);
+    const altId = useEvolutionStore.getState().altId!;
+    expect((await switchAlternative(null)).ok).toBe(true);
+    await historyService().setPaused(true);
+    await edit((file) => updateNode(file, 'n_api', { text: 'Edge router' }));
+    expect((await switchAlternative(altId)).ok).toBe(false);
+    expect(fileOf(useEditorStore.getState()).nodes[0]!.text).toBe('Edge router');
+    expect(useEvolutionStore.getState().altId).toBeNull();
+    // Undone back to what is recorded, nothing would be lost: switching while paused is fine then.
+    useEditorStore.getState().undo();
+    expect((await switchAlternative(altId)).ok).toBe(true);
+    expect(useEvolutionStore.getState().altId).toBe(altId);
+  });
+
+  it('refuses when history was turned off for the device after the diagram opened', async () => {
+    await start();
+    localStorage.setItem('draft-canvas.history', 'off');
+    try {
+      await edit(addDatabase);
+      expect(await createAlternative('Later')).toMatchObject({ ok: false, message: expect.stringMatching(/off on this device/) });
+      expect(ids()).toEqual(['n_api', 'n_db']);
+    } finally {
+      localStorage.removeItem('draft-canvas.history');
+    }
+  });
+
+  it('refuses to bring an alternative in over edits made with recording paused', async () => {
+    const { startMerge } = await import('../../src/store/evolution/merging');
+    await start();
+    await createAlternative('Ahead');
+    const altId = useEvolutionStore.getState().altId!;
+    await edit((file) => addNodes(file, [createNode({ type: 'queue', x: 300, y: 0, id: 'n_q', text: 'Events' })]));
+    await switchAlternative(null);
+    await historyService().setPaused(true);
+    await edit((file) => updateNode(file, 'n_api', { text: 'Edge router' }));
+    expect((await startMerge(altId)).ok).toBe(false);
+    expect(ids()).toEqual(['n_api']);
+    expect(fileOf(useEditorStore.getState()).nodes[0]!.text).toBe('Edge router');
+  });
+});
+
 describe('recovering an interrupted operation', { timeout: 30_000 }, () => {
   it('finishes a restore whose history moved but whose diagram did not', async () => {
     await start();

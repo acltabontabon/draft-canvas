@@ -289,6 +289,9 @@ desktop broker like `read_selection`). Another diagram answers `NOT_ACTIVE`. The
   exported.
 - Nothing in history changes the working copy except a journaled operation, and those go through
   `editorStore.applyToFile` as one undo step.
+- An operation that replaces what is on screen with a recorded revision (switching, exploring,
+  bringing an alternative in) starts only from the branch's tip. While recording is paused or off,
+  `flush` records nothing, so unrecorded content refuses the operation; it is never recorded anyway.
 - Every ref name is built from ids (`refs.ts`), and every ref read from outside passes
   `isSafeRefName`.
 - Every revision read back passes `parseDocument`. A tree that is not exactly `{ diagram.draftcanvas }`
