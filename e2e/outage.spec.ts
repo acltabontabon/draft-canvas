@@ -192,6 +192,32 @@ test.describe('Outage walk', () => {
     await expect(page.locator('.dc-status-open-points')).toContainText('1');
   });
 
+  test('offers no answers while the diagram takes no edits', async ({ page }) => {
+    await importDocument(page, storeDocument(), 'store.draftcanvas');
+    await page.locator('.dc-status-outage').click();
+    await takeDown(page, 'payments');
+    const answers = page.getByRole('group', { name: 'What should Fulfilment do while Payment provider is down?' });
+    await expect(answers.getByRole('button', { name: 'Keep as open point' })).toBeVisible();
+    const notes = await page.locator('button.dc-outage-note').count();
+
+    // A view-only copy refuses every edit. Offered anyway, a fix did nothing at all, and Keep said
+    // the canvas held as many open points as it could, with none on it.
+    const setReadOnly = (on: boolean) =>
+      page.evaluate(async (value) => {
+        const { useUiStore } = await import('/src/store/uiStore.ts');
+        useUiStore.getState().setReadOnly(value ? { sharedTitle: 'Shared', collaborative: true } : null);
+      }, on);
+    await setReadOnly(true);
+    await expect(page.locator('.dc-outage-actions')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Keep as open point' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Draw the replay route' })).toHaveCount(0);
+    // The questions are still asked.
+    await expect(page.locator('button.dc-outage-note')).toHaveCount(notes);
+
+    await setReadOnly(false);
+    await expect(answers.getByRole('button', { name: 'Keep as open point' })).toBeVisible();
+  });
+
   test('loses one instance of a replicated service before all of them', async ({ page }) => {
     await importDocument(page, storeDocument(), 'store.draftcanvas');
     await page.locator('.dc-status-outage').click();

@@ -1536,6 +1536,15 @@ function reidentify(previous: ContinuationOffer, next: ContinuationOffer): Conti
 }
 
 /**
+ * Whether the diagram takes no edits just now: opened read-only (a share link, a view-only
+ * collaborator), showing a past revision in the history lens, or showing a flow being traced. The one
+ * answer the store refuses edits by (`editorStore`'s `editingLocked`) and chrome offering an edit asks.
+ */
+export function editingLockedIn(ui: Pick<UiStore, 'readOnly' | 'flowTrace' | 'historyLens'>): boolean {
+  return Boolean(ui.readOnly || ui.flowTrace || ui.historyLens);
+}
+
+/**
  * The last pointer position over the canvas, in screen pixels. `known` is false while the pointer is
  * off the canvas.
  *

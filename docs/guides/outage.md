@@ -78,6 +78,9 @@ A dashed loop marks something the drawing leaves open. Each question has its ans
 - **Keep as open point** leaves the question on that shape as an [open point](open-points.md), in
   the file, for the review.
 
+Both are edits, so neither is offered where the diagram takes none: a read-only copy, a past
+revision you are looking at in [History](history.md#look-at-the-past), or a flow you are tracing.
+
 Nothing is changed for you, and a gap in the diagram is not proof of a gap in the system: it may
 simply not be drawn yet.
 

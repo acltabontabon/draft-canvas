@@ -9,6 +9,7 @@
  * again as soon as it lands. Keeping a question as an open point is `addOpenPoint`, the same way.
  */
 
+import { LIMITS } from '../document/limits';
 import { normalizeOpenPointText } from '../document/openPoints';
 import type { OpenPoint } from '../document/types';
 import { useEditorStore } from '../store/editorStore';
@@ -74,6 +75,11 @@ export function keptAsOpenPoint(note: OutageNote, openPoints: readonly OpenPoint
 export function keepAsOpenPoint(note: OutageNote, editor: Editor = useEditorStore.getState()): void {
   if (!note.ask || !note.focus[0] || keptAsOpenPoint(note, editor.document.openPoints)) return;
   if (editor.addOpenPoint('awaiting', [{ kind: 'node', id: note.focus[0] }], note.ask)) return;
+  // Refused for the limit only when the canvas is full. The store refuses every edit while editing is
+  // locked (a read-only copy, the history lens, a flow being traced), where the walk offers no answers
+  // (`OutageLayer`); blamed on the limit, a canvas holding a handful of points was called full.
+  // Open points are the whole file's, so a room's view holds them all.
+  if (editor.document.openPoints.length < LIMITS.maxOpenPoints) return;
   // The same words the open-point popover uses at the limit.
   useUiStore.getState().notify('This canvas is holding as many open points as it can.', 'error');
 }

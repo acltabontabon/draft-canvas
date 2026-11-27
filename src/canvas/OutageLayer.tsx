@@ -9,7 +9,7 @@ import { layoutText } from '../render/text/layout';
 import { createRng } from '../render/roughness/seed';
 import { useEditorStore } from '../store/editorStore';
 import { outageIn, outageReviewIn, runtimeOf } from '../store/outage';
-import { useUiStore } from '../store/uiStore';
+import { editingLockedIn, useUiStore } from '../store/uiStore';
 import type { Outage, OutageFlow, OutageNote, OutageReviewEntry } from '../traffic';
 import { outageSummary } from '../traffic/outage';
 import { arrowFor, placeSketches, type Rect, type SketchRequest } from '../traffic/sketchLayout';
@@ -27,8 +27,8 @@ import { markerArrow, markerLoop } from './sketchPaths';
  *
  * A question — something the drawing leaves open — carries its answers under it: the edit that
  * would settle it, where one exists, and "Keep as open point", which leaves the question on that
- * shape in the file. Both are ordinary edits the person makes; the walk reads the diagram again as
- * soon as one lands, so drawing an answer shows what it changes.
+ * shape in the file. Both are ordinary edits the person makes, offered only while the diagram takes
+ * edits; the walk reads the diagram again as soon as one lands, so drawing an answer shows what it changes.
  *
  * Outside the drawing, docked at the canvas edge (`OutageDock`): one card that lists what each
  * outage would do before anything is taken down, and what this one does to each flow after.
@@ -97,6 +97,10 @@ export const OutageLayer = memo(function OutageLayer() {
   const moving = useUiStore((state) => state.interactionActive);
   // The list's row under the pointer circles its shape, so a name in the list is found in the drawing.
   const pointer = useUiStore((state) => state.outagePointer);
+  // A question's answers are edits. Where the diagram takes none (a read-only copy, a past revision in
+  // the history lens, a flow being traced) none is offered, as the open-point popover offers none: the
+  // store refused them, a fix silently and Keep with word that the canvas was full.
+  const answering = !useUiStore(editingLockedIn);
   // The list takes the canvas's bottom-left corner; where there is room the drawing is framed
   // beside it, so what the rows name is not sitting underneath them.
   const listed = useEditorStore(listsOutages);
@@ -138,7 +142,7 @@ export const OutageLayer = memo(function OutageLayer() {
     const gone = nodes.find((node) => node.id === down);
     return `${gone ? displayNameFor(gone) || 'That shape' : 'That shape'} takes no part in anything that runs here. Pick another.`;
   }, [outage, down, cut, nodes]);
-  const drawn = useMemo(() => layout(outage, nodes, headline, open), [outage, nodes, headline, open]);
+  const drawn = useMemo(() => layout(outage, nodes, headline, open, answering), [outage, nodes, headline, open, answering]);
   useFrameNotes(drawn?.extent ?? null, outage ? `${outage.target}:${outage.instances ? 'one' : 'all'}` : listed ? 'list' : '', listed);
 
   if (!analysis || !drawn) return null;
@@ -234,7 +238,7 @@ export const OutageLayer = memo(function OutageLayer() {
           <p
             key={`source:${placed.note.id}`}
             className="dc-outage-source nodrag nopan nowheel"
-            style={{ transform: `translate(${placed.x + 8}px, ${placed.y + placed.label.height - (placed.note.ask ? ACTION_ROOM : 0) - SOURCE_ROOM + 2}px)`, fontFamily: familyOf('sans') }}
+            style={{ transform: `translate(${placed.x + 8}px, ${placed.y + placed.label.height - (answering && placed.note.ask ? ACTION_ROOM : 0) - SOURCE_ROOM + 2}px)`, fontFamily: familyOf('sans') }}
             onPointerDown={hold}
           >
             Source:{' '}
@@ -247,7 +251,7 @@ export const OutageLayer = memo(function OutageLayer() {
         ))}
 
         {/* A question's answers sit under its words — siblings of the note, not buttons inside one. */}
-        {drawn.notes.filter((placed) => placed.note.ask).map((placed) => {
+        {answering && drawn.notes.filter((placed) => placed.note.ask).map((placed) => {
           const { note } = placed;
           return (
             <div
@@ -464,8 +468,9 @@ function boundsOf(nodes: readonly DraftNode[]): Bounds | null {
   };
 }
 
-/** Where the notes go: each one's own few words, beside what it circles, clear of the shapes. */
-function layout(outage: Outage | null, nodes: readonly DraftNode[], title: string, unfolded: string | null = null) {
+/** Where the notes go: each one's own few words, beside what it circles, clear of the shapes. A
+ *  question has room under its words for its answers only while they are offered (`answering`). */
+function layout(outage: Outage | null, nodes: readonly DraftNode[], title: string, unfolded: string | null = null, answering = true) {
   const bounds = boundsOf(nodes);
   if (!bounds) return null;
   const rects = new Map<string, Rect>(nodes.map((node) => [node.id, { x: node.x, y: node.y, width: node.width, height: node.height }]));
@@ -482,10 +487,11 @@ function layout(outage: Outage | null, nodes: readonly DraftNode[], title: strin
       lineHeight: plain ? PLAIN_LINE_HEIGHT : LINE_HEIGHT,
       maxLines: 3,
     });
-    const answers = note.ask ? (note.fix ? ACTION_WIDTH.two : ACTION_WIDTH.one) : 0;
+    const answered = answering && !!note.ask;
+    const answers = answered ? (note.fix ? ACTION_WIDTH.two : ACTION_WIDTH.one) : 0;
     return {
       width: Math.max(Math.ceil(text.width) + 8, answers),
-      height: text.height + 2 + (note.ask ? ACTION_ROOM : 0),
+      height: text.height + 2 + (answered ? ACTION_ROOM : 0),
       lines: text.lines.map((line) => line.text),
     };
   };

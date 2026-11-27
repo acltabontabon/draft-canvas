@@ -5,7 +5,7 @@ import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
 // UI feedback for document limits and rejected reconnects stays outside document operations.
 import type { ArrangePreset } from '../agent/layoutPlan';
 import type { Job, JobResult } from '../agent/jobs';
-import { PRESENTATION_AT_REST, useUiStore, type ArrangePreview, type TidyNothing, type TidyPreview } from './uiStore';
+import { editingLockedIn, PRESENTATION_AT_REST, useUiStore, type ArrangePreview, type TidyNothing, type TidyPreview } from './uiStore';
 import { edgeIndex, nodeIndex, selectSequenceMessage } from './selectors';
 import {
   createAttachment,
@@ -1472,13 +1472,13 @@ function recorded(
 
 /**
  * Whether the diagram takes no edits just now: opened read-only from a share link, or showing a
- * flow being traced. What `apply` and the actions that write the file themselves all ask.
+ * flow being traced. What `apply` and the actions that write the file themselves all ask, and what
+ * chrome offering an edit asks too (`editingLockedIn`).
  */
 function editingLocked(): boolean {
-  const ui = useUiStore.getState();
   // The history lens shows a past revision over the live diagram: an edit made "on" it would land on
   // the hidden live diagram instead, so none is taken while it is open (one guard, not one per tool).
-  return Boolean(ui.readOnly || ui.flowTrace || ui.historyLens);
+  return editingLockedIn(useUiStore.getState());
 }
 
 /** The selection without anything `document` no longer holds — checked by id, not by count: a remote

@@ -242,4 +242,30 @@ describe('keeping a question as an open point', () => {
       notify.mockRestore();
     }
   });
+
+  it('never calls a canvas full when it only takes no edits just now', () => {
+    const notify = vi.spyOn(useUiStore.getState(), 'notify');
+    const locks = [
+      { readOnly: { sharedTitle: 'Shared', collaborative: true as const } },
+      { historyLens: true },
+      { flowTrace: { documentId: 'd', path: [], revision: 0, title: 'Trace', edgeIds: [], choices: [], message: '' } },
+    ];
+    try {
+      store.getState().takeDown('external');
+      for (const lock of locks) {
+        useUiStore.setState(lock);
+        try {
+          // The store refuses the point, as it refuses every edit while locked; nothing says the
+          // canvas holds as many open points as it can, with none on it.
+          keepAsOpenPoint(replayQuestion());
+          expect(store.getState().document.openPoints).toHaveLength(0);
+        } finally {
+          useUiStore.setState({ readOnly: null, historyLens: false, flowTrace: null });
+        }
+      }
+      expect(notify).not.toHaveBeenCalledWith(expect.stringMatching(/as many open points as it can/), 'error');
+    } finally {
+      notify.mockRestore();
+    }
+  });
 });
