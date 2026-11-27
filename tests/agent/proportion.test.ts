@@ -49,6 +49,24 @@ describe('proportion findings', () => {
     expect(kinds(proportionFindings({ nodes: [a, b], edges: [label] }, ctx))).toEqual(['hidden-caption:label']);
   });
 
+  // Its chip shows the action's name as a label, on up to two lines (`routedLabel`); judged as a
+  // relationship caption, one line cut to an ellipsis, a name the chip shows whole was reported hidden.
+  it('judges a named recovery action by the label chip its name is drawn in', () => {
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0, text: 'Orders' });
+    const b = createNode({ id: 'b', type: 'service', x: 420, y: 0, text: 'Billing' });
+    const charge = createEdge({ id: 'charge', source: 'a', target: 'b', semantic: 'command' });
+    const name = 'Refund the payment and release the held stock';
+    const refund = { ...createEdge({ id: 'refund', source: 'a', target: 'b', semantic: 'compensates' }), compensationFor: 'charge', compensationName: name };
+    const ctx = measureContext();
+    const labelled = { ...refund, compensationName: undefined, label: name };
+    expect(kinds(proportionFindings({ nodes: [a, b], edges: [charge, labelled] }, ctx))).not.toContain('hidden-caption:refund');
+    expect(kinds(proportionFindings({ nodes: [a, b], edges: [charge, refund] }, ctx))).not.toContain('hidden-caption:refund');
+    // Where there is no room for the chip, it is reported, named or labelled alike.
+    const near = { ...b, x: a.width + 24 };
+    expect(kinds(proportionFindings({ nodes: [a, near], edges: [charge, refund] }, ctx))).toContain('hidden-caption:refund');
+    expect(kinds(proportionFindings({ nodes: [a, near], edges: [charge, labelled] }, ctx))).toContain('hidden-caption:refund');
+  });
+
   it('reports a boundary whose header band outweighs what it holds', () => {
     const group = { ...createNode({ id: 'grp', type: 'group', x: 0, y: 0, text: 'Orders' }), width: 300, height: 320 };
     const low = { ...createNode({ id: 'm', type: 'service', x: 40, y: 220, text: 'Orders' }), parentId: 'grp' };
