@@ -2015,11 +2015,16 @@ export class DesktopController {
   }
 
   async listProposals(diagramId?: string): Promise<Proposal[]> {
+    return (await this.lookUpProposals(diagramId)) ?? [];
+  }
+
+  /** The proposals, or null when the shell couldn't say. */
+  private async lookUpProposals(diagramId?: string): Promise<Proposal[] | null> {
     try {
       return await this.api.agentProposalList(diagramId);
     } catch (error) {
       logDiagnostic(error, { operation: 'desktop-agent-proposal-list' });
-      return [];
+      return null;
     }
   }
 
@@ -2246,7 +2251,10 @@ export class DesktopController {
       }
     }
     for (const [diagramId, runIds] of watched) {
-      const proposals = await this.listProposals(diagramId);
+      // A lookup that failed says nothing about these runs. Taken for "no proposal", it took down the
+      // chip of a turn still waiting for review, and kept an older lookup's answer from putting it back.
+      const proposals = await this.lookUpProposals(diagramId);
+      if (!proposals) continue;
       for (const runId of runIds) {
         if (seq < (this.companionProposalAnswered.get(runId) ?? 0)) continue;
         this.companionProposalAnswered.set(runId, seq);
