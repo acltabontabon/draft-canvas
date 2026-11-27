@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import zlib from 'node:zlib';
 import { zlibSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { PackRejected, scanPack, type PackLimits } from '../../src/evolution/packScan';
+import { PackRejected, scanPack, type PackLimits, type ScanWork } from '../../src/evolution/packScan';
 import { HAS_GIT, gitOk, scratch } from './realGit';
 
 const LIMITS: PackLimits = { maxObjects: 1000, maxObjectBytes: 1024 * 1024, maxTotalInflated: 8 * 1024 * 1024, maxDeltaDepth: 50 };
@@ -76,6 +76,55 @@ function objectHeader(type: number, size: number): number[] {
     out.push(rest & 0x7f);
   }
   return out;
+}
+
+/** Canonical codes for `lengths` (RFC 1951, 3.2.2); 0 where a symbol has none. */
+function canonical(lengths: number[]): number[] {
+  const count = new Array<number>(16).fill(0);
+  for (const length of lengths) if (length > 0) count[length] = count[length]! + 1;
+  const next = new Array<number>(16).fill(0);
+  for (let bits = 1, code = 0; bits < 16; bits += 1) next[bits] = code = (code + count[bits - 1]!) << 1;
+  return lengths.map((length) => (length > 0 ? next[length]!++ : 0));
+}
+
+const CODE_LENGTH_ORDER = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+
+/**
+ * A dynamic block with these literal/length and distance code lengths, then `symbols` in stream
+ * order, each `[which code, symbol, extra bits' value, how many extra bits]`. Code lengths go out one
+ * by one, zeros in runs, under a complete code-length code: symbols 0 to 12 at four bits, 13 to 18 at five.
+ */
+function dynamicBlock(w: BitWriter, final: boolean, literals: number[], distances: number[], symbols: ['literal' | 'distance', number, number, number][]) {
+  const all = [...literals, ...distances];
+  const sent: [number, number, number][] = [];
+  for (let i = 0; i < all.length; ) {
+    let zeros = 0;
+    while (i + zeros < all.length && all[i + zeros] === 0 && zeros < 138) zeros += 1;
+    if (zeros >= 11) sent.push([18, zeros - 11, 7]);
+    else if (zeros >= 3) sent.push([17, zeros - 3, 3]);
+    else zeros = 0;
+    if (zeros === 0) sent.push([all[i]!, 0, 0]);
+    i += Math.max(zeros, 1);
+  }
+  const lengthLengths = Array.from({ length: 19 }, (_, symbol) => (symbol < 13 ? 4 : 5));
+  const lengthCodes = canonical(lengthLengths);
+  w.put(final ? 1 : 0, 1);
+  w.put(2, 2);
+  w.put(literals.length - 257, 5);
+  w.put(distances.length - 1, 5);
+  w.put(19 - 4, 4);
+  for (const symbol of CODE_LENGTH_ORDER) w.put(lengthLengths[symbol]!, 3);
+  for (const [symbol, extra, bits] of sent) {
+    w.code(lengthCodes[symbol]!, lengthLengths[symbol]!);
+    if (bits) w.put(extra, bits);
+  }
+  const literalCodes = canonical(literals);
+  const distanceCodes = canonical(distances);
+  for (const [kind, symbol, extra, bits] of symbols) {
+    if (kind === 'literal') w.code(literalCodes[symbol]!, literals[symbol]!);
+    else w.code(distanceCodes[symbol]!, distances[symbol]!);
+    if (bits) w.put(extra, bits);
+  }
 }
 
 /** An offset delta's distance back to its base, as Git encodes it. */
@@ -199,6 +248,59 @@ describe('the pack pre-scan', { timeout: 60_000 }, () => {
     for (let i = 0; i < 20; i += 1) parts.push(0);
     const summary = scanPack(Uint8Array.from(parts), LIMITS);
     expect(summary).toEqual({ objects: streams.length, inflated: streams.reduce((sum, [size]) => sum + size, 0), deltas: 0 });
+  });
+
+  it('reads codes up to 15 bits long to the size and end zlib reads them to', () => {
+    // End of block at one bit, `a` to `m` at two to fourteen, and `n` and a length of three at fifteen.
+    const literals = new Array<number>(258).fill(0);
+    literals[256] = 1;
+    for (let i = 0; i < 13; i += 1) literals[97 + i] = i + 2;
+    literals[110] = 15;
+    literals[257] = 15;
+    // A distance of one at fifteen bits, beside one at fifteen and one at each of fourteen to one.
+    const distances = Array.from({ length: 16 }, (_, symbol) => (symbol < 2 ? 15 : 16 - symbol));
+    const w = new BitWriter();
+    dynamicBlock(w, true, literals, distances, [
+      ['literal', 97, 0, 0],
+      ['literal', 110, 0, 0],
+      ['literal', 109, 0, 0],
+      ['literal', 257, 0, 0],
+      ['distance', 0, 0, 0],
+      ['literal', 256, 0, 0],
+    ]);
+    w.align();
+    const stream = [0x78, 0x01, ...w.bytes, ...adler32(text('anmmmm'))];
+    expect(new TextDecoder().decode(zlib.inflateSync(Uint8Array.from(stream)))).toBe('anmmmm');
+    // The object after it is found only where zlib ends this one.
+    const parts = [0x50, 0x41, 0x43, 0x4b, 0, 0, 0, 2, 0, 0, 0, 2, ...objectHeader(3, 6), ...stream, ...objectHeader(3, 5), ...zlibSync(text('hello')), ...new Array<number>(20).fill(0)];
+    expect(scanPack(Uint8Array.from(parts), LIMITS)).toEqual({ objects: 2, inflated: 11, deltas: 0 });
+  });
+
+  it('builds tables as deep as a block’s codes need, so blocks of 15-bit codes holding nothing cost little', () => {
+    // Nothing in each block but its end, yet its literal and distance codes both reach fifteen bits.
+    const literals = new Array<number>(257).fill(0);
+    literals[256] = 1;
+    for (let i = 0; i < 14; i += 1) literals[i] = i + 2;
+    literals[14] = 15;
+    const distances = Array.from({ length: 16 }, (_, symbol) => (symbol === 15 ? 15 : symbol + 1));
+    const blocks = 200;
+    const w = new BitWriter();
+    for (let b = 0; b < blocks; b += 1) dynamicBlock(w, false, literals, distances, [['literal', 256, 0, 0]]);
+    // A final fixed block with `a` in it.
+    w.put(1, 1);
+    w.put(1, 2);
+    w.code(0x30 + 0x61, 8);
+    w.code(0, 7);
+    w.align();
+    const stream = [0x78, 0x01, ...w.bytes, ...adler32(text('a'))];
+    expect(zlib.inflateSync(Uint8Array.from(stream)).length).toBe(1);
+    const work: ScanWork = { tableEntries: 0 };
+    const parts = [0x50, 0x41, 0x43, 0x4b, 0, 0, 0, 2, 0, 0, 0, 1, ...objectHeader(3, 1), ...stream, ...new Array<number>(20).fill(0)];
+    expect(scanPack(Uint8Array.from(parts), LIMITS, work)).toEqual({ objects: 1, inflated: 1, deltas: 0 });
+    // A table indexed by every bit of the longest code took 2^15 entries for each of a block's two
+    // codes, and a pack of such blocks seconds a megabyte to scan. Built as zlib builds them, a
+    // block's tables take 1,184: 32 for its code lengths, and 512 + 64 for each of its two codes.
+    expect(work.tableEntries).toBe(blocks * 1_184);
   });
 
   it('refuses an object declared larger than any diagram', () => {
