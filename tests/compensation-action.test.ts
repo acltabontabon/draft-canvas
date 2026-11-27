@@ -3,6 +3,7 @@ import { edgeCommands } from '../src/commands/registry';
 import type { CommandContext } from '../src/commands/types';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { linkedCompensations, normalizeCompensationHttpLabel, repairCompensationLinks, visibleEdges } from '../src/document/compensation';
+import { LIMITS } from '../src/document/limits';
 import { addEdges, addNodes, extractFragment, pasteFragment, removeElements } from '../src/document/operations';
 import { deserializeDocument, serializeDocument } from '../src/export/project';
 import { repairReferences } from '../src/collab/repair';
@@ -173,6 +174,49 @@ describe('linked compensation files and fragments', () => {
     expect(normalizeCompensationHttpLabel('DELETE /reservations/1')).toBe('DELETE /reservations/1');
     const legacy = { ...compensation, label: 'OK' };
     expect(repairCompensationLinks([step, legacy])[1]?.label).toBeUndefined();
+  });
+
+  // Was: an action whose link was broken kept its free-text operation on the first open and read
+  // "POST refund" on the next, with nothing said; and an unlinked HTTP action was rewritten only
+  // when some other connector in the room happened to be linked.
+  it('repairs a broken link and the HTTP operation in one pass, whatever else is in the room', () => {
+    const broken = createEdge({ source: b.id, target: a.id, semantic: 'compensates', compensationFor: 'gone', compensationProtocol: 'http', label: 'refund' });
+    const unlinked = createEdge({ source: b.id, target: a.id, semantic: 'compensates', compensationProtocol: 'http', label: 'release' });
+    const once = repairCompensationLinks([step, compensation, broken, unlinked]);
+    expect(once[2]!.compensationFor).toBeUndefined();
+    expect(once[2]!.label).toBe('POST refund');
+    expect(once[3]!.label).toBe('POST release');
+    expect(repairCompensationLinks(once)).toBe(once);
+    expect(repairCompensationLinks([unlinked])[0]!.label).toBe('POST release');
+    expect(repairCompensationLinks([broken])[0]!.label).toBe('POST refund');
+  });
+
+  it('keeps an HTTP operation within the label limit, so the next open cuts nothing', () => {
+    const long = 'x'.repeat(LIMITS.maxLabelLength);
+    expect(normalizeCompensationHttpLabel(long)!.length).toBeLessThanOrEqual(LIMITS.maxLabelLength);
+    const file = JSON.parse(serializeDocument(doc));
+    file.edges[1].label = long;
+    file.edges[1].compensationFor = 'missing-step';
+    const first = deserializeDocument(JSON.stringify(file));
+    if (!first.ok) throw new Error(first.error);
+    const saved = serializeDocument(first.document);
+    const second = deserializeDocument(saved);
+    if (!second.ok) throw new Error(second.error);
+    expect(second.repairs).toEqual([]);
+    expect(serializeDocument(second.document)).toBe(saved);
+  });
+
+  it('opens a file with a broken link the same way every time', () => {
+    const file = JSON.parse(serializeDocument(addEdges(doc, [createEdge({ source: b.id, target: a.id, semantic: 'compensates', compensationProtocol: 'http', label: 'refund' })])));
+    file.edges[2].compensationFor = 'gone';
+    const first = deserializeDocument(JSON.stringify(file));
+    if (!first.ok) throw new Error(first.error);
+    const saved = serializeDocument(first.document);
+    const second = deserializeDocument(saved);
+    if (!second.ok) throw new Error(second.error);
+    expect(second.repairs).toEqual([]);
+    expect(serializeDocument(second.document)).toBe(saved);
+    expect(second.document.edges[2]!.label).toBe('POST refund');
   });
 
   it('round-trips optional metadata without changing legacy independent edges', () => {
