@@ -22,7 +22,7 @@ use crate::util::{now_ms, sha256_hex};
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
 /// A tool's failure, as the agent sees it: a stable code to branch on, a sentence to show, and
@@ -969,7 +969,14 @@ async fn admit<'a>(
         return match begun {
             Begin::Fresh => Ok(Admission::Go { key, fp, guard }),
             Begin::Mismatch => Err(request_id_mismatch()),
-            Begin::Replay(entry) => Ok(Admission::Replay(replay_receipt(&entry, projects)?)),
+            Begin::Replay(entry) => {
+                let now_at = current_path(agent, projects, &entry);
+                Ok(Admission::Replay(replay_receipt(
+                    &entry,
+                    projects,
+                    now_at.as_deref(),
+                )?))
+            }
             Begin::Unresolved(entry) => match recover(&entry) {
                 Some(receipt) => {
                     let now = now_ms();
@@ -978,12 +985,14 @@ async fn admit<'a>(
                             e.receipt = Some(receipt.clone())
                         })
                     });
+                    let now_at = current_path(agent, projects, &entry);
                     Ok(Admission::Replay(replay_receipt(
                         &Entry {
                             receipt: Some(receipt),
                             ..entry
                         },
                         projects,
+                        now_at.as_deref(),
                     )?))
                 }
                 None if legacy_proposal_outcome_uncertain(agent, &entry) => Err(outcome_unknown()),
@@ -1037,11 +1046,31 @@ fn ledger_unavailable() -> ToolError {
     .hint("Turn agent access off and on again in Settings.")
 }
 
-/// A stored receipt, checked against today's scope, marked as a replay. Side effects the first
-/// answer described (opening the document) are not repeated.
-fn replay_receipt(entry: &Entry, projects: &[Project]) -> Result<Value, ToolError> {
-    if let Some(path) = &entry.path {
-        if in_scope(projects, &PathBuf::from(path)).is_none() {
+/// Where a request's diagram is now: the path recorded with it while that is still there, and once it
+/// isn't — the file was renamed or moved since — wherever its id is found today. Checking the old path
+/// alone answered a retry for a renamed diagram with OUT_OF_SCOPE instead of its receipt.
+fn current_path(agent: &Agent, projects: &[Project], entry: &Entry) -> Option<PathBuf> {
+    let recorded = PathBuf::from(entry.path.as_ref()?);
+    if std::fs::symlink_metadata(&recorded).is_ok() {
+        return Some(recorded);
+    }
+    entry
+        .diagram_id
+        .as_deref()
+        .and_then(|id| agent.index.find(projects, id).ok())
+        .map(|diagram| diagram.absolute)
+        .or(Some(recorded))
+}
+
+/// A stored receipt, checked against today's scope at `path` (where the diagram is now), marked as a
+/// replay. Side effects the first answer described (opening the document) are not repeated.
+fn replay_receipt(
+    entry: &Entry,
+    projects: &[Project],
+    path: Option<&Path>,
+) -> Result<Value, ToolError> {
+    if let Some(path) = path {
+        if in_scope(projects, path).is_none() {
             return Err(ToolError::new(
                 "OUT_OF_SCOPE",
                 "That request's diagram is no longer in a folder agents may use.",
@@ -2505,6 +2534,48 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn a_retry_after_its_diagram_was_renamed_replays_the_receipt() {
+        let data = tempfile::tempdir().unwrap();
+        let folder = tempfile::tempdir().unwrap();
+        let agent = Agent::new(data.path());
+        agent.ensure_ledger().unwrap();
+        let project = diagram_project(folder.path(), "P", "Shop", "d_shop0000001");
+        let first = project.root.join("Shop.draftcanvas");
+        let args = json!({"diagramId":"d_shop0000001", "requestId":"r1", "expectedRevision":"f:1", "ops":[]});
+        record(
+            &agent,
+            Entry {
+                key: "update_diagram:r1".into(),
+                tool: "update_diagram".into(),
+                fingerprint: fingerprint("update_diagram", &args),
+                stage: Stage::Committed,
+                at: now_ms(),
+                diagram_id: Some("d_shop0000001".into()),
+                path: Some(first.to_string_lossy().into()),
+                receipt: Some(json!({"applied":true,"persisted":true,"revision":"f:2"})),
+            },
+        )
+        .unwrap();
+        std::fs::rename(&first, project.root.join("Store.draftcanvas")).unwrap();
+        let calls = CallRegistry::new("external".into());
+        let projects = [project];
+        let Admission::Replay(receipt) =
+            admit(&agent, "update_diagram", &args, &projects, &calls, |_| None)
+                .await
+                .unwrap()
+        else {
+            panic!("a finished request must replay, wherever its diagram moved within scope");
+        };
+        assert_eq!(receipt["revision"], "f:2");
+        assert_eq!(receipt["replayed"], true);
+        // Its folder no longer open to agents: still refused.
+        assert!(matches!(
+            admit(&agent, "update_diagram", &args, &[], &calls, |_| None).await,
+            Err(error) if error.code == "OUT_OF_SCOPE"
+        ));
+    }
+
     #[test]
     fn a_replayed_unsaved_receipt_says_its_durability_is_unverified() {
         let entry = Entry {
@@ -2517,7 +2588,7 @@ mod tests {
             path: None,
             receipt: Some(json!({"persisted": false, "state": "applied-unsaved"})),
         };
-        let receipt = replay_receipt(&entry, &[]).unwrap();
+        let receipt = replay_receipt(&entry, &[], None).unwrap();
         assert_eq!(receipt["replayed"], json!(true));
         assert_eq!(receipt["durability"], json!("unverified"));
     }
@@ -2528,7 +2599,7 @@ mod tests {
         entry.stage = Stage::Committed;
         entry.receipt =
             Some(ToolError::new("INTERNAL", "Saving failed after applying.").to_value());
-        let error = replay_receipt(&entry, &[]).unwrap_err();
+        let error = replay_receipt(&entry, &[], None).unwrap_err();
         assert_eq!(error.code, "INTERNAL");
         assert_eq!(error.details.unwrap()["replayed"], true);
     }
