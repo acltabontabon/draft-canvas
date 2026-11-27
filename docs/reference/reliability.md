@@ -68,7 +68,9 @@ reason, tracking reference and expiry. Expired or incomplete entries fail.
 
 Current exception: RUSTSEC-2024-0429 (glib 0.18.5), reached only through Tauri's Linux GTK stack.
 The macOS and Windows dependency trees contain no glib. It must be resolved before shipping a Linux
-desktop build; its expiry is in the exceptions file.
+desktop build; its expiry is in the exceptions file. Tauri 2 holds glib at 0.18 through wry 0.57;
+the fix arrives with wry 0.58 (glib 0.22), which Tauri 3 uses. Renew the entry a month at a time,
+checking `cargo update --dry-run` and `cargo tree -i glib` for each target first.
 
 ## Local diagnostic reports
 
