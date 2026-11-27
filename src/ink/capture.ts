@@ -21,6 +21,13 @@ export interface StrokeStyle {
 }
 
 /**
+ * Distances measured from a point to a span by both simplifications below, counted for tests: keeping
+ * a long stroke must stay one pass over it, which a wall clock can't show on a slow or instrumented
+ * machine. Only a test resets it.
+ */
+export const simplifyWork = { distances: 0 };
+
+/**
  * Indices to keep under Ramer–Douglas–Peucker at `epsilon`. Index-based so pressure, which runs
  * alongside the points, is thinned with them.
  */
@@ -32,6 +39,7 @@ export function simplifyIndices(points: readonly Pt[], epsilon: number): number[
   const stack: Array<[number, number]> = [[0, points.length - 1]];
   while (stack.length > 0) {
     const [from, to] = stack.pop()!;
+    simplifyWork.distances += to - from - 1;
     let worst = -1;
     let index = -1;
     for (let i = from + 1; i < to; i += 1) {
@@ -69,6 +77,7 @@ function thinned(points: readonly Pt[], epsilon: number, limit: number): number[
   const stack: Array<[number, number, number]> = [[0, points.length - 1, Infinity]];
   while (stack.length > 0) {
     const [from, to, nearest] = stack.pop()!;
+    simplifyWork.distances += to - from - 1;
     let worst = -1;
     let index = -1;
     for (let i = from + 1; i < to; i += 1) {

@@ -3,7 +3,7 @@ import { addInk, inkAbsolutePoints, inkRound, translateInk } from '../../src/doc
 import { createDocument } from '../../src/document/factory';
 import { LIMITS } from '../../src/document/limits';
 import type { DraftInk } from '../../src/document/types';
-import { buildStroke, simplifyIndices, type InkSample } from '../../src/ink/capture';
+import { buildStroke, simplifyIndices, simplifyWork, type InkSample } from '../../src/ink/capture';
 import { recognize } from '../../src/ink/recognize';
 import { inkPaint } from '../../src/render/ink';
 import { renderDocumentSvg } from '../../src/render/svg/document';
@@ -122,10 +122,14 @@ describe('a long stroke', () => {
       expect(buildStroke(samples, pen, { zoom, pressure: true })!.points, `${count} samples`).toEqual(again(samples, zoom));
     }
     // A spiral of 100,000 samples, minutes of drawing: 17.8 s here before, one simplification now.
+    // Counted rather than timed: CI's coverage run took 6.4 s over a 6 s limit with no regression.
+    // One pass measures about 40 million distances for this spiral; simplifying again at each
+    // epsilon measured over ten times as many (72 million against 6.6 million at 40,000 samples).
     const spiral = Array.from({ length: 100_000 }, (_, i) => ({ x: Math.cos(i / 40) * (200 + i / 50) + i * 0.05, y: Math.sin(i / 40) * (200 + i / 50), pressure: 0.5 }));
-    const started = performance.now();
+    simplifyWork.distances = 0;
     const kept = buildStroke(spiral, pen, { zoom: 1, pressure: false })!;
-    expect(performance.now() - started).toBeLessThan(6_000);
+    expect(simplifyWork.distances).toBeGreaterThan(0);
+    expect(simplifyWork.distances).toBeLessThan(50_000_000);
     expect(kept.points.length / 2).toBeLessThanOrEqual(LIMITS.maxInkPoints);
   }, 60_000);
 });
