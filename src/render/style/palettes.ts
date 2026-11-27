@@ -180,7 +180,9 @@ export function schemesForCanvas(canvas: string): Schemes {
       fill,
       line: reach(from.line, canvas, CONTRAST.line, 0.4),
       text: reach(from.text, fill, CONTRAST.label, 0.5),
-      chip: reach(from.chip, canvas, CONTRAST.line, 0.4),
+      // Words, not only a mark: a Text in this colour is written in its chip, and a banner writes the
+      // canvas's colour on it. Held to the line floor alone, a banner read at 4.1:1 on Slate.
+      chip: reach(from.chip, canvas, CONTRAST.text, 0.3),
     };
   }
   const edgeLabelBg = mix(canvas, dark ? '#000000' : '#ffffff', 0.35);

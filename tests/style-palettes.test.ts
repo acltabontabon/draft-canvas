@@ -101,6 +101,19 @@ describe('a canvas colour of one’s own, over the whole of RGB', () => {
     }
     expect(unseen).toEqual([]);
   });
+
+  it('gives every colour a chip that reads as words on the canvas, both ways round', () => {
+    // A Text in a colour is written in its chip, and a banner writes the canvas's colour on the chip.
+    const faint: string[] = [];
+    for (const canvas of CANVASES) {
+      const { theme } = drawnOn(canvas);
+      for (const accent of ACCENTS) {
+        const ratio = contrast(theme.accents[accent].chip, theme.canvas);
+        if (ratio < CONTRAST.text) faint.push(`${canvas} ${accent} ${ratio.toFixed(2)}:1`);
+      }
+    }
+    expect(faint).toEqual([]);
+  });
 });
 
 describe('the marks the editor draws in its own colours', () => {
