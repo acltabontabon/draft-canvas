@@ -7,6 +7,7 @@ import { drawioSource } from '../src/export/source/drawio';
 import { SOURCE_FORMAT_INFO, SOURCE_FORMATS, sourceFileNameFor, sourceTextFor } from '../src/export/source';
 import { mermaidFlowchartSource } from '../src/export/source/mermaidFlowchart';
 import { structurizrSource } from '../src/export/source/structurizr';
+import { parseMermaidFlowchart } from '../src/import/mermaid/parse';
 import { ARCHITECTURE_STARTERS } from './fixtures/starters-v1/catalog';
 import { starterDocument } from './fixtures/starters-v1/document';
 
@@ -39,6 +40,9 @@ const HOSTILE_LABELS = [
   'two\nlines',
   'end note',
   '<b>tag</b> & ampersand',
+  // Mermaid opens a Markdown string at a quote and a backtick: one never closed failed the whole file.
+  '`orders` table',
+  '`Svc`',
   '',
 ];
 
@@ -90,6 +94,19 @@ describe('Mermaid flowchart', () => {
     expect(text).toContain('flowchart LR');
     expect(text).not.toMatch(/%%\{/);
     expect(await mermaidParses(text)).toBe(true);
+  });
+
+  it('keeps a label in backticks as text, backticks and all', async () => {
+    const api = createNode({ type: 'service', x: 0, y: 0, text: '`OrderService`' });
+    const db = createNode({ type: 'database', x: 300, y: 0, text: '`orders` table' });
+    const text = mermaidFlowchartSource({ ...createDocument('Ticks'), nodes: [api, db], edges: [createEdge({ source: api.id, target: db.id, label: 'writes `orders`' })] });
+    expect(await mermaidParses(text)).toBe(true);
+    const diagram = await mermaid.mermaidAPI.getDiagramFromText(text);
+    const vertices = [...(diagram.db as unknown as { getVertices(): Map<string, { labelType: string }> }).getVertices().values()];
+    // A label wrapped in backticks was rendered as Markdown, its backticks gone.
+    expect(vertices.map((vertex) => vertex.labelType)).toEqual(['string', 'string']);
+    const back = parseMermaidFlowchart(text);
+    expect(back.ok && back.create.nodes.map((node) => node.label)).toEqual(['`OrderService`', '`orders` table']);
   });
 
   it('draws each kind with its own silhouette and keeps labels, boundaries and rooms', () => {
