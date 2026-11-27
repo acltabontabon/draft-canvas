@@ -196,8 +196,11 @@ frame it is in lights with it, and the caption names its condition or branch.
 
 - A sequence is one shape on the canvas: move it, put it in a boundary, connect to it, copy it, attach
   notes and [open points](open-points.md). It never resizes smaller than what it holds.
-- Nothing you write is cut short. A long message, condition, note or title wraps onto more lines
-  and the sequence makes room; the field you type it in wraps the same way.
+- A long message, condition, note or title wraps onto more lines and the sequence makes room; the
+  field you type it in wraps the same way. So that one row never outgrows the screen, a message
+  shows at most eight lines, a condition six, a note sixteen and the title three. Past that the
+  canvas and images end it with "…"; the diagram keeps the whole text, and so do the Mermaid and
+  PlantUML exports.
 - Mermaid has no reference frame, so one is exported as a note. draw.io shows a sequence as a
   labelled box.
 - While [collaborating live](collaborating.md), if two people change the same sequence at once the
