@@ -11,7 +11,7 @@ import type { HistoryBackend } from '../../evolution/backend';
 import { HistoryError, type Signature } from '../../evolution/contracts';
 import { copyIdOf, type CopyKey } from '../../evolution/identity';
 import { randomId } from '../../evolution/hash';
-import { copyLock } from '../../evolution/locks';
+import { copyLock, hasWebLocks, processLocks, webLocks } from '../../evolution/locks';
 import { readPreference, writePreference } from '../../lib/preferences';
 import { useCollabStore } from '../collabStore';
 import { documentLoadCount, fileOf, isInteracting, useEditorStore } from '../editorStore';
@@ -181,6 +181,8 @@ export function historyService(): HistoryService {
     holdCopy,
     attribution: (keys) => attribution?.(keys) ?? { contributors: [], agents: [] },
     firstUseSeen: () => readPreference(HISTORY_PREFS.note) === 'seen',
+    // Every tab and window of this origin, as the worker's ref updates are: two may have copies of one history open.
+    lock: hasWebLocks() ? webLocks : processLocks(),
   });
   return service;
 }

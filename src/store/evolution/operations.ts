@@ -264,10 +264,8 @@ export async function createAlternative(name: string, from?: Oid): Promise<Outco
     const altId = randomId('a');
     const created = await store.updateRef({ ref: branchOf(altId), expected: null, next: start });
     if (!created.ok) return refused('That alternative could not be created; try again.');
-    const meta = await store.meta();
     const alternative: AlternativeMeta = { altId, name: name.trim().slice(0, 80) || 'Alternative', createdAt: Date.now(), from: start };
-    const nextMeta = { ...meta, alternatives: [...meta.alternatives, alternative] };
-    await store.writeMeta(nextMeta);
+    const nextMeta = await service.changeMeta(store, (meta) => ({ ...meta, alternatives: [...meta.alternatives, alternative] }));
     await service.adopt(context.token, { tip: context.tip, meta: nextMeta });
     const moved = await switchAlternative(altId);
     return moved.ok ? { ok: true, message: `Exploring “${alternative.name}”. The architecture you left is unchanged.` } : moved;
@@ -279,10 +277,10 @@ export async function createAlternative(name: string, from?: Oid): Promise<Outco
 export async function renameAlternative(altId: string, name: string): Promise<Outcome> {
   try {
     const { service, context, store } = await begin();
-    const meta = await store.meta();
-    const alternatives = meta.alternatives.map((alt) => (alt.altId === altId ? { ...alt, name: name.trim().slice(0, 80) || alt.name } : alt));
-    const nextMeta = { ...meta, alternatives };
-    await store.writeMeta(nextMeta);
+    const nextMeta = await service.changeMeta(store, (meta) => ({
+      ...meta,
+      alternatives: meta.alternatives.map((alt) => (alt.altId === altId ? { ...alt, name: name.trim().slice(0, 80) || alt.name } : alt)),
+    }));
     await service.adopt(context.token, { tip: context.tip, meta: nextMeta });
     return { ok: true };
   } catch (error) {
@@ -313,9 +311,7 @@ export async function archiveAlternative(altId: string, archived: boolean): Prom
       await store.updateRef({ ref: to, expected: tip, next: null });
       return refused('That alternative changed meanwhile; try again.');
     }
-    const meta = await store.meta();
-    const nextMeta = { ...meta, alternatives: meta.alternatives.map((alt) => (alt.altId === altId ? { ...alt, archived: archived || undefined } : alt)) };
-    await store.writeMeta(nextMeta);
+    const nextMeta = await service.changeMeta(store, (meta) => ({ ...meta, alternatives: meta.alternatives.map((alt) => (alt.altId === altId ? { ...alt, archived: archived || undefined } : alt)) }));
     await service.adopt(now.token, { tip: now.tip, meta: nextMeta });
     return { ok: true, message: archived ? 'Archived. Its revisions are kept.' : 'Back among the alternatives.' };
   } catch (error) {

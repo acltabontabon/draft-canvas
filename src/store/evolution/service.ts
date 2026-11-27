@@ -15,6 +15,7 @@ import type { HistoryBackend, ImportedHistory } from '../../evolution/backend';
 import { HistoryError, type Binding, type Oid, type RepoMeta, type Signature, type VersionStore } from '../../evolution/contracts';
 import { randomId } from '../../evolution/hash';
 import { decideIdentity, copyIdOf, type CopyKey, type KnownHistory } from '../../evolution/identity';
+import { processLocks, repoLock, type LockRunner } from '../../evolution/locks';
 import { branchOf } from '../../evolution/refs';
 import { IDLE_STATE, decide, isPending, step, type SchedulerConfig, type SchedulerEvent, type SchedulerState } from '../../evolution/scheduler';
 import { formatMessage, type Initiator } from '../../evolution/trailers';
@@ -78,6 +79,11 @@ export interface ServiceDeps {
   attribution?: (changedKeys: string[]) => Attribution;
   /** Whether this device has shown the first-use note. */
   firstUseSeen: () => boolean;
+  /**
+   * Serialises changes to a history's `repo.json` across tabs and windows, under the repository's
+   * lock (Web Locks). Absent: within this page only.
+   */
+  lock?: LockRunner;
 }
 
 interface Session {
@@ -113,9 +119,11 @@ export class HistoryService {
   private recorded = 0;
 
   private readonly deps: ServiceDeps;
+  private readonly lock: LockRunner;
 
   constructor(deps: ServiceDeps) {
     this.deps = deps;
+    this.lock = deps.lock ?? processLocks();
   }
 
   /** The current session's token: async work compares it to know it still belongs to the editor. */
@@ -284,8 +292,8 @@ export class HistoryService {
             altId = randomId('a');
             const made = await store.updateRef({ ref: branchOf(altId), expected: null, next: tip });
             if (made.ok) {
-              const meta = await store.meta();
-              await store.writeMeta({ ...meta, alternatives: [...meta.alternatives, { altId, name: `Copy: ${this.deps.editor.file().metadata.title}`.slice(0, 80), createdAt: this.deps.clock.now(), from: tip }] });
+              const alternative = { altId, name: `Copy: ${this.deps.editor.file().metadata.title}`.slice(0, 80), createdAt: this.deps.clock.now(), from: tip };
+              await this.changeMeta(store, (meta) => ({ ...meta, alternatives: [...meta.alternatives, alternative] }));
             } else {
               altId = null;
             }
@@ -497,10 +505,11 @@ export class HistoryService {
     session.binding = binding;
     if (!paused && session.meta?.paused) {
       // A pause an earlier version kept for the whole history: resuming this copy lifts it.
-      const meta = await session.store.meta();
-      delete meta.paused;
-      await session.store.writeMeta(meta);
-      session.meta = meta;
+      await this.changeMeta(session.store, (meta) => {
+        const next = { ...meta };
+        delete next.paused;
+        return next;
+      });
     }
     session.paused = paused;
     if (paused) {
@@ -515,9 +524,21 @@ export class HistoryService {
   async updateMeta(change: (meta: RepoMeta) => RepoMeta): Promise<RepoMeta | null> {
     const session = this.session;
     if (!session?.store || !session.meta || session.readOnly) return null;
-    const meta = change(session.meta);
-    await session.store.writeMeta(meta);
-    if (this.session === session) session.meta = meta;
+    return this.changeMeta(session.store, change);
+  }
+
+  /**
+   * Changes `store`'s `repo.json` from what it holds now, under the repository's lock. Another window
+   * recording a copy of the same history may have changed it since this session read it (its own
+   * "Copy: …" alternative, a publishing setting): writing the session's copy back once dropped that.
+   */
+  async changeMeta(store: VersionStore, change: (meta: RepoMeta) => RepoMeta): Promise<RepoMeta> {
+    const meta = await this.lock(repoLock(store.repoId), async () => {
+      const next = change(await store.meta());
+      await store.writeMeta(next);
+      return next;
+    });
+    if (this.session?.store?.repoId === store.repoId) this.session.meta = meta;
     return meta;
   }
 

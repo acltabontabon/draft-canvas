@@ -9,7 +9,7 @@ import { MAIN_REF } from '../../src/evolution/refs';
 import { DEFAULT_SCHEDULE } from '../../src/evolution/scheduler';
 import { parseMessage } from '../../src/evolution/trailers';
 import { compute } from '../../src/evolution/workerHost';
-import { processLocks } from '../../src/evolution/locks';
+import { processLocks, type LockRunner } from '../../src/evolution/locks';
 import { INITIAL_EVOLUTION, useEvolutionStore } from '../../src/store/evolution/evolutionStore';
 import { HistoryService, type Clock } from '../../src/store/evolution/service';
 
@@ -48,7 +48,7 @@ async function settle(rounds = 50) {
   for (let i = 0; i < rounds; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-function harness(initial: DraftDocument, backend = new BrowserBackend(new KvFs(new MemoryKv()), new MemoryState(), processLocks())) {
+function harness(initial: DraftDocument, backend = new BrowserBackend(new KvFs(new MemoryKv()), new MemoryState(), processLocks()), lock?: LockRunner) {
   let file = initial;
   let generation = 1;
   let gesture = false;
@@ -63,6 +63,7 @@ function harness(initial: DraftDocument, backend = new BrowserBackend(new KvFs(n
     signature: (at) => ({ name: 'Tester', email: 'tester@draftcanvas.invalid', timestamp: Math.floor(at / 1000), timezoneOffset: 0 }),
     holdCopy: async () => () => {},
     firstUseSeen: () => true,
+    ...(lock ? { lock } : {}),
   });
   return {
     service,
@@ -266,6 +267,41 @@ describe('the history service', { timeout: 30_000 }, () => {
       await one.service.attach(ORIGINAL);
       expect(one.service.store!.repoId).toBe(repoId);
       expect(useEvolutionStore.getState().tip).toBe(main);
+    });
+
+    it('changes repo.json from what it holds now, not from what a session read earlier', async () => {
+      const one = harness(doc());
+      await one.service.attach(ORIGINAL);
+      await one.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+      const repoId = one.service.store!.repoId;
+      // Another window opens the copy while this one still has the original open.
+      const two = harness(one.file, one.backend);
+      await two.service.attach(COPY);
+      await two.service.answerIdentity(true);
+      // This session read repo.json before the copy added its alternative. Writing that back (a
+      // publishing setting) once dropped the alternative from the switcher and from publishing.
+      await one.service.updateMeta((meta) => ({ ...meta, remote: { url: 'https://example.com/a.git', policy: 'manual', publishAlternatives: [] } }));
+      const meta = await (await one.backend.open(repoId))!.meta();
+      expect(meta.alternatives.map((alt) => alt.name)).toEqual(['Copy: Payments']);
+      expect(meta.remote?.url).toBe('https://example.com/a.git');
+    });
+
+    it('lets two windows change repo.json at once without either change being lost', async () => {
+      const lock = processLocks();
+      const one = harness(doc(), undefined, lock);
+      await one.service.attach(ORIGINAL);
+      await one.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+      const repoId = one.service.store!.repoId;
+      const two = harness(one.file, one.backend, lock);
+      await two.service.attach(COPY);
+      await two.service.answerIdentity(true);
+      await Promise.all([
+        one.service.updateMeta((meta) => ({ ...meta, remote: { url: 'https://example.com/a.git', policy: 'manual', publishAlternatives: [] } })),
+        two.service.updateMeta((meta) => ({ ...meta, alternatives: meta.alternatives.map((alt) => ({ ...alt, name: 'Payments v2' })) })),
+      ]);
+      const meta = await (await one.backend.open(repoId))!.meta();
+      expect(meta.alternatives.map((alt) => alt.name)).toEqual(['Payments v2']);
+      expect(meta.remote?.url).toBe('https://example.com/a.git');
     });
 
     it('removes it for every copy only when asked to', async () => {

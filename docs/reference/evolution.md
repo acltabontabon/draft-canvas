@@ -80,9 +80,9 @@ Rules:
 - **One writer per copy.** One editor records a copy's history: a Web Lock per copy, held for the
   session (`bridge.ts`). Another tab with the same diagram shows history read-only. Where the browser
   has no Web Locks, history is off and the status says so.
-- **Repository locks.** A repository's lock only serialises ref updates. Two copies on different
-  alternatives of one history may record at once; each moves only its own branch, by
-  compare-and-swap.
+- **Repository locks.** A repository's lock only serialises ref updates and changes to its
+  `repo.json`, each read again under it (`changeMeta`). Two copies on different alternatives of one
+  history may record at once; each moves only its own branch, by compare-and-swap.
 - **Active alternative.** Which alternative a copy is on lives in its binding, not in the repository,
   so two sessions never fight over a global "current branch".
 - **Per copy, not per history.** A pause lives in the binding too, so copies continuing one history

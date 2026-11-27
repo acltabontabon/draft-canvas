@@ -155,7 +155,10 @@ export interface RemoteMeta {
 export interface VersionStore {
   readonly repoId: string;
   meta(): Promise<RepoMeta>;
-  /** Replaces `repo.json` atomically. Callers hold the repository's writer lock (`repo.ts`). */
+  /**
+   * Replaces `repo.json` atomically. A history another tab or window may have open is changed only
+   * through `HistoryService.changeMeta`, which reads it again under the repository's lock.
+   */
   writeMeta(meta: RepoMeta): Promise<void>;
   /** Blob, tree and commit, content-addressed: writing the same snapshot twice writes nothing new. */
   writeSnapshot(write: SnapshotWrite): Promise<Oid>;
