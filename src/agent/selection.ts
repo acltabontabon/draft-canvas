@@ -112,7 +112,8 @@ export function readSelectionContext(file: DraftDocument, path: DepthPath, selec
   // agent can still choose, rather than as a refusal of the ids it was handed.
   const scopable = selectedNodes.size <= AGENT_LIMITS.scopeIds && selectedEdges.size <= AGENT_LIMITS.scopeIds;
 
-  // Every selected id stays in `selection`, whatever is cut from the detail to fit.
+  // Every selected id stays in `selection`, whatever is cut from the detail to fit: they are what the
+  // agent names in its change, so a select-all of a large diagram takes the read past the ceiling.
   return withinReadLimit({
     ...base,
     selection: { path: [...path], nodes: [...selectedNodes], edges: [...selectedEdges] },

@@ -230,8 +230,9 @@ An agent captures the selection once, then edits only those ids, even if the per
    selection if nothing is selected). Items have `role: "selected"` or `"context"` (up to 50
    neighbours). The ids come back as `selection: {path, nodes, edges}`. A selected sequence is
    reported under `sequences`, in full. The read is held to 96 KB as `get_implementation_context`
-   is; `selection` always keeps every selected id. A scope takes at most 300 shapes and 300
-   relationships: a larger selection says so in `message`.
+   is, apart from `selection`, which always keeps every selected id: a select-all of a large
+   diagram can take it past that. A scope takes at most 300 shapes and 300 relationships: a larger
+   selection says so in `message`.
 2. The agent passes them as `scope: {nodes, edges}` to `update_diagram`, `preview_diagram` or `submit_proposal`.
 
 With `scope`, `add` is always allowed. An `update` or `remove` outside scope is `OUT_OF_SCOPE`, naming
