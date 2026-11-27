@@ -190,8 +190,10 @@ is drawn in the style in use on the device that opens it, as every file before v
 `normalizeStyle` rebuilds a style from this whitelist wherever one is read: a file, a collaborator's
 change, a profile or a gallery pack. A drawing that is not exactly the stored form is dropped whole, a
 drawing no shape uses is dropped, and a colour that could not be read falls back when the style is
-resolved (`src/render/style/scheme.ts`). Limits are `STYLE_LIMITS`: 64 drawings, 48 paths and 8,192
-characters of path data each, 262,144 characters across a style.
+resolved (`src/render/style/scheme.ts`). A point past a drawing's reach is the exception: it is held to
+that reach, as the SVG importer holds what it reads, so a drawing saved before the reach was set still
+opens. Limits are `STYLE_LIMITS`: 64 drawings, 48 paths and 8,192 characters of path data each, 262,144
+characters across a style.
 
 ### Style files
 

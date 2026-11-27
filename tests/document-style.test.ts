@@ -16,6 +16,7 @@ import {
   normalizeStyle,
   pathCommands,
   shapeKindOf,
+  storedPath,
   withoutAssets,
   type DocumentStyle,
   type StyleAsset,
@@ -159,32 +160,74 @@ describe('a drawing in a style', () => {
       'M0 0L1e3 0',
       'M0 0L0.123 0',
       'M0 0L99999 0',
-      'M0 0L2001 0',
-      'M0 0L-1001 0',
       'M0 0Z0',
       'M0 0L10 0"/><script>alert(1)</script>',
       'M0 0L10 0 url(#x)',
     ]) {
       expect(pathCommands(bad, 1000, 1000), bad).toBeNull();
     }
+    // A short number past the drawing's reach is read, and held to it.
+    expect(storedPath('M0 0L2001 0', 1000, 1000)).toEqual({ d: 'M0 0L2000 0', commands: 2, held: true });
+    expect(storedPath('M0 0L-1001 0', 1000, 1000)).toEqual({ d: 'M0 0L-1000 0', commands: 2, held: true });
+    expect(storedPath('M0 0L10 0Z', 1000, 1000)).toEqual({ d: 'M0 0L10 0Z', commands: 3, held: false });
   });
 
   it('reaches no further past its own box than its own size', () => {
     // Held to -1000..2000 whatever its size, a 1×1 drawing reached 2,000 of its own widths: one
-    // Service painted an opaque square over the whole canvas and every export.
+    // Service painted an opaque square over the whole canvas and every export. Its points are held
+    // to the drawing's reach, as the SVG importer holds what it reads, and the repair says so.
     const cover = { id: 'acover0001', w: 1, h: 1, paths: [{ d: 'M-1000 -1000L2000 -1000L2000 2000L-1000 2000Z', fill: '#000000' }] };
-    expect(normalizeAsset(cover)).toBeNull();
+    const pulledIn = { ...cover, paths: [{ d: 'M-1 -1L2 -1L2 2L-1 2Z', fill: '#000000' }] };
+    expect(normalizeAsset(cover)).toEqual(pulledIn);
     const { style, repairs } = normalizeStyle({ v: 1, hand: { base: 'clean' }, shapes: { service: { art: cover.id } }, assets: [cover] });
-    expect(style?.assets).toBeUndefined();
-    expect(style?.shapes).toBeUndefined();
-    expect(repairs).toEqual(['Left out 1 custom drawing(s) that could not be read or were too large.']);
+    expect(style?.assets).toEqual([pulledIn]);
+    expect(style?.shapes).toEqual({ service: { art: cover.id } });
+    expect(repairs).toEqual(['Pulled in 1 custom drawing(s) that reached far outside their own box.']);
+    // Read again, it is already the stored form: nothing more to pull in, and nothing to say.
+    expect(normalizeStyle(style)).toEqual({ style, repairs: [] });
     // One of its own widths and heights past each side is still its own: a tile that joins itself,
     // a hat brim. Each axis by its own measure.
     const tall = { ...cover, w: 10, h: 20 };
-    expect(normalizeAsset({ ...tall, paths: [{ d: 'M-10 -20L20 -20L20 40Z', fill: 'line' }] })).not.toBeNull();
-    expect(normalizeAsset({ ...tall, paths: [{ d: 'M-10 -20L20.01 -20L20 40Z', fill: 'line' }] })).toBeNull();
-    expect(normalizeAsset({ ...tall, paths: [{ d: 'M0 0L10 40.01Z', fill: 'line' }] })).toBeNull();
-    expect(normalizeAsset({ ...tall, paths: [{ d: 'M0 -20.01L10 0Z', fill: 'line' }] })).toBeNull();
+    const kept = { ...tall, paths: [{ d: 'M-10 -20L20 -20L20 40Z', fill: 'line' }] };
+    expect(normalizeAsset(kept)).toEqual(kept);
+    expect(normalizeAsset({ ...tall, paths: [{ d: 'M-10 -20L20.01 -20L20 40Z', fill: 'line' }] })).toEqual(kept);
+    expect(normalizeAsset({ ...tall, paths: [{ d: 'M0 0L10 40.01Z', fill: 'line' }] })?.paths[0]!.d).toBe('M0 0L10 40Z');
+    expect(normalizeAsset({ ...tall, paths: [{ d: 'M0 -20.01L10 0Z', fill: 'line' }] })?.paths[0]!.d).toBe('M0 -20L10 0Z');
+  });
+
+  it('keeps a drawing saved before its reach was set, with its stray path pulled in', () => {
+    // The old importer stored what it read anywhere in -1000..2000: here a path four widths out.
+    // Left out whole, the drawing was gone from the file the next time it was saved.
+    const stray = {
+      id: 'astray0001',
+      w: 240,
+      h: 240,
+      paths: [
+        { d: 'M0 0L240 0L240 240L0 240Z', fill: 'line' },
+        { d: 'M960 0L1000 0L1000 40Z', fill: 'line' },
+      ],
+    };
+    const { style, repairs } = normalizeStyle({ v: 1, hand: { base: 'clean' }, shapes: { service: { art: stray.id } }, assets: [stray] });
+    expect(style?.shapes).toEqual({ service: { art: stray.id } });
+    expect(style?.assets).toEqual([{ ...stray, paths: [stray.paths[0], { d: 'M480 0L480 0L480 40Z', fill: 'line' }] }]);
+    expect(repairs).toEqual(['Pulled in 1 custom drawing(s) that reached far outside their own box.']);
+  });
+
+  it('still refuses a drawing that is no drawing, wherever its points are', () => {
+    const base = { id: 'ahostile01', w: 240, h: 240 };
+    for (const d of ['MNaN 0L10 10Z', 'M1e9 0L10 10Z', 'M99999 0L10 10Z', 'MInfinity 0Z', 'M0.123 0L10 10Z']) {
+      expect(normalizeAsset({ ...base, paths: [{ d, fill: 'line' }] }), d).toBeNull();
+    }
+    // A box of no size, or of an absurd one, is not held to anything: it is refused.
+    for (const size of [{ w: 0, h: 10 }, { w: 1e9, h: 10 }, { w: Number.NaN, h: 10 }]) {
+      expect(normalizeAsset({ ...base, ...size, paths: [{ d: 'M0 0L10 10Z', fill: 'line' }] }), JSON.stringify(size)).toBeNull();
+    }
+    // Pulling points in never lets more of them through.
+    const many = `M0 0${'L2000 2000'.repeat(STYLE_LIMITS.maxAssetCommands)}`;
+    expect(normalizeAsset({ ...base, paths: [{ d: many, fill: 'line' }] })).toBeNull();
+    const long = `M0 0${'L9999 9999'.repeat(1_000)}`;
+    expect(long.length).toBeGreaterThan(STYLE_LIMITS.maxAssetChars);
+    expect(normalizeAsset({ ...base, paths: [{ d: long, fill: 'line' }] })).toBeNull();
   });
 
   it('is kept whole or not at all', () => {
