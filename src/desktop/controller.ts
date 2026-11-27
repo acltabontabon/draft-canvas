@@ -1063,9 +1063,14 @@ export class DesktopController {
   async discardRecovery(id: string): Promise<void> {
     const entry = this.store.getSnapshot().recovery.find((candidate) => candidate.id === id);
     if (!entry) return;
-    const choice = await this.api.ask('Discard this draft?', `“${entry.title}” will be deleted from this computer. This can’t be undone.`, ['Discard', 'Cancel']);
-    if (choice !== 0) return;
-    await this.discard(id);
+    await this.guard('Couldn’t discard the draft', async () => {
+      const choice = await this.api.ask('Discard this draft?', `“${entry.title}” will be deleted from this computer. This can’t be undone.`, ['Discard', 'Cancel']);
+      if (choice !== 0) return;
+      // Not `discard`, which keeps quiet for the clean-ups made on the way: this one the person asked
+      // for, and the tile staying put with no word was all a failure told them. Never the open
+      // document's copy, which Home doesn't list.
+      await this.api.recoveryDiscard(id);
+    });
     await this.refreshRecovery();
   }
 
@@ -1907,24 +1912,29 @@ export class DesktopController {
     }
   }
 
+  // Like the rest of what Home and Settings ask for, these say why when the shell refuses: the callers
+  // don't wait, and a refusal was an unhandled rejection, the radio or tile going back without a word.
+
   async forgetRecent(handle: Handle): Promise<void> {
-    await this.api.recentsRemove(handle);
+    await this.guard('Couldn’t remove it from Recent', () => this.api.recentsRemove(handle));
     await this.refreshRecents();
   }
 
   async clearRecents(): Promise<void> {
-    await this.api.recentsClear();
+    await this.guard('Couldn’t clear Recent', () => this.api.recentsClear());
     await this.refreshRecents();
   }
 
   async setCloseBehavior(closeBehavior: 'ask' | 'tray' | 'quit'): Promise<void> {
-    const settings = await this.api.settingsSet({ closeBehavior });
-    this.store.update({ settings });
+    await this.guard('Couldn’t change what closing the window does', async () => {
+      this.store.update({ settings: await this.api.settingsSet({ closeBehavior }) });
+    });
   }
 
   async setAutoCheckUpdates(autoCheckUpdates: boolean): Promise<void> {
-    const settings = await this.api.settingsSet({ autoCheckUpdates });
-    this.store.update({ settings });
+    await this.guard('Couldn’t change checking for updates', async () => {
+      this.store.update({ settings: await this.api.settingsSet({ autoCheckUpdates }) });
+    });
   }
 
   /** Where agent access stands: asked at start, by Settings → AI agents and by Nodi when it opens,

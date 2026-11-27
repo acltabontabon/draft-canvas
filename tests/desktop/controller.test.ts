@@ -1227,6 +1227,38 @@ describe('from the app', () => {
   });
 });
 
+describe('a setting or a change on Home the shell refuses', () => {
+  it('says why, rather than going back without a word', async () => {
+    const id = 'q_77777777-7777-4777-8777-777777777777';
+    h.recovery.set(id, { text: documentText('Sketch'), entry: { id, title: 'Sketch', updatedAt: Date.now(), bytes: 10, origin: { kind: 'quick' } } });
+    await h.controller.start();
+    const refusal = () => new DesktopError('Io', 'Draft Canvas couldn’t write to its data folder.');
+    h.api.settingsSet.mockRejectedValueOnce(refusal()).mockRejectedValueOnce(refusal());
+    h.api.recentsRemove.mockRejectedValueOnce(refusal());
+    h.api.recentsClear.mockRejectedValueOnce(refusal());
+    h.api.recoveryDiscard.mockRejectedValueOnce(refusal());
+    h.answer(0);
+
+    await h.controller.setCloseBehavior('tray');
+    await h.controller.setAutoCheckUpdates(false);
+    await h.controller.forgetRecent('h_9');
+    await h.controller.clearRecents();
+    await h.controller.discardRecovery(id);
+
+    expect(h.errors).toEqual(
+      [
+        'Couldn’t change what closing the window does',
+        'Couldn’t change checking for updates',
+        'Couldn’t remove it from Recent',
+        'Couldn’t clear Recent',
+        'Couldn’t discard the draft',
+      ].map((title) => ({ title, message: 'Draft Canvas couldn’t write to its data folder.' })),
+    );
+    expect(h.store.getSnapshot().settings).toEqual({ closeBehavior: 'ask', autoCheckUpdates: true });
+    expect(h.store.getSnapshot().recovery.map((entry) => entry.id)).toEqual([id]);
+  });
+});
+
 describe('start-up', () => {
   it('shows recents and what was left unsaved, and opens nothing on its own', async () => {
     h.api.recentsList.mockResolvedValueOnce([{ handle: 'h_9', kind: 'file', name: 'old', displayPath: '~/old.draftcanvas', lastOpenedMs: 1 }]);
