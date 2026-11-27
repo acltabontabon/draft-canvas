@@ -20,19 +20,27 @@ import { serveStarterGallery } from './gallery';
  *   axe cannot express in a single pass, hence the separate passes below.
  * - `target-size` inside the diagram, likewise: what is drawn there (an attachment chip, a badge)
  *   is as large as the zoom makes it, so the floor is the chrome's to hold.
+ *
+ * Left out in one engine: Firefox's page process crashes partway through axe's walk of the
+ * Appearance panel ("Page crashed": Playwright's Firefox 159 with axe-core 4.14, on Linux CI and on
+ * Windows, in most runs, and with axe run inside the page too). No single rule or part of the panel
+ * brings it on alone, and nothing in the app throws. So in Firefox that panel sits out its own scan
+ * (`skip`) while the rest of the page is scanned; Chromium and WebKit scan the panel, whose markup
+ * is the same in every engine.
  */
 const ENFORCED = new Set(['serious', 'critical']);
 
-async function scan(page: Page, where: string, { targetSize = false } = {}) {
+async function scan(page: Page, where: string, { targetSize = false, skip = [] as string[] } = {}) {
   // Panels and dialogs fade in. Sampled mid-fade, every colour is a blend of the panel and what is
   // behind it, and axe reports contrast failures that exist for 140 ms.
   await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined))));
   const tags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'];
-  const structure = await new AxeBuilder({ page }).withTags(tags).disableRules(['color-contrast']).analyze();
-  const contrast = await new AxeBuilder({ page }).withRules(['color-contrast']).exclude('.react-flow__renderer').analyze();
+  const axe = () => skip.reduce((builder, selector) => builder.exclude(selector), new AxeBuilder({ page }));
+  const structure = await axe().withTags(tags).disableRules(['color-contrast']).analyze();
+  const contrast = await axe().withRules(['color-contrast']).exclude('.react-flow__renderer').analyze();
   // Presentation's step marks were 14 × 18px targets 4px apart.
   const targets = targetSize
-    ? (await new AxeBuilder({ page }).withRules(['target-size']).exclude('.react-flow__renderer').analyze()).violations
+    ? (await axe().withRules(['target-size']).exclude('.react-flow__renderer').analyze()).violations
     : [];
   const failing = [...structure.violations, ...contrast.violations, ...targets].filter(
     (violation) => violation.impact && ENFORCED.has(violation.impact),
@@ -68,7 +76,7 @@ test.describe('accessibility (axe)', () => {
     await scan(page, 'Home with a diagram');
   });
 
-  test('the context menu, Appearance and a presentation', async ({ page }) => {
+  test('the context menu, Appearance and a presentation', async ({ page, browserName }) => {
     await serveStarterGallery(page);
     await newCanvas(page, 'axe surfaces');
     const starters = page.getByRole('group', { name: 'Suggested starters', exact: true });
@@ -92,7 +100,8 @@ test.describe('accessibility (axe)', () => {
     await page.keyboard.press('Enter');
     const appearance = page.getByRole('complementary', { name: 'Appearance', exact: true });
     await expect(appearance).toBeVisible();
-    await scan(page, 'Appearance panel');
+    // Firefox crashes scanning this panel (see the top of this file).
+    await scan(page, 'Appearance panel', { skip: browserName === 'firefox' ? ['.dc-style-panel'] : [] });
     await appearance.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(appearance).toBeHidden();
 
