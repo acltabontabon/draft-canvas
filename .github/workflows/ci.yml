@@ -216,9 +216,12 @@ jobs:
       # fetched 10 of WebKit's ~180 system packages in five minutes, on Chromium and WebKit shards
       # alike. The install skips it for the archive and security mirrors listed after it, and a
       # stalled download times out and retries instead of holding the step until its limit.
+      # The image's Microsoft package source, which nothing here installs from, sometimes answers
+      # 403; `apt-get update` then failed the step (exit 100) before a test ran. It is dropped first.
       - name: Install the selected browser and system dependencies
         run: |
           sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+          sudo grep -rlE 'packages\.microsoft\.com' /etc/apt/sources.list.d/ | xargs -r sudo rm -f
           printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/99ci-network > /dev/null
           npx playwright install --with-deps "$PLAYWRIGHT_BROWSER"
         timeout-minutes: 10
