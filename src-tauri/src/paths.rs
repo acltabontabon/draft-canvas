@@ -159,6 +159,14 @@ fn display_path_in(path: &Path, home: Option<&Path>) -> String {
     path.display().to_string()
 }
 
+/// Whether a path the app stored earlier and `path` name the same file or folder today. A stored path
+/// keeps the spelling it was saved with, while handles come from the canonical one: after a case-only
+/// rename in Explorer or Finder (or a re-pointed link) the two strings differ, and "Remove from Home"
+/// or "Remove from Recent" found nothing to remove while opening the item again added it twice.
+pub fn same_place(stored: &str, path: &Path) -> bool {
+    Path::new(stored) == path || dunce::canonicalize(stored).is_ok_and(|real| real == path)
+}
+
 pub(crate) fn home_dir() -> Option<PathBuf> {
     if cfg!(windows) {
         return None;

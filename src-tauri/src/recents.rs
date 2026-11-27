@@ -93,7 +93,7 @@ impl Recents {
         };
         let _held = lock(&self.guard);
         let mut items = self.load()?;
-        items.retain(|e| e.path != path);
+        items.retain(|e| !crate::paths::same_place(&e.path, Path::new(path)));
         items.insert(
             0,
             RecentEntry {
@@ -117,7 +117,7 @@ impl Recents {
         let mut items = self.load()?;
         let mut changed = false;
         for entry in &mut items {
-            if Path::new(&entry.path) == old_path {
+            if crate::paths::same_place(&entry.path, old_path) {
                 entry.path = new_path.to_string();
                 entry.name = new_name.to_string();
                 changed = true;
@@ -133,7 +133,7 @@ impl Recents {
         let _held = lock(&self.guard);
         let mut items = self.load()?;
         let before = items.len();
-        items.retain(|e| Path::new(&e.path) != path);
+        items.retain(|e| !crate::paths::same_place(&e.path, path));
         if items.len() != before {
             self.store(&items)?;
         }

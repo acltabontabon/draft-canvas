@@ -89,18 +89,25 @@ impl Default for Settings {
 impl Settings {
     /// Puts a project first, adding it if it's new, and keeps the list within its cap.
     pub fn remember_project(&mut self, mut project: LastProject) {
+        let here = Path::new(&project.path).to_path_buf();
         // Opening a project again keeps the person's choice about agents for it.
-        if let Some(known) = self.projects.iter().find(|p| p.path == project.path) {
+        if let Some(known) = self
+            .projects
+            .iter()
+            .find(|p| crate::paths::same_place(&p.path, &here))
+        {
             project.agent |= known.agent;
         }
-        self.projects.retain(|p| p.path != project.path);
+        self.projects
+            .retain(|p| !crate::paths::same_place(&p.path, &here));
         self.projects.insert(0, project);
         self.projects.truncate(PROJECTS_CAP);
     }
 
     /// Lets a project go from the list. Only the list: the folder and its files are never touched.
     pub fn forget_project(&mut self, path: &str) {
-        self.projects.retain(|p| p.path != path);
+        self.projects
+            .retain(|p| !crate::paths::same_place(&p.path, Path::new(path)));
     }
 
     /// A file written when there could only be one project becomes a list of one.

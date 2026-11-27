@@ -303,6 +303,23 @@ mod tests {
         );
     }
 
+    /// Renamed in Explorer or Finder by case only, a project's stored spelling no longer matched its
+    /// canonical path: opening it again listed it twice, and Remove from Home removed nothing.
+    #[cfg(any(windows, target_os = "macos"))]
+    #[test]
+    fn a_project_renamed_only_in_case_is_listed_once_and_can_be_removed() {
+        let (dir, state) = test_state();
+        let folder = dir.path().join("Payments");
+        fs::create_dir(&folder).unwrap();
+        open_project_at(&state, &folder).unwrap();
+        let renamed = dir.path().join("payments");
+        fs::rename(&folder, &renamed).unwrap();
+        let again = open_project_at(&state, &renamed).unwrap();
+        assert_eq!(state.settings.get().projects.len(), 1);
+        forget_project(&state, &again.handle).unwrap();
+        assert!(state.settings.get().projects.is_empty());
+    }
+
     #[test]
     fn several_projects_are_kept_and_one_can_be_let_go_without_touching_it() {
         let (dir, state) = test_state();
