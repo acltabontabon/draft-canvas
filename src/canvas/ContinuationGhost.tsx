@@ -266,10 +266,11 @@ export const GhostEdge = memo(function GhostEdge({
   // as static SVG markup keyed by exact colour string (`Markers.tsx`'s `colors` Set) — a CSS custom
   // property string here would mint a `marker-end` reference nothing in `<defs>` ever defines, and
   // the browser silently drops an unresolvable marker reference (no arrowhead, not a fallback one).
-  // `theme.danger` matches the CSS `--dc-danger` `.dc-agent-preview-removed` uses, so the two
-  // treatments still read as one system in both themes — just via the same literal-colour route
-  // every other connector on screen already takes.
-  const color = removed ? theme.danger : theme.edge;
+  // `theme.dangerMark` matches the CSS `--dc-danger-mark` `.dc-agent-preview-removed` uses, so the
+  // two treatments still read as one system in both themes — just via the same literal-colour route
+  // every other connector on screen already takes. The mark, not the danger words' colour: on a
+  // style's canvas of middling tone that is black or white, and a removal read as one more line.
+  const color = removed ? theme.dangerMark : theme.edge;
   return (
     <g>
       <path

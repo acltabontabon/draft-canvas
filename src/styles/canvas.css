@@ -121,13 +121,14 @@
 }
 
 /* The selection ring is chrome, so it lives here rather than in the display
-   list — which is precisely why it never appears in an exported image. */
+   list — which is precisely why it never appears in an exported image. A mark, not words: drawn in
+   `--dc-selection-mark`, which keeps its hue on a style's canvas (`render/style/scheme.ts`). */
 .dc-node[data-selected='true']::after {
   content: '';
   position: absolute;
   inset: -4px;
   /* A full 2px: at 1.5 the ring was barely heavier than the outline of the shape it surrounds. */
-  border: 2px solid var(--dc-selection);
+  border: 2px solid var(--dc-selection-mark, var(--dc-selection));
   border-radius: calc(var(--dc-radius) + 3px);
   pointer-events: none;
 }
@@ -152,7 +153,7 @@
  * second, competing "focused but not selected" look — but a plain one: wide and strong enough
  * that "the arrow keys act on this" can be told from "this is selected" at a glance. */
 .dc-canvas:focus-visible .dc-node[data-selected='true']::after {
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--dc-selection) 45%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--dc-selection-mark, var(--dc-selection)) 45%, transparent);
 }
 
 .dc-node[data-type='text'] {
@@ -626,13 +627,13 @@
  * connector are decided there, not here.
  */
 .dc-edge[data-selected='true'] .dc-edge-line {
-  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-selection) 60%, transparent));
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-selection-mark, var(--dc-selection)) 60%, transparent));
 }
 
 /* Same keyboard-focus emphasis as a node's own rule above, same brighter/wider intensity the
  * attach-target glow just below already establishes for "a distinct-but-related state". */
 .dc-canvas:focus-visible .dc-edge[data-selected='true'] .dc-edge-line {
-  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--dc-selection) 85%, transparent));
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--dc-selection-mark, var(--dc-selection)) 85%, transparent));
 }
 
 /* A dragged note/code card is hovering this connector's own hit corridor — dropping now folds it
@@ -6340,13 +6341,14 @@
   white-space: nowrap;
 }
 
+/* A mark, in the colour a removed connector is drawn in (`theme.dangerMark`, `ContinuationGhost`). */
 .dc-agent-preview-removed {
   position: absolute;
   left: 0;
   top: 0;
-  border: 1px dashed var(--dc-danger);
+  border: 1px dashed var(--dc-danger-mark, var(--dc-danger));
   border-radius: calc(var(--dc-radius) + 3px);
-  background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--dc-danger) 18%, transparent) 6px 7px);
+  background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--dc-danger-mark, var(--dc-danger)) 18%, transparent) 6px 7px);
 }
 
 /* A proposal waiting for review is the subject while it is shown: drawn solid and outlined in teal,

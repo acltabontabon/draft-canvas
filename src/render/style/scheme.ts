@@ -18,6 +18,9 @@ export const CONTRAST = {
   line: 2.4,
   /** A shape's name on its own fill. */
   label: 4.5,
+  /** What the editor marks on the canvas and beside it (what is chosen, what would be removed): a
+   *  graphic that has to be seen, WCAG 1.4.11's 3:1. */
+  mark: 3,
 } as const;
 
 /** The canvas's own colours come as a set: words chosen for one canvas mean nothing on another. */
@@ -94,10 +97,16 @@ function wash(hex: string, alpha: number): string {
  * The colours the editor marks things in, what is chosen and what would be removed, on a canvas
  * that is not the one they were chosen for. On a brand's blue the built-in teal was 1.4:1, and a
  * removed shape in a preview could vanish into a red canvas. Each is taken toward the words' side
- * until it reads as words do, on the canvas and on a panel: canvas-coloured words are written on
- * the selection (a solid button), and the danger colour is words of its own (a Delete). The words
- * already read there, so their side always has room. Where a colour reads as it is, it is kept:
- * every palette and every pack keeps the marks it always had.
+ * until it can be seen, on the canvas and on a panel. The words already read there, so their side
+ * always has room. Where a colour reads as it is, it is kept: every palette and every pack keeps the
+ * marks it always had.
+ *
+ * Twice over, for words and for marks. Where words are written in a colour or on it, it reads as
+ * words do: canvas-coloured words are written on the selection (a solid button), and the danger
+ * colour is words of its own (a Delete). The ring round what is chosen and a crossed-out removal are
+ * graphics, held to a graphic's 3:1 (`selectionMark`, `dangerMark`). Held to words' 4.5:1 as well, on
+ * a canvas of middling tone (a brand's blue, a red) only black or white was left, and the ring and
+ * what a preview would remove read as the diagram's own words.
  */
 function marksFor(next: Theme, base: Theme): void {
   const ink = luminance(next.text) > luminance(next.canvas) ? '#ffffff' : '#000000';
@@ -108,6 +117,8 @@ function marksFor(next: Theme, base: Theme): void {
     next.selectionSoft = wash(selection, next.name === 'light' ? 0.12 : 0.16);
   }
   next.danger = heldOn(base.danger, grounds, ink, CONTRAST.text);
+  next.selectionMark = heldOn(base.selectionMark, grounds, ink, CONTRAST.mark);
+  next.dangerMark = heldOn(base.dangerMark, grounds, ink, CONTRAST.mark);
 }
 
 /** `base` with a scheme's colours over it. `base` itself when the scheme changes nothing. */
@@ -132,6 +143,7 @@ export function schemeTheme(base: Theme, scheme: StyleScheme | undefined): Theme
   if (scheme.selection && scheme.selection !== base.selection && contrast(scheme.selection, next.canvas) >= CONTRAST.line && contrast(scheme.selection, next.surfaceRaised) >= CONTRAST.line) {
     next.selection = scheme.selection;
     next.selectionSoft = wash(scheme.selection, next.name === 'light' ? 0.12 : 0.16);
+    next.selectionMark = scheme.selection;
     changed = true;
   }
   if (scheme.accents) {

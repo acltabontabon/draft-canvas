@@ -89,13 +89,20 @@ describe('a canvas colour of one’s own, over the whole of RGB', () => {
 
   it('marks what is chosen and what would be removed in colours that can be seen on it', () => {
     // Canvas-coloured words are written on the selection (a solid button), and the danger colour is
-    // words too (a Delete), so both are held where words are: on the canvas and on a panel.
+    // words too (a Delete), so both are held where words are: on the canvas and on a panel. The ring
+    // round what is chosen and a crossed-out removal are graphics, held to a graphic's floor.
     const unseen: string[] = [];
     for (const canvas of CANVASES) {
       const { theme } = drawnOn(canvas);
-      for (const [what, colour] of [['selection', theme.selection], ['danger', theme.danger]] as const) {
+      const checks = [
+        ['selection', theme.selection, CONTRAST.text],
+        ['danger', theme.danger, CONTRAST.text],
+        ['selection mark', theme.selectionMark, CONTRAST.mark],
+        ['danger mark', theme.dangerMark, CONTRAST.mark],
+      ] as const;
+      for (const [what, colour, floor] of checks) {
         for (const ground of [theme.canvas, theme.surfaceRaised]) {
-          if (contrast(colour, ground) < CONTRAST.text) unseen.push(`${canvas}: ${what} ${colour} ${contrast(colour, ground).toFixed(2)}:1 on ${ground}`);
+          if (contrast(colour, ground) < floor) unseen.push(`${canvas}: ${what} ${colour} ${contrast(colour, ground).toFixed(2)}:1 on ${ground}`);
         }
       }
     }
@@ -124,8 +131,32 @@ describe('the marks the editor draws in its own colours', () => {
     for (const palette of STYLE_PALETTES) {
       const themes = styleThemes(normalizeStyle({ v: 1, hand: { base: 'clean' }, ...(palette.schemes ? { schemes: palette.schemes } : {}) }).style);
       for (const name of ['light', 'dark'] as const) {
-        expect([themes[name].selection, themes[name].selectionSoft, themes[name].danger], `${palette.id} ${name}`).toEqual([THEMES[name].selection, THEMES[name].selectionSoft, THEMES[name].danger]);
+        const marks = (theme: Theme) => [theme.selection, theme.selectionSoft, theme.danger, theme.selectionMark, theme.dangerMark];
+        expect(marks(themes[name]), `${palette.id} ${name}`).toEqual(marks(THEMES[name]));
       }
+    }
+    // Built in, the marks are the selection and danger colours themselves.
+    for (const theme of [LIGHT, DARK]) expect([theme.selectionMark, theme.dangerMark]).toEqual([theme.selection, theme.danger]);
+  });
+
+  it('keep their own hue on a canvas of middling tone, where words in those colours are black or white', () => {
+    // Held to words' 4.5:1, the ring and a removal were #000000 and #0a0304 on a Fluent blue, and
+    // #f3f9f8 and #fef7f8 on Netflix red: they read as the diagram's own words and lines.
+    const spread = (colour: string) => {
+      const [r, g, b] = [1, 3, 5].map((at) => parseInt(colour.slice(at, at + 2), 16));
+      return { r: r!, g: g!, b: b!, chroma: Math.max(r!, g!, b!) - Math.min(r!, g!, b!) };
+    };
+    for (const canvas of ['#0078d4', '#e50914']) {
+      const { theme } = drawnOn(canvas);
+      for (const [mark, words] of [[theme.selectionMark, theme.selection], [theme.dangerMark, theme.danger]] as const) {
+        expect(contrast(words, theme.canvas), `${canvas} ${words}`).toBeGreaterThanOrEqual(CONTRAST.text);
+        expect(spread(mark).chroma, `${canvas} ${mark}`).toBeGreaterThan(spread(words).chroma + 15);
+      }
+      // Still the selection's teal and the danger's red.
+      const selection = spread(theme.selectionMark);
+      const danger = spread(theme.dangerMark);
+      expect(selection.g > selection.r && selection.b > selection.r, `${canvas} ${theme.selectionMark}`).toBe(true);
+      expect(danger.r > danger.g && danger.r > danger.b, `${canvas} ${theme.dangerMark}`).toBe(true);
     }
   });
 
@@ -153,8 +184,12 @@ describe('the marks the editor draws in its own colours', () => {
     const theme = drawnOn('#e50914').theme;
     applyThemeVariables(theme, element);
     expect(element.style.getPropertyValue('--dc-selection')).toBe(theme.selection);
-    // Removed items in a preview are drawn in `theme.danger` on the canvas and `--dc-danger` beside it.
     expect(element.style.getPropertyValue('--dc-danger')).toBe(theme.danger);
+    // The ring round a selected shape is `--dc-selection-mark`, as a selected connector is
+    // `theme.selectionMark`; removed items in a preview are `theme.dangerMark` on the canvas and
+    // `--dc-danger-mark` beside it.
+    expect(element.style.getPropertyValue('--dc-selection-mark')).toBe(theme.selectionMark);
+    expect(element.style.getPropertyValue('--dc-danger-mark')).toBe(theme.dangerMark);
   });
 });
 

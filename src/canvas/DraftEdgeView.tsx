@@ -744,9 +744,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // `filter`, never set inline — can safely live there). The active step
   // wears its flow's own accent when it has one (`presentationAccent`,
   // already folded into `color`); with no accent set, it falls back to the
-  // plain selection colour exactly as it always has.
+  // plain selection colour exactly as it always has. A mark, not words:
+  // `selectionMark`, which keeps its hue on a style's canvas.
   const strokeColor =
-    selected || attachTarget || spliceTarget ? theme.selection : isActiveStep ? (presentationAccent ?? theme.selection) : color;
+    selected || attachTarget || spliceTarget ? theme.selectionMark : isActiveStep ? (presentationAccent ?? theme.selectionMark) : color;
   // Condition and cadence share one chip, worded once for the canvas and the export (`edgeMetaText`).
   const conditionText = edgeMetaText(edge);
 
@@ -933,7 +934,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           one a click takes" reads without looking selected. Mounted only while hovered — canvas
           chrome, never exported (`edges/describe.ts` has no counterpart, deliberately). */}
       {hoverShown && (
-        <path className="dc-edge-hover" d={drawnPath} fill="none" pointerEvents="none" stroke={theme.selection} strokeLinecap="round" />
+        <path className="dc-edge-hover" d={drawnPath} fill="none" pointerEvents="none" stroke={theme.selectionMark} strokeLinecap="round" />
       )}
       <RouteMorph id={id} line={lineRef} styledPath={styledPath} still={transient || usesHandDrawnArrow || arriving || Boolean(portal)} />
       <path
@@ -1054,8 +1055,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           unmount as soon as the pointer leaves, a gesture starts or presentation takes over. */}
       {hoverShown && !routeUnsettled && outageReading === null && (
         <>
-          <path className="dc-edge-trace" d={drawnPath} pathLength={1} fill="none" stroke={theme.selection} strokeWidth={2} pointerEvents="none" />
-          {responseDrawnPath && <path className="dc-edge-trace dc-edge-trace-reply" d={responseDrawnPath} pathLength={1} fill="none" stroke={theme.selection} strokeWidth={1.6} pointerEvents="none" />}
+          <path className="dc-edge-trace" d={drawnPath} pathLength={1} fill="none" stroke={theme.selectionMark} strokeWidth={2} pointerEvents="none" />
+          {responseDrawnPath && <path className="dc-edge-trace dc-edge-trace-reply" d={responseDrawnPath} pathLength={1} fill="none" stroke={theme.selectionMark} strokeWidth={1.6} pointerEvents="none" />}
         </>
       )}
 
@@ -1100,7 +1101,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           cx={labelX}
           cy={labelY}
           r={3.5}
-          fill={theme.selection}
+          fill={theme.selectionMark}
           // Punched out of the line rather than drawn on top of it — the dot sits on a connector
           // already tinted with the selection colour, and without this it reads as a thickening of
           // the stroke instead of as a point on it.
