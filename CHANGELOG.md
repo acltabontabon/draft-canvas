@@ -10,9 +10,8 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Changed
 
-- **Faster connectors** — Dropping a shape replans connectors about 30% faster on large diagrams,
-  and Tidy up and Arrange run about twice as fast on a 300-connector diagram, with the same
-  previews.
+- **Faster Tidy up and Arrange** — On a 300-connector diagram, Tidy up runs up to twice as fast and
+  Arrange about three times as fast, with the same previews.
 - **Tidy up on large diagrams** — Over 800 connectors, Tidy up stops on its work budget in seconds
   and gives the same preview on any computer. Run it again to continue.
 
