@@ -1,6 +1,6 @@
 import { openGallery } from './library';
 import { expect, test, type Page } from '@playwright/test';
-import { cameraAtRest, newCanvas, connect, create, reopenAfterReload, toggleFlows } from './canvas';
+import { cameraAtRest, newCanvas, connect, create, reopenAfterReload, toggleFlows, presentButton } from './canvas';
 
 /**
  * Flows: build one from existing connectors, present it, and reuse the same
@@ -155,7 +155,7 @@ test.describe('Flows', () => {
     await closeFlowPanel(page);
 
     // Present it — the active flow starts directly, no picker.
-    await page.getByRole('button', { name: 'Present', exact: true }).click();
+    await presentButton(page).click();
     await expect(page.locator('.dc-explain')).toBeVisible();
     await expect(page.locator('.dc-explain-flow-title')).toContainText('Happy path');
     // The opening first — the flow's title over its whole path — and the story on the first press.
@@ -449,7 +449,7 @@ test.describe('Flows', () => {
     });
     await expect(page.locator('.dc-editor')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Present', exact: true }).click();
+    await presentButton(page).click();
     await expect(page.locator('.dc-explain')).toBeVisible();
     await expect(page.locator('.dc-explain-flow-title')).toContainText('Walkthrough');
     await page.keyboard.press('ArrowRight');
@@ -462,7 +462,7 @@ test.describe('Flows', () => {
     await page.keyboard.press('Escape');
 
     // No flow was ever made: Present follows the arrows instead of showing a still picture.
-    await page.getByRole('button', { name: 'Present', exact: true }).click();
+    await presentButton(page).click();
     await expect(page.locator('.dc-present-card[data-kind="opening"]')).toContainText('Whole diagram');
     await expect(page.locator('.dc-explain-count')).toHaveText('3 steps');
     await page.keyboard.press('ArrowRight');

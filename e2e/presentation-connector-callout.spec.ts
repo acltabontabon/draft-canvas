@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { cameraAtRest } from './canvas';
+import { cameraAtRest, presentButton } from './canvas';
 
 /**
  * A connector's note, presented on a short connector, and the step card beside it.
@@ -87,7 +87,7 @@ async function presentPublishStep(page: Page) {
   await page.waitForSelector('.dc-editor');
   await cameraAtRest(page);
   // The diagram's only flow opens straight away, at its opening overview.
-  await page.getByRole('button', { name: 'Present', exact: true }).click();
+  await presentButton(page).click();
   await page.keyboard.press('ArrowRight');
   await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 3');
   await page.keyboard.press('ArrowRight');

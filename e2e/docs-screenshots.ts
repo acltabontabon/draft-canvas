@@ -1,6 +1,6 @@
 import { openGallery, openStarter } from './library';
 import { createReaderExample } from './reader-example';
-import { clickEdge } from './canvas';
+import { clickEdge, presentButton } from './canvas';
 import { storeWithFlows } from './fixtures/outage';
 import { paymentsDocument } from './fixtures/junctions';
 
@@ -1202,7 +1202,7 @@ async function main() {
     await shot(page, 'flows-panel');
 
     // Presenting: past the opening, to the first step once its signal has settled.
-    await page.getByRole('button', { name: 'Present', exact: true }).click();
+    await presentButton(page).click();
     await page.waitForTimeout(1300); // the opening draws itself in before it takes a key
     await page.keyboard.press('Space');
     await page.waitForTimeout(1400);

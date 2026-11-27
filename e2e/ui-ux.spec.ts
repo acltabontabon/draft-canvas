@@ -1,6 +1,6 @@
 import { openGallery } from './library';
 import { expect, test, type Page } from '@playwright/test';
-import { cameraAtRest, create, newCanvas, nextFrames } from './canvas';
+import { cameraAtRest, create, newCanvas, nextFrames, presentButton } from './canvas';
 
 async function command(page: Page, name: string) {
   await page.keyboard.press('ControlOrMeta+k');
@@ -255,7 +255,7 @@ test('long presentation details remain scrollable within the camera footprint', 
     state.addEdgeToFlow(nextFlow, returnEdge.id, text);
     state.setSelectedFlowId(flow);
   }, { text: caption, title, nextTitle });
-  await page.getByRole('button', { name: 'Present', exact: true }).click();
+  await presentButton(page).click();
   await page.keyboard.press('ArrowRight');
   const details = page.getByRole('region', { name: 'Step details' });
   await expect(page.locator('.dc-explain-flow-title')).toHaveText(title);

@@ -1,6 +1,6 @@
 import { openGallery } from './library';
 import { expect, test, type Page } from '@playwright/test';
-import { armTool, cameraAtRest, newCanvas, nextFrames, reopenAfterReload, toggleFlows } from './canvas';
+import { armTool, cameraAtRest, newCanvas, nextFrames, reopenAfterReload, toggleFlows, presentButton } from './canvas';
 import { readFileSync, existsSync } from 'node:fs';
 
 /**
@@ -322,7 +322,7 @@ test.describe('Draft Canvas', () => {
     await addToFlow(page, 1, 'Untitled flow');
     await expect(page.locator('.dc-edge-step')).toHaveCount(2);
 
-    await page.getByRole('button', { name: 'Present', exact: true }).click();
+    await presentButton(page).click();
     // The flow just built is the active one, so presentation starts it directly — opening with
     // its title over the whole path; the first press begins the story.
     await expect(page.locator('.dc-explain')).toBeVisible();
@@ -356,7 +356,7 @@ test.describe('Draft Canvas', () => {
     await page.locator('.dc-node').first().click();
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(1);
 
-    await page.getByRole('button', { name: 'Present', exact: true }).click();
+    await presentButton(page).click();
     await expect(page.locator('.dc-canvas[data-explain="on"], .react-flow')).toBeVisible();
     // A selection ring from editing has no meaning in a read-only
     // presentation, and no drag-in-progress chrome (guides, attach
@@ -370,7 +370,7 @@ test.describe('Draft Canvas', () => {
     await newCanvas(page, 'Escape leaves plain present mode');
     await createNode(page, 'Service', { x: 400, y: 300 });
 
-    await page.getByRole('button', { name: 'Present', exact: true }).click();
+    await presentButton(page).click();
     await expect(page.locator('.dc-editor[data-mode="present"]')).toBeVisible();
 
     await page.keyboard.press('Escape');
