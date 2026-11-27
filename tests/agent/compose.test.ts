@@ -42,6 +42,16 @@ describe('the reopen check for a change to the open diagram', () => {
     // A repair the person's document would get already is not the change's doing.
     expect(() => gateChange(twice, { ...twice, metadata: { ...twice.metadata, title: 'Renamed' } })).not.toThrow();
   });
+
+  it('judges a repair the document needs already by how much of it there is, not its words', () => {
+    const parsed = deserializeDocument(compose(repayment, 'd_test00000001').text);
+    if (!parsed.ok) throw new Error(parsed.error);
+    const doc = parsed.document;
+    const repeat = (times: number) => ({ ...doc, nodes: [...doc.nodes, ...Array.from({ length: times }, () => ({ ...doc.nodes[0]! }))] });
+    // "Gave 2 node(s) new ids" before, "Gave 1 node(s) new ids" after: the change made it smaller.
+    expect(() => gateChange(repeat(2), repeat(1))).not.toThrow();
+    expect(() => gateChange(repeat(1), repeat(2))).toThrow(AgentError);
+  });
 });
 
 describe('compose', () => {

@@ -602,7 +602,17 @@ export function gateChange(before: DraftDocument, after: DraftDocument): void {
   };
   const now = repairsOf(after);
   if (now.length === 0) return;
-  const was = new Set(repairsOf(before));
-  const added = now.filter((repair) => !was.has(repair));
+  // A repair is told apart by its words without their numbers, and weighed by its first number:
+  // "Gave 1 node(s) new ids" is less of what "Gave 2 node(s) new ids" was, which a change that made
+  // it smaller was refused for when the two were compared word for word.
+  const kindOf = (repair: string) => repair.replace(/\d+/g, '#');
+  const tally = (repairs: readonly string[]) => {
+    const counts = new Map<string, number>();
+    for (const repair of repairs) counts.set(kindOf(repair), (counts.get(kindOf(repair)) ?? 0) + Number(/\d+/.exec(repair)?.[0] ?? 1));
+    return counts;
+  };
+  const was = tally(repairsOf(before));
+  const is = tally(now);
+  const added = now.filter((repair) => is.get(kindOf(repair))! > (was.get(kindOf(repair)) ?? 0));
   if (added.length > 0) throw new AgentError('INTERNAL', 'The changed diagram would be altered on its next open. Nothing changed.', { details: { repairs: added.slice(0, 5) } });
 }
