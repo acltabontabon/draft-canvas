@@ -34,7 +34,7 @@ import { diffFile } from '../src/collab/diff';
 import { freeOriginFor } from '../src/document/operations';
 import { buildStarter, starterSize } from './fixtures/starters-v1/build';
 import { buildDocumentForNodeCount } from '../benchmark/workloads/generator';
-import { ARRANGE_WORK_UNITS, LAYOUT_BACKSTOP_MS, planArrange, planTidy, TIDY_WORK_PER_CONNECTOR, TIDY_WORK_UNITS } from '../src/agent/layoutPlan';
+import { ARRANGE_WORK_UNITS, LAYOUT_BACKSTOP_MS, planArrange, planTidy, tidyBudget } from '../src/agent/layoutPlan';
 
 // Counts the work `evaluateAttachCandidates` does to prepare a frame's candidates, which is the thing
 // a drag must not repeat: a pass over every shape asking whether it has room.
@@ -875,7 +875,7 @@ describe('Arrange and Tidy up are bounded by work, at 100, 300 and 1000 shapes',
 
   it.each(SIZES)('Tidy up on %i shapes spends no more than its budget allows', (size) => {
     const doc = buildDocumentForNodeCount(size);
-    const budget = TIDY_WORK_UNITS + TIDY_WORK_PER_CONNECTOR * doc.edges.length;
+    const budget = tidyBudget(doc.edges.length);
     const started = performance.now();
     const result = planTidy(doc);
     const elapsed = performance.now() - started;

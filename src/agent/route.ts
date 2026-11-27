@@ -455,6 +455,8 @@ let workUsed = 0;
 let activeDeadline = Number.POSITIVE_INFINITY;
 /** Set the first time a check finds the request out of time, so a result can say it stopped early. */
 let cutShort = false;
+/** Set when it was the clock that stopped it, and not the work budget — see `Bounded.timedOut`. */
+let timedOut = false;
 
 /**
  * Runs `work` with repairs bounded by `deadline`: past it, `repairAnchors` leaves the rest as they are
@@ -478,27 +480,32 @@ export interface Bounded<T> {
   /** A repair or an alternative was skipped because the budget was spent: the result is the best
    *  found so far, and running the same request again on it may find more. */
   partial: boolean;
+  /** It was the wall-clock backstop that stopped it, not the budget — a machine too slow to spend the
+   *  budget in time. Only then can the same diagram come out differently elsewhere. Implies `partial`. */
+  timedOut: boolean;
 }
 
 /**
  * Runs `work` bounded by `limit` units of work (see `charge`), and, as a backstop only, by `backstopMs`
  * of wall-clock time. Which repairs run depends on the units spent so far and never on the clock, unless
- * the backstop trips; so a result is the same on any machine.
+ * the backstop trips; so a result is the same on any machine, and one the backstop stopped says so.
  */
 export function withBudget<T>(limit: { work: number; backstopMs?: number }, work: () => T): Bounded<T> {
-  const outer = { limit: workLimit, used: workUsed, deadline: activeDeadline, cutShort };
+  const outer = { limit: workLimit, used: workUsed, deadline: activeDeadline, cutShort, timedOut };
   workLimit = limit.work;
   workUsed = 0;
   cutShort = false;
+  timedOut = false;
   if (limit.backstopMs !== undefined) activeDeadline = Math.min(outer.deadline, performance.now() + limit.backstopMs);
   try {
     const value = work();
-    return { value, used: workUsed, partial: cutShort };
+    return { value, used: workUsed, partial: cutShort, timedOut };
   } finally {
     workLimit = outer.limit;
     workUsed = outer.used;
     activeDeadline = outer.deadline;
     cutShort = outer.cutShort;
+    timedOut = outer.timedOut;
   }
 }
 
@@ -529,10 +536,32 @@ export function charge(units: number): void {
 
 /** Whether the request's budget or time is up (see `withBudget`, `withDeadline`). */
 export function pastDeadline(): boolean {
-  if (workUsed > workLimit || performance.now() > activeDeadline) {
+  if (workUsed > workLimit) {
     cutShort = true;
     return true;
   }
+  if (performance.now() > activeDeadline) {
+    cutShort = true;
+    timedOut = true;
+    return true;
+  }
+  return false;
+}
+
+/** The units an assessment of `count` drawn lines is charged: every pair of them is compared. */
+const assessmentCost = (count: number) => Math.ceil((count * (count - 1)) / 2 / PAIRS_PER_UNIT);
+
+/**
+ * Whether the budget can pay for an assessment of `count` lines. One it can't is charged all the same,
+ * so the units spent are what they always were, but not done: the next check stops the repair and
+ * throws its answer away, and comparing every pair of lines is the costliest step a repair takes — on
+ * 6,000 connectors, most of a minute spent for an answer nobody read. Free outside a budget.
+ */
+function affords(count: number): boolean {
+  const cost = assessmentCost(count);
+  if (workUsed + cost <= workLimit) return true;
+  charge(cost);
+  pastDeadline();
   return false;
 }
 
@@ -591,7 +620,7 @@ function assessRoutes(nodes: readonly DraftNode[], edges: readonly DraftEdge[], 
   const edgeMap = new Map(edges.map((e) => [e.id, e]));
   const runs = drawn.map((d) => runsOf(d.points));
   // Every pair of lines is compared for shared runs and crossings: counted like the draws are.
-  charge(Math.ceil((drawn.length * (drawn.length - 1)) / 2 / PAIRS_PER_UNIT));
+  charge(assessmentCost(drawn.length));
   let cost = 0;
   let obstruction = 0;
   let overlap = 0;
@@ -665,6 +694,8 @@ export function repairAnchors(
   const current = () => all.map((e) => moving.get(e.id) ?? e);
   let edges = current();
   let drawn = new Map(othersOf(nodes, edges, caption, undefined, byId).map((o) => [o.id, o]));
+  // Past the budget no connector below would be repaired: the view is left as it is.
+  if (!affords(drawn.size)) return;
   let assessment = assessRoutes(nodes, edges, [...drawn.values()], byId);
   // The side an automatic end of a connector this repair isn't moving is drawn on — fixed for it.
   const autoSides = new Map<string, { source?: Side; target?: Side }>();
@@ -767,6 +798,8 @@ export function repairAnchors(
       // view, so accept using fresh full-view geometry, never the neighbourhood approximation.
       if (problems.some((p) => p && p.kind !== 'through-boundary')) continue;
       const full = othersOf(nodes, next, caption, undefined, byId);
+      // Past the budget this candidate is passed over, and the search ends at the next check.
+      if (!affords(full.length)) continue;
       const after = assessRoutes(nodes, next, full, byId);
       if (pastDeadline() || !preservesReadability(before, after)) continue;
       if (why === 'unresolved' && after.unresolved.has(mover.id)) continue;
