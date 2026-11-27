@@ -373,7 +373,8 @@ export interface EditorStore {
    * What the editor was looking at when the presentation started, so leaving one puts the
    * presenter back rather than wherever the last flow happened to end. Transient session state:
    * never saved, never in history, and dropped by `resetViewSession` so a different document can
-   * never be handed a selection from this one. `null` whenever nothing is being presented.
+   * never be handed a selection from this one (moving between rooms while presenting keeps it).
+   * `null` whenever nothing is being presented.
    *
    * The selection half is restored here — `setMode` is the one door every exit goes through. The
    * camera lives in React Flow rather than the store, so `EditorScreen` captures and restores that
@@ -1648,6 +1649,10 @@ function navigateTo(set: SetEditorState, get: GetEditorState, path: DepthPath): 
   const cleared = resetViewSession();
   set((s) => ({
     ...cleared,
+    // Presenting is a way of looking at any room, and what to come back to when it ends goes along:
+    // `setMode` keeps only the part of it the room it ends in holds. Dropped here, a presenter who
+    // followed a Junction or looked inside a shape and came back lost the selection from before.
+    ...(s.mode === 'present' ? { editReturn: s.editReturn } : {}),
     document: view,
     path: inside ? resolved : ROOT_PATH,
     outer: inside ? file : null,

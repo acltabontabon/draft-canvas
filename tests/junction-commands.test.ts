@@ -17,7 +17,8 @@ import {
 import { jumpCommands } from '../src/commands/search';
 import { isStage, type CommandContext } from '../src/commands/types';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
-import type { DraftEdge, DraftNode } from '../src/document/types';
+import { createFlow } from '../src/document/flow';
+import type { DraftEdge, DraftFlow, DraftNode } from '../src/document/types';
 import { membersOf } from '../src/junctions/groups';
 import { ARRIVAL_MAX_ZOOM, FLIGHT_MAX_MS, GLIDE_MAX_MS } from '../src/junctions/journey';
 import { EMPTY_TRAIL } from '../src/junctions/trail';
@@ -216,6 +217,59 @@ describe('following a junction', () => {
     expect(useUiStore.getState().presentation.framing).toBe('manual');
     expect(store.getState().mode).toBe('present');
     expect(store.getState().selection).toEqual({ nodes: [], edges: [] });
+  });
+});
+
+describe('following a junction while presenting', () => {
+  const walk: DraftFlow = {
+    ...createFlow({ title: 'The diagram' }),
+    steps: [
+      { id: 'fs1', edgeId: 'Order Service>a1' },
+      { id: 'fs2', edgeId: 'Order Service>b1' },
+    ],
+  };
+
+  function presenting() {
+    store.getState().setSelection({ nodes: ['Notifier'], edges: [] });
+    store.getState().setMode('present');
+    store.getState().setFlowPlayback({ active: true, flowId: walk.id, walk, step: 2 });
+  }
+
+  /**
+   * A flow belongs to the room it is told in, so stepping into another room ends its playback there.
+   * The way back by the trail is what the guide promises carries the presentation on from the step
+   * it was on — it had ended, with no flow bar to go on with, and the selection from before
+   * presenting was gone too.
+   */
+  it('carries the presentation on from the step it was on when the trail brings you back', async () => {
+    const { ctx } = camera();
+    presenting();
+    expect(await followJunction(ctx(), 'a1', 'a-inside')).toBe(true);
+    expect(store.getState().path).toEqual(['Order Service']);
+    expect(store.getState().flowPlayback.active).toBe(false);
+
+    expect(await stepTrail(ctx(), -1)).toBe(true);
+    expect(store.getState().path).toEqual([]);
+    expect(store.getState().mode).toBe('present');
+    expect(store.getState().flowPlayback).toMatchObject({ active: true, flowId: walk.id, walk, step: 2 });
+
+    // There and back again.
+    expect(await stepTrail(ctx(), 1)).toBe(true);
+    expect(store.getState().flowPlayback.active).toBe(false);
+    expect(await stepTrail(ctx(), -1)).toBe(true);
+    expect(store.getState().flowPlayback).toMatchObject({ active: true, flowId: walk.id, step: 2 });
+
+    store.getState().setMode('edit');
+    expect(store.getState().selection.nodes).toEqual(['Notifier']);
+  });
+
+  it('picks nothing up again once the presentation has ended', async () => {
+    const { ctx } = camera();
+    presenting();
+    await followJunction(ctx(), 'a1', 'a-inside');
+    store.getState().setMode('edit');
+    expect(await stepTrail(ctx(), -1)).toBe(true);
+    expect(store.getState().flowPlayback.active).toBe(false);
   });
 });
 
