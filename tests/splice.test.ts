@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createDocument, createEdge, createNode, type CreateNodeInput } from '../src/document/factory';
+import { createAttachment, createDocument, createEdge, createNode, type CreateNodeInput } from '../src/document/factory';
 import { createFlow } from '../src/document/flow';
+import { LIMITS } from '../src/document/limits';
 import { addEdges, addNodes } from '../src/document/operations';
 import { bridgeProblems, canSpliceInto, removeAndBridge, spliceNodeIntoEdge } from '../src/document/splice';
-import type { DraftDocument, DraftEdge, DraftNode } from '../src/document/types';
+import type { Attachment, DraftDocument, DraftEdge, DraftNode } from '../src/document/types';
+import { parseDocument } from '../src/document/validate';
+import { serializeDocument } from '../src/export/project';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 function node(input: CreateNodeInput): DraftNode {
@@ -16,6 +19,17 @@ function graph(nodes: DraftNode[], edges: DraftEdge[]): DraftDocument {
 
 function edgeBetween(doc: DraftDocument, source: string, target: string) {
   return doc.edges.find((e) => e.source === source && e.target === target);
+}
+
+function notes(...texts: string[]): Attachment[] {
+  return texts.map((text) => createAttachment({ type: 'note', text }));
+}
+
+/** What the next open of `doc` keeps, and what it had to repair to keep it. */
+function reopened(doc: DraftDocument) {
+  const result = parseDocument(serializeDocument(doc));
+  if (!result.ok) throw new Error(result.error);
+  return result;
 }
 
 describe('spliceNodeIntoEdge', () => {
@@ -158,6 +172,66 @@ describe('removeAndBridge', () => {
     expect(result.joined).toBe(0);
     expect(result.doc.edges).toHaveLength(0);
   });
+
+  it('carries both legs\' attachments when they fit on one connector, as the next open keeps them', () => {
+    const into = { ...createEdge({ source: client.id, target: gateway.id }), attachments: notes('in 1', 'in 2') };
+    const out = { ...createEdge({ source: gateway.id, target: api.id }), attachments: notes('out 1', 'out 2') };
+    const result = removeAndBridge(graph([client, gateway, api], [into, out]), [gateway.id])!;
+    const joined = edgeBetween(result.doc, client.id, api.id)!;
+    expect(joined.attachments!.map((a) => a.text)).toEqual(['in 1', 'in 2', 'out 1', 'out 2']);
+    const back = reopened(result.doc);
+    expect(back.repairs).toEqual([]);
+    expect(back.document.edges[0]!.attachments).toEqual(joined.attachments);
+  });
+
+  // Was: the joined connector took all five, a connector holds four, and the next open dropped the
+  // fifth for good ("kept the first 4") — the save after it made the loss permanent.
+  it('refuses a join that would put more attachments on one connector than it holds, changing nothing', () => {
+    const into = { ...createEdge({ source: client.id, target: gateway.id }), attachments: notes('in 1', 'in 2', 'in 3') };
+    const out = { ...createEdge({ source: gateway.id, target: api.id }), attachments: notes('out 1', 'out 2') };
+    const doc = graph([client, gateway, api], [into, out]);
+    expect(into.attachments.length + out.attachments.length).toBeGreaterThan(LIMITS.maxAttachmentsPerEdge);
+    expect(bridgeProblems(doc, [gateway.id])).toEqual([gateway.id]);
+    expect(removeAndBridge(doc, [gateway.id])).toBeNull();
+  });
+
+  it('refuses a chain whose attachments only add up past the limit as it is joined through', () => {
+    const second = node({ type: 'service', text: 'Auth', x: 450, y: 0 });
+    const edges = [
+      { ...createEdge({ source: client.id, target: gateway.id }), attachments: notes('1', '2') },
+      { ...createEdge({ source: gateway.id, target: second.id }), attachments: notes('3', '4') },
+      { ...createEdge({ source: second.id, target: api.id }), attachments: notes('5') },
+    ];
+    expect(removeAndBridge(graph([client, gateway, second, api], edges), [gateway.id, second.id])).toBeNull();
+  });
+
+  // Was: the way in was copied onto every joined connector under the same attachment ids, which a
+  // load keeps (ids are unique per connector) and an agent's `read_attachment` then always answered
+  // from the first connector.
+  it('gives each copy of a shared leg\'s attachments its own id when one way in feeds several ways out', () => {
+    const into = { ...createEdge({ source: client.id, target: gateway.id }), attachments: notes('auth', 'retries') };
+    const toApi = { ...createEdge({ source: gateway.id, target: api.id }), attachments: notes('api') };
+    const toOther = createEdge({ source: gateway.id, target: other.id });
+    const result = removeAndBridge(graph([client, gateway, api, other], [into, toApi, toOther]), [gateway.id])!;
+    expect(result.joined).toBe(2);
+    expect(edgeBetween(result.doc, client.id, api.id)!.attachments!.map((a) => a.text)).toEqual(['auth', 'retries', 'api']);
+    expect(edgeBetween(result.doc, client.id, other.id)!.attachments!.map((a) => a.text)).toEqual(['auth', 'retries']);
+    const ids = result.doc.edges.flatMap((e) => (e.attachments ?? []).map((a) => a.id));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(reopened(result.doc).repairs).toEqual([]);
+  });
+
+  it('gives an attachment a fresh id when both legs carry the same one', () => {
+    const [shared] = notes('shared');
+    const into = { ...createEdge({ source: client.id, target: gateway.id }), attachments: [shared!] };
+    const out = { ...createEdge({ source: gateway.id, target: api.id }), attachments: [{ ...shared!, text: 'also' }] };
+    const result = removeAndBridge(graph([client, gateway, api], [into, out]), [gateway.id])!;
+    const joined = edgeBetween(result.doc, client.id, api.id)!.attachments!;
+    expect(joined.map((a) => a.text)).toEqual(['shared', 'also']);
+    expect(joined[0]!.id).toBe(shared!.id);
+    expect(joined[1]!.id).not.toBe(shared!.id);
+    expect(reopened(result.doc).repairs).toEqual([]);
+  });
 });
 
 describe('store: splice and delete-keeping-lines', () => {
@@ -198,6 +272,22 @@ describe('store: splice and delete-keeping-lines', () => {
     const doc = store.getState().document;
     expect(doc.nodes.some((n) => n.id === g.id)).toBe(false);
     expect(edgeBetween(doc, a.id, b.id)).toBeDefined();
+  });
+
+  it('⌥⌫ leaves the shape and its connectors when the joined line could not hold their attachments', () => {
+    const a = store.getState().addNode({ type: 'service', x: 0, y: 0 });
+    const g = store.getState().addNode({ type: 'service', serviceKind: 'gateway', x: 300, y: 0 });
+    const b = store.getState().addNode({ type: 'service', x: 600, y: 0 });
+    const into = store.getState().connect(a.id, g.id)!;
+    const out = store.getState().connect(g.id, b.id)!;
+    for (const card of notes('in 1', 'in 2', 'in 3')) store.getState().attachToEdge(into.id, card);
+    for (const card of notes('out 1', 'out 2')) store.getState().attachToEdge(out.id, card);
+    const before = store.getState().document;
+    const steps = store.getState().history.past.length;
+    store.getState().setSelection({ nodes: [g.id], edges: [] });
+    store.getState().deleteSelectionKeepingLines();
+    expect(store.getState().document).toBe(before);
+    expect(store.getState().history.past.length).toBe(steps);
   });
 });
 

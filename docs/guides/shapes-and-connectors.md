@@ -351,8 +351,10 @@ An agent using the Draft Canvas MCP tools, including Nodi, can add the same asso
   `Orders API → orders → Billing`. Works for Queues, Data Stores, Services, Components and Junctions;
   the label, notes and flow steps stay.
 - **Take one out**: select a shape and press `⌥⌫` (**Delete and join connectors**).
-  `Client → Gateway → API` becomes `Client → API`, keeping its flows. A shape with several ways in
-  and out has no single way to join, so `⌥⌫` leaves it; plain `⌫` deletes it.
+  `Client → Gateway → API` becomes `Client → API`, keeping its flows, notes and code. A shape with
+  several ways in and out has no single way to join, so `⌥⌫` leaves it; plain `⌫` deletes it. It
+  also leaves a shape whose joined connector would carry more than four notes and code cards, the
+  most a connector holds.
 - **Data pipelines**: draw arrows the way the data moves. A Data Store drawn into what reads it
   reads "read by", and a Table drawn into the next Table is `transforms`. A data connector's panel
   has a **Cadence** (Streaming, Hourly, Daily, Weekly, On demand), shown as a chip under its caption.

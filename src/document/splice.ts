@@ -9,6 +9,8 @@
 
 import { createEdge } from './factory';
 import { mergeEdgesInFlows, spliceEdgeInFlows } from './flow';
+import { createId } from './ids';
+import { LIMITS } from './limits';
 import { retargetOpenPoints } from './openPoints';
 import { addEdges, removeElements } from './operations';
 import { reinferIfEligible } from './reinfer';
@@ -79,8 +81,9 @@ export function spliceNodeIntoEdge(
   return { doc: next, legs: [into.id, out.id] };
 }
 
-/** Why a shape can't be taken out with its lines joined: nothing to join, or no single way to. */
-export type BridgeProblem = 'many-to-many';
+/** Why a shape can't be taken out with its lines joined: no single way to join them, or a joined
+ *  connector that couldn't hold the attachments both of its legs carry. */
+export type BridgeProblem = 'many-to-many' | 'attachments';
 
 interface Bridge {
   incoming: DraftEdge;
@@ -94,14 +97,29 @@ function sidesOf(doc: DraftDocument, nodeId: string) {
   return { incoming, outgoing };
 }
 
+/** Whether `inEdge` and `outEdge` become a connector of their own: not a way back to where the line
+ *  came from, and not a pair that is already connected. */
+function joins(doc: DraftDocument, inEdge: DraftEdge, outEdge: DraftEdge): boolean {
+  return inEdge.source !== outEdge.target && !doc.edges.some((e) => e.source === inEdge.source && e.target === outEdge.target);
+}
+
+/** Whether the connector joining these legs would carry more attachments than a connector holds.
+ *  It carries every one of both legs', so such a join is refused rather than trimmed, as attaching
+ *  to a full connector is: the next open would keep the first ones and drop the rest for good. */
+function overfull(inEdge: DraftEdge, outEdge: DraftEdge): boolean {
+  return (inEdge.attachments?.length ?? 0) + (outEdge.attachments?.length ?? 0) > LIMITS.maxAttachmentsPerEdge;
+}
+
 /**
  * Which of `nodeIds` can't be removed with their lines joined: those with several ways in *and*
- * several ways out. Joining every one to every other would invent connections nobody drew.
+ * several ways out, since joining every one to every other would invent connections nobody drew,
+ * and those whose joined connector couldn't hold every attachment its two legs carry.
  */
 export function bridgeProblems(doc: DraftDocument, nodeIds: readonly string[]): string[] {
   return nodeIds.filter((id) => {
     const { incoming, outgoing } = sidesOf(doc, id);
-    return incoming.length > 1 && outgoing.length > 1;
+    if (incoming.length > 1 && outgoing.length > 1) return true;
+    return incoming.some((inEdge) => outgoing.some((outEdge) => overfull(inEdge, outEdge) && joins(doc, inEdge, outEdge)));
   });
 }
 
@@ -113,7 +131,8 @@ export function bridgeProblems(doc: DraftDocument, nodeIds: readonly string[]): 
  * legs' attachments, flow steps and open points, and has its meaning inferred from what it now
  * joins. A pair that is already connected isn't connected twice. Everything else about removal is
  * `removeElements`'s, so a boundary's contents and the shapes' own open points go as with Delete.
- * Returns `null` when a shape can't be joined unambiguously (`bridgeProblems`).
+ * Returns `null` when a shape can't be joined unambiguously, or when a joined connector couldn't
+ * hold every attachment its legs carry (`bridgeProblems`).
  */
 export function removeAndBridge(
   doc: DraftDocument,
@@ -130,12 +149,25 @@ export function removeAndBridge(
     // out; that one is just as ambiguous as if it had been drawn so.
     if (incoming.length > 1 && outgoing.length > 1) return null;
     const bridges: Bridge[] = incoming.flatMap((inEdge) => outgoing.map((outEdge) => ({ incoming: inEdge, outgoing: outEdge })));
+    // The ids this shape's joined connectors already carry. The leg every bridge shares (the one way
+    // in, or the one way out) is copied onto each of them, and a copy gets an id of its own, as a
+    // paste's does. A load keeps ids unique per connector only, so the same id on two would last,
+    // and whatever finds an attachment by its id (an agent's `read_attachment`) would always answer
+    // from the first.
+    const given = new Set<string>();
     for (const { incoming: inEdge, outgoing: outEdge } of bridges) {
-      if (inEdge.source === outEdge.target) continue;
-      const exists = next.edges.some((e) => e.source === inEdge.source && e.target === outEdge.target);
-      if (exists) continue;
+      if (!joins(next, inEdge, outEdge)) continue;
+      // Asked again here, as above for many-to-many: a chain adds up as it is joined through, so a
+      // later shape's way in can be a connector that already carries an earlier one's two legs.
+      if (overfull(inEdge, outEdge)) return null;
       const label = inEdge.label ?? outEdge.label;
-      const attachments = [...(inEdge.attachments ?? []), ...(outEdge.attachments ?? [])];
+      const attachments = [...(inEdge.attachments ?? []), ...(outEdge.attachments ?? [])].map((attachment) => {
+        if (!given.has(attachment.id)) {
+          given.add(attachment.id);
+          return attachment;
+        }
+        return { ...attachment, id: createId('a') };
+      });
       const edge: DraftEdge = {
         ...createEdge({
           source: inEdge.source,
