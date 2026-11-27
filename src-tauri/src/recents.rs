@@ -58,7 +58,8 @@ impl Recents {
     }
 
     /// Newest first. Entries whose file (or folder) has gone are removed for good and the file is
-    /// rewritten only when something was.
+    /// rewritten only when something was. An entry on a drive or share that can't be reached right now
+    /// is kept (see `gone`).
     pub fn list(&self) -> Result<Listing, AppError> {
         let _held = lock(&self.guard);
         // Unreadable right now (a share that dropped): show nothing this time and touch nothing, so the
@@ -70,7 +71,7 @@ impl Recents {
             });
         };
         let before = items.len();
-        items.retain(still_exists);
+        items.retain(|entry| !gone(entry));
         let pruned = items.len() != before;
         if pruned {
             self.store(&items)?;
@@ -186,11 +187,18 @@ impl Recents {
     }
 }
 
-fn still_exists(entry: &RecentEntry) -> bool {
+/// Whether an entry's file (or folder) is gone for good: it isn't there, or isn't the right kind,
+/// while the folder it was in is. A USB drive or network share that is offline right now hides the
+/// folder too, and says nothing about the file: such an entry is kept, as the project list keeps the
+/// same folder. Removing it lost it for good though the drive came back.
+fn gone(entry: &RecentEntry) -> bool {
     let path = Path::new(&entry.path);
-    match entry.kind {
-        RecentKind::File => path.is_file(),
-        RecentKind::Project => path.is_dir(),
+    match fs::metadata(path) {
+        Ok(meta) => match entry.kind {
+            RecentKind::File => !meta.is_file(),
+            RecentKind::Project => !meta.is_dir(),
+        },
+        Err(_) => path.parent().is_some_and(|folder| folder.is_dir()),
     }
 }
 
@@ -285,6 +293,20 @@ mod tests {
         assert_eq!(items[0].kind, RecentKind::Project);
         assert_eq!(items[1].name, "f19");
         assert_eq!(items[14].name, "f6");
+    }
+
+    #[test]
+    fn an_entry_whose_drive_or_share_is_offline_is_kept() {
+        let f = fixture();
+        // The folder it was in can't be seen at all, as with an unplugged drive or a dropped share.
+        let away = f.root.join("unplugged/plan.draftcanvas");
+        fs::create_dir(f.root.join("unplugged")).unwrap();
+        fs::write(&away, "{}").unwrap();
+        f.recents.add(RecentKind::File, &away, "plan", 1).unwrap();
+        fs::remove_dir_all(f.root.join("unplugged")).unwrap();
+        let listing = f.recents.list().unwrap();
+        assert!(!listing.pruned);
+        assert_eq!(listing.items.len(), 1);
     }
 
     #[test]
