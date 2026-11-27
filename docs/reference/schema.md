@@ -10,7 +10,7 @@ A document (`DraftDocument` in `src/document/types.ts`) is JSON with these root 
 | Field | Contents |
 | --- | --- |
 | `format` | Always `"draft-canvas"` |
-| `version` | Format version, currently **33** (`CURRENT_VERSION`) |
+| `version` | Format version, currently **34** (`CURRENT_VERSION`) |
 | `metadata` | `id`, `title`, `createdAt`, `updatedAt`, optional `projectId` |
 | `nodes`, `edges`, `flows`, `viewport` | The top-level graph |
 | `ink` | Optional handwritten strokes over the top-level graph (`DraftInk`). Absent when there are none |
@@ -96,7 +96,7 @@ Rules for a new version:
 | v32 → v33 | identity | No-op (optional `link` on Junctions: the group a Junction continues in). Junctions that only share a label are not linked by the migration |
 | v33 → v34 | `migrateExternalToCard`, `migrateApiToGlyph`, `keepGlyphPins` | A Service of kind `external` gives back the height its glyph took (68 from a box with only a name, 40 from one with a technology or a description, never below 68), placed so the card's middle is where the glyph's middle was: the kind is drawn as a card with a dashed outline and its name inside, and a pin on its left or right keeps the height it was drawn at. A Service of kind `api` grows the way v30 grew a Worker, with its side pins kept at the height they were drawn: it is drawn as a glyph with the name underneath. A pin on the top or bottom of any shape drawn as a glyph is given the offset that keeps it where it was drawn, or at the glyph's corner: those anchors are spread along the glyph's reach, not the whole box |
 
-Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17, v20, v29, v30 and v32. `migrateActionsToNotes` is
+Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17, v20, v29, v30 and v33. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.
 
 **Compensating actions** are ordinary connectors. One can name its originating interaction
@@ -105,6 +105,8 @@ root-only but walks rooms itself to resolve anchors.
 `label` stays the counteraction operation. MCP `create_diagram`, `read_diagram` and `update_diagram`
 expose these fields. Older unlinked `compensates` connectors stay visible, since migration never
 guesses which operation they counteract; an invalid link is removed and the action stays editable.
+An HTTP action's operation starts with a verb, linked or not: free text such as `refund` reads
+`POST refund`, and the old placeholder `OK` is removed.
 
 ## Validation
 
@@ -132,12 +134,14 @@ Repaired, after migration, and reported to the caller:
   steps to missing edges.
 - Boundaries nested deeper than `maxGroupDepth` lose the link ("Removed … invalid grouping link(s)");
   the editor refuses to nest that deep, so only a hand-edited file reaches it.
-- Rooms deeper than `maxInsideDepth` are dropped. A room with no shapes is dropped. Ids are unique
-  across the whole file. A missing or repeated id on a shape, connector, flow, flow step or
-  attachment gets a new one, and the report says how many.
+- Rooms deeper than `maxInsideDepth` are dropped. A room with no shapes is dropped. Shape,
+  connector and flow ids are unique across the whole file; a flow step's id is unique within its
+  flow, and an attachment's within the shape or connector that carries it. A missing or repeated id
+  gets a new one, and the report says how many.
 - `ink` strokes are read per room: an unknown `tool` or unreadable points drop the stroke; size is
   clamped; a `pressure` list that doesn't match the points is dropped; ids are unique across the
-  file; a room over `maxInkStrokes` keeps the first strokes.
+  file. `maxInkStrokes` is one allowance across the file, like `maxNodes`: a room past what is left
+  keeps its first strokes.
 - `openPoints` is read at the root only. Targets are resolved after every room is loaded; a
   missing target is dropped, and a point with no targets left is dropped.
 - A `sequence` payload is normalized by `validateSequence.ts`: messages to or from a missing
