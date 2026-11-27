@@ -52,7 +52,15 @@ const SHAPES_TOOLTIP: PrimitiveTooltipContent = {
  * (`ShapePicker`). A shape picked there that has no place of its own on the rail is shown in that
  * slot while it is in hand, so the rail never has a tool in hand it isn't showing.
  */
-export function CreateRail() {
+export function CreateRail({ onPlace }: {
+  /**
+   * Puts a shape down now, the way its key does over the canvas (`createAtPointer`: beside the
+   * selection, or in the middle of the view), ready to name. For a shape chosen from the keyboard in
+   * a picker opened from the keyboard, where no click on the canvas is coming to place an armed tool:
+   * a technology has no key of its own, so it could be found but never put down.
+   */
+  onPlace?: (preset: Preset) => void;
+}) {
   const armed = useUiStore((state) => state.armed);
   const arm = useUiStore((state) => state.arm);
   const pencil = useUiStore((state) => state.pencil);
@@ -62,7 +70,8 @@ export function CreateRail() {
   const railRef = useRef<HTMLDivElement>(null);
   const shapesRef = useRef<HTMLButtonElement>(null);
   const [more, setMore] = useState({ start: false, end: false });
-  const [picker, setPicker] = useState<{ rect: DOMRect; trigger: HTMLElement } | null>(null);
+  // `viaKeyboard`: opened with Enter or Space (a click with no pointer behind it, `detail` 0).
+  const [picker, setPicker] = useState<{ rect: DOMRect; trigger: HTMLElement; viaKeyboard: boolean } | null>(null);
   // In hand, but with no button of its own on the rail: the Shapes slot shows it.
   const tucked = armed && !ON_RAIL.has(armed.id) ? armed : null;
   const closePicker = () => {
@@ -248,7 +257,8 @@ export function CreateRail() {
                     {...tip}
                     onClick={(event) => {
                       const trigger = event.currentTarget;
-                      setPicker((open) => (open ? null : { rect: trigger.getBoundingClientRect(), trigger }));
+                      const viaKeyboard = event.detail === 0;
+                      setPicker((open) => (open ? null : { rect: trigger.getBoundingClientRect(), trigger, viaKeyboard }));
                     }}
                   >
                     {tucked ? (
@@ -282,9 +292,12 @@ export function CreateRail() {
           anchorRect={picker.rect}
           trigger={picker.trigger}
           armedId={armed?.id ?? null}
-          onPick={(preset) => {
+          onPick={(preset, by) => {
             closePicker();
-            arm(preset);
+            // Opened and chosen from the keyboard, the shape is put down now. Anything else arms it
+            // for the click on the canvas a pointer is there to make.
+            if (by === 'keyboard' && picker.viaKeyboard && onPlace) onPlace(preset);
+            else arm(preset);
           }}
           onDismiss={closePicker}
         />

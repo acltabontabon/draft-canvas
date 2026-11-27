@@ -21,7 +21,8 @@ interface ShapePickerProps {
   trigger: HTMLElement | null;
   /** The tool in hand, marked in the list. */
   armedId: string | null;
-  onPick: (preset: Preset) => void;
+  /** `by`: Enter in the list, or a click on a row. */
+  onPick: (preset: Preset, by: 'keyboard' | 'pointer') => void;
   onDismiss: () => void;
 }
 
@@ -128,7 +129,7 @@ export function ShapePicker({ anchorRect, trigger, armedId, onPick, onDismiss }:
           if (isImeKeyEvent(event)) return;
           event.preventDefault();
           const preset = flat[at];
-          if (preset) onPick(preset);
+          if (preset) onPick(preset, 'keyboard');
           return;
         }
         case 'k':
@@ -211,7 +212,7 @@ export function ShapePicker({ anchorRect, trigger, armedId, onPick, onDismiss }:
                   onPointerMove={() => {
                     if (latest.current.at !== row) setHighlight(row);
                   }}
-                  onClick={() => onPick(preset)}
+                  onClick={() => onPick(preset, 'pointer')}
                 >
                   <span className="dc-shape-option-glyph" aria-hidden="true">
                     {preset.technology ? <TechnologyLogo technology={preset.technology} /> : <ToolGlyph id={preset.glyph ?? preset.id} />}
