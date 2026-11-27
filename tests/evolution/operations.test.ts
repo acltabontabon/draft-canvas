@@ -9,7 +9,7 @@ import { parseMessage } from '../../src/evolution/trailers';
 import { attachHistory, detachHistory, duplicateHistory, hasHistory, historyService } from '../../src/store/evolution/bridge';
 import { cloneDocumentAsNew } from '../../src/document/factory';
 import { useEvolutionStore } from '../../src/store/evolution/evolutionStore';
-import { createAlternative, recoverOperations, restoreElements, restoreRevision, switchAlternative } from '../../src/store/evolution/operations';
+import { createAlternative, recoverOperations, resolveUnfinished, restoreElements, restoreRevision, switchAlternative } from '../../src/store/evolution/operations';
 import { fileOf, useEditorStore } from '../../src/store/editorStore';
 import { semanticDiff } from '../../src/evolution/diff';
 import { historyContent } from '../../src/document/content';
@@ -24,13 +24,15 @@ beforeAll(() => {
       const before = held.get(name) ?? Promise.resolve();
       let release!: () => void;
       const mine = new Promise<void>((resolve) => (release = resolve));
-      held.set(name, before.then(() => mine));
+      // Forgotten once released, so a copy closed and opened again can be held again.
+      const queued = before.then(() => mine);
+      held.set(name, queued);
       await before;
       try {
         return await run({ name });
       } finally {
         release();
-        if (held.get(name) === mine) held.delete(name);
+        if (held.get(name) === queued) held.delete(name);
       }
     },
   };
@@ -249,6 +251,46 @@ describe('recovering an interrupted operation', { timeout: 30_000 }, () => {
     );
     await recoverOperations();
     expect(fileOf(useEditorStore.getState()).nodes.map((node) => node.id)).toEqual(['n_api']);
+    expect(await store.journalList()).toEqual([]);
+  });
+
+  it('keeps the diagram on the alternative it was on when a switch that stopped half way is not finished', async () => {
+    const doc = await start();
+    expect((await createAlternative('Events')).ok).toBe(true);
+    const altId = useEvolutionStore.getState().altId!;
+    await edit((file) => addNodes(file, [createNode({ type: 'queue', x: 300, y: 0, id: 'n_q', text: 'Events' })]));
+    const altTip = await tipOf(branchOf(altId));
+    expect((await switchAlternative(null)).ok).toBe(true);
+    const mainTip = await tipOf();
+    const store = historyService().store!;
+    const copyId = useEvolutionStore.getState().copyId!;
+    // A switch from main to the alternative that stopped once the binding had moved...
+    const workingBefore = await blobId(historyText(fileOf(useEditorStore.getState())));
+    await historyService().putBindingFor({ ...historyService().binding!, altId, lastSeen: altTip, at: 1 });
+    await store.journalPut(
+      operationRecord('o_switch', 'switch', 'pointer-moved', { repoId: store.repoId, copyId, sessionId: '1', pointer: { kind: 'binding', copyId, fromAlt: null, toAlt: altId }, workingBefore, workingAfter: await blobId(await store.readSnapshot(altTip)), target: altTip }, 1),
+    );
+    await detachHistory();
+    // The copy's lock goes once the closing session lets it go.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // ...and a change to the diagram that autosave kept but history never saw.
+    expect(useEditorStore.getState().applyToFile('Rename', (file) => updateNode(file, 'n_api', { text: 'Edge router' }))).toBe(true);
+    await attachHistory({ kind: 'library', documentId: doc.metadata.id });
+    for (let i = 0; i < 200 && !useEvolutionStore.getState().unfinished; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(useEvolutionStore.getState().unfinished).toMatchObject({ opId: 'o_switch', kind: 'switch' });
+    // Nothing is recorded on either alternative while the question waits.
+    historyService().requestCapture('manual');
+    await historyService().flush();
+    expect(await tipOf(branchOf(altId))).toBe(altTip);
+    // "Keep the diagram as it is": the copy is back on main, and what is on screen is recorded there.
+    expect((await resolveUnfinished(false)).ok).toBe(true);
+    await historyService().flush();
+    expect(historyService().binding?.altId).toBeNull();
+    expect(useEvolutionStore.getState().altId).toBeNull();
+    expect(await tipOf(branchOf(altId))).toBe(altTip);
+    const kept = await tipOf();
+    expect((await historyService().store!.readCommit(kept)).parents).toEqual([mainTip]);
+    expect(readHistoryText(await historyService().store!.readSnapshot(kept)).document.nodes.map((node) => node.text)).toEqual(['Edge router']);
     expect(await store.journalList()).toEqual([]);
   });
 

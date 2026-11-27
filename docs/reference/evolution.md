@@ -113,6 +113,9 @@ At each interruption boundary, recovery decides as follows:
 | Pointer moved elsewhere (another writer) | The other writer's ref | Discard as stale |
 | `working-reconciled` | Everything is in place | Remove the entry |
 
+A switch whose binding had already moved asks the same way. Until the person answers, nothing is
+recorded on either alternative, and Keep current puts the binding back on the alternative it left.
+
 Durability:
 
 - **Desktop.** Write a temp file, fsync it, rename it, then fsync the directory on Unix. Atomic

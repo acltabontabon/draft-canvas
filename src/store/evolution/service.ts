@@ -105,6 +105,8 @@ interface Session {
   readOnly: boolean;
   /** Recording is paused for this diagram; kept on the session so removing its history keeps it paused. */
   paused: boolean;
+  /** An interrupted switch waits for the person: until they answer, nothing is recorded on either alternative. */
+  held: boolean;
   initiator: Initiator;
   agents: Set<string>;
 }
@@ -172,6 +174,7 @@ export class HistoryService {
       question: null,
       readOnly: options.readOnly === true,
       paused: false,
+      held: false,
       initiator: 'auto',
       agents: new Set(),
     };
@@ -378,7 +381,7 @@ export class HistoryService {
    * branch it began with, and touches no editor state.
    */
   private async capture(session: Session, initiator: Initiator): Promise<void> {
-    if (session.readOnly || session.question || session.meta?.paused || session.paused) return;
+    if (session.readOnly || session.question || session.held || session.meta?.paused || session.paused) return;
     if (!this.deps.enabled()) return;
     const generation = this.deps.editor.generation();
     const snapshot = this.deps.editor.file();
@@ -667,6 +670,18 @@ export class HistoryService {
   /** Writes a working copy's binding (an operation moved it to another alternative). */
   putBindingFor(binding: Binding): Promise<void> {
     return this.deps.backend().putBinding(binding);
+  }
+
+  /**
+   * Holds recording while a switch a crash interrupted waits for the person (Resume or Keep
+   * current): the copy's binding may already name the alternative it was going to, while what is
+   * on screen is still the one it left, so a capture now would put it on the wrong one.
+   */
+  holdCapture(held: boolean): void {
+    const session = this.session;
+    if (!session) return;
+    session.held = held;
+    if (!held) this.arm(session);
   }
 
   /** Records what is pending now and waits for it, so an operation starts from a recorded state. */

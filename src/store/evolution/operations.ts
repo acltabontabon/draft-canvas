@@ -24,6 +24,7 @@ import { historyEnabled, historyService, historySignature } from './bridge';
 import { historyCompute } from './client';
 import { useEvolutionStore } from './evolutionStore';
 import { closeLens, loadTimeline, snapshotOf } from './historyView';
+import type { OperationContext } from './service';
 
 export type Outcome = { ok: true; message?: string } | { ok: false; message: string };
 
@@ -338,7 +339,10 @@ export async function recoverOperations(): Promise<void> {
     const decision = recoveryFor(op, { pointerAt, working });
     if (decision.action === 'discard' || decision.action === 'finish') await store.journalDelete(op.opId);
     else if (decision.action === 'complete') await complete(op);
-    else useEvolutionStore.setState({ unfinished: { opId: op.opId, kind: op.kind, reason: decision.reason } });
+    else {
+      if (op.kind === 'switch') service.holdCapture(true);
+      useEvolutionStore.setState({ unfinished: { opId: op.opId, kind: op.kind, reason: decision.reason } });
+    }
   }
 }
 
@@ -368,11 +372,27 @@ export async function resolveUnfinished(resume: boolean): Promise<Outcome> {
     const op = (await context.store.journalList()).filter(isOperation).find((candidate) => candidate.opId === unfinished.opId);
     if (op && resume && !(await complete(op))) return refused('The diagram is busy; try again in a moment.');
     // Keeping the current diagram: it simply becomes the next revision, on top of what was recorded.
-    if (op && !resume) await context.store.journalDelete(op.opId);
+    if (op && !resume) {
+      // A switch kept this way never happened: the copy goes back to the alternative it left, and
+      // what is on screen becomes that one's next revision. It once stayed bound to the alternative
+      // the switch was headed for, and recorded the other one's content there.
+      if (op.data.pointer.kind === 'binding') await stayOn(op.data.pointer.fromAlt, context);
+      await context.store.journalDelete(op.opId);
+    }
     useEvolutionStore.setState({ unfinished: null });
+    historyService().holdCapture(false);
     if (!resume) historyService().requestCapture('manual');
     return { ok: true };
   } catch (error) {
     return refused(messageOf(error));
   }
+}
+
+/** Puts the copy's binding back on `altId`, the alternative an interrupted switch left. */
+async function stayOn(altId: string | null, context: OperationContext): Promise<void> {
+  if (!context.store || !context.binding || context.binding.altId === altId) return;
+  const tip = await context.store.readRef(branchOf(altId));
+  const binding = { ...context.binding, altId, lastSeen: tip, at: Date.now() };
+  await historyService().putBindingFor(binding);
+  await historyService().adopt(context.token, { tip, binding });
 }
