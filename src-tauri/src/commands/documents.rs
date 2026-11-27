@@ -113,18 +113,9 @@ fn save_document_now(
         // it the Overwrite was unconditional, and an outside change made while the question was up
         // was replaced without ever being seen.
         WriteOutcome::Conflict => SaveResult::Conflict {
-            current: current_stamp(&grant.path)?,
+            current: crate::docio::stamp_now(&grant.path)?,
         },
     })
-}
-
-/// The stamp of the file as it is now, or `None` when there is none.
-fn current_stamp(path: &Path) -> Result<Option<String>, AppError> {
-    match read_document(path) {
-        Ok(doc) => Ok(Some(doc.stamp)),
-        Err(e) if e.kind == ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(e),
-    }
 }
 
 #[tauri::command]
@@ -468,6 +459,36 @@ mod tests {
             fs::read_to_string(&path).unwrap(),
             "someone else's longer edit"
         );
+    }
+
+    #[test]
+    fn a_file_replaced_with_something_not_a_document_is_still_a_conflict_to_overwrite() {
+        let (dir, state) = test_state();
+        let path = doc(&dir, "a.draftcanvas", "mine");
+        let opened = opened_doc(&state, &path).unwrap();
+        // Not UTF-8: reading it as a document fails, which turned the conflict into an error.
+        fs::write(&path, [0xff, 0xfe, 0x00, 0x9f]).unwrap();
+        let meta = SaveMeta {
+            handle: opened.handle,
+            expected_stamp: Some(opened.stamp),
+            expect_missing: false,
+        };
+        let SaveResult::Conflict {
+            current: Some(current),
+        } = save_document_now(&state, &meta, b"mine again").unwrap()
+        else {
+            panic!("an outside change is a conflict with the file's stamp");
+        };
+        assert_eq!(fs::read(&path).unwrap(), [0xff, 0xfe, 0x00, 0x9f]);
+        let overwrite = SaveMeta {
+            expected_stamp: Some(current),
+            ..meta
+        };
+        assert!(matches!(
+            save_document_now(&state, &overwrite, b"mine again").unwrap(),
+            SaveResult::Saved { .. }
+        ));
+        assert_eq!(fs::read(&path).unwrap(), b"mine again");
     }
 
     #[test]

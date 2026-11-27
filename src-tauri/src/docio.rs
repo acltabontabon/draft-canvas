@@ -118,6 +118,32 @@ pub struct ReadDoc {
 }
 
 pub fn read_document(path: &Path) -> Result<ReadDoc, AppError> {
+    let (bytes, meta) = read_bounded(path)?;
+    let mut text = String::from_utf8(bytes).map_err(|_| AppError::not_a_document(path))?;
+    // A byte-order mark (what Notepad and Windows PowerShell 5 put at the front of UTF-8 they save) is
+    // not part of the JSON, and `JSON.parse` refuses a document that starts with one. The stamp stays
+    // on the bytes as they are on disk, so a save still compares against the real file.
+    let stamp = Stamp::of(&meta, text.as_bytes()).encode();
+    if text.starts_with('\u{feff}') {
+        text.drain(..'\u{feff}'.len_utf8());
+    }
+    Ok(ReadDoc { text, stamp })
+}
+
+/// The stamp of the file as it is now, or `None` when there is none. Taken from the bytes alone, as
+/// `stamp_matches` compares them: a file replaced with something that isn't a document is still a
+/// change the person can be asked about and overwrite, not an error that stops the save.
+pub fn stamp_now(path: &Path) -> Result<Option<String>, AppError> {
+    match read_bounded(path) {
+        Ok((bytes, meta)) => Ok(Some(Stamp::of(&meta, &bytes).encode())),
+        Err(e) if e.kind == crate::errors::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+/// A file's bytes, refused past the document limit, with its metadata taken after the read so a
+/// stamp's mtime belongs to the bytes just read.
+fn read_bounded(path: &Path) -> Result<(Vec<u8>, fs::Metadata), AppError> {
     let io_err = |e: io::Error| AppError::from_io(&e, Verb::Open, Subject::Path(path));
     let file = File::open(path).map_err(io_err)?;
     let len = file.metadata().map_err(io_err)?.len();
@@ -133,17 +159,8 @@ pub fn read_document(path: &Path) -> Result<ReadDoc, AppError> {
     if bytes.len() as u64 > MAX_DOC_BYTES {
         return Err(AppError::too_large(path, Verb::Open, MAX_DOC_BYTES));
     }
-    // Taken after the read so the stamp's mtime belongs to the bytes just read.
     let meta = file.metadata().map_err(io_err)?;
-    let mut text = String::from_utf8(bytes).map_err(|_| AppError::not_a_document(path))?;
-    // A byte-order mark (what Notepad and Windows PowerShell 5 put at the front of UTF-8 they save) is
-    // not part of the JSON, and `JSON.parse` refuses a document that starts with one. The stamp stays
-    // on the bytes as they are on disk, so a save still compares against the real file.
-    let stamp = Stamp::of(&meta, text.as_bytes()).encode();
-    if text.starts_with('\u{feff}') {
-        text.drain(..'\u{feff}'.len_utf8());
-    }
-    Ok(ReadDoc { text, stamp })
+    Ok((bytes, meta))
 }
 
 // --- writing -----------------------------------------------------------------------------------
