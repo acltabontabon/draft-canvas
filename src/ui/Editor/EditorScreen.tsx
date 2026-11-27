@@ -1415,6 +1415,11 @@ export function useKeyboard({
       switch (event.key) {
         case 'Backspace':
         case 'Delete':
+          // The same guard as the letters below: Tabbed onto Share or a status-bar chip, Backspace is
+          // a key pressed on that control. It deleted the canvas selection behind the person's back,
+          // with nothing on screen to say so. A button that merely kept focus after a click still
+          // lets Delete delete, as it lets a letter drop a shape.
+          if (!focusIsOnCanvas() && keyboardFocusIsOnControl()) return;
           event.preventDefault();
           // ⌥⌫ takes a shape out of the middle of a line and joins the line back up.
           if (event.altKey) state.deleteSelectionKeepingLines();

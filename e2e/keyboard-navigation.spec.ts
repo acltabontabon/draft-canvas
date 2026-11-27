@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { armTool, newCanvas, nextFrames } from './canvas';
+import { armTool, create, newCanvas, nextFrames } from './canvas';
 
 /**
  * Alt+Arrow (spatial navigation between nearby elements) and Alt+Shift+Left/Right (relationship
@@ -224,5 +224,71 @@ test.describe('relationship navigation (Alt+Shift+Left/Right)', () => {
     await page.keyboard.press('Meta+a');
     await page.keyboard.press('Alt+Shift+ArrowRight');
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
+  });
+});
+
+/**
+ * Where keyboard focus goes when the thing holding it closes, and which layer a key belongs to. The
+ * canvas (`.dc-canvas`) is the diagram's one Tab stop: a surface that unmounts with focus inside it
+ * hands focus back there, as the Outline and Appearance do, rather than dropping it on `<body>`,
+ * where a screen reader loses its place and the next Tab starts from wherever the removed control
+ * sat. And a key pressed in chrome reached from the keyboard is that control's, never the canvas's.
+ */
+test.describe('keyboard focus around the canvas', () => {
+  const canvas = (page: Page) => page.locator('.dc-canvas');
+  const selectedNodes = (page: Page) => page.locator('.dc-node[data-selected="true"]');
+  const depth = (page: Page) =>
+    page.evaluate(async () => (await import('/src/store/editorStore.ts')).useEditorStore.getState().path.length);
+
+  test('Backspace and Delete on chrome reached by keyboard leave the canvas selection alone', async ({ page }) => {
+    await newCanvas(page, 'Stray delete');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Queue', { x: 650, y: 300 });
+    await expect(selectedNodes(page)).toHaveCount(1);
+
+    // Back from the canvas onto the header's last control, the way a keyboard gets there.
+    await canvas(page).focus();
+    await page.keyboard.press('Shift+Tab');
+    await expect(page.getByRole('button', { name: 'Share', exact: true })).toBeFocused();
+    await page.keyboard.press('Backspace');
+    await page.keyboard.press('Delete');
+    await expect(page.locator('.dc-node')).toHaveCount(2);
+
+    // The History popover owns its keys too, however it was opened.
+    await page.locator('.dc-node').first().click();
+    await page.locator('.dc-history-chip').click();
+    const history = page.getByRole('dialog', { name: 'History' });
+    await expect(history).toBeVisible();
+    await expect.poll(() => history.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('s');
+    await expect(page.locator('.dc-node')).toHaveCount(2);
+  });
+
+  test('Escape in the History popover closes only the popover', async ({ page }) => {
+    await newCanvas(page, 'History escape');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await expect(selectedNodes(page)).toHaveCount(1);
+    const chip = page.locator('.dc-history-chip');
+    const history = page.getByRole('dialog', { name: 'History' });
+
+    await chip.click();
+    await expect(history).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(history).toBeHidden();
+    await expect(chip).toBeFocused();
+    await expect(selectedNodes(page)).toHaveCount(1);
+
+    // Inside a shape with nothing selected, the same Escape would otherwise back out of the room.
+    await page.keyboard.press('ControlOrMeta+ArrowDown');
+    await expect.poll(() => depth(page)).toBe(1);
+    await page.locator('.react-flow__pane').click({ position: { x: 600, y: 500 } });
+    await expect(selectedNodes(page)).toHaveCount(0);
+    await chip.click();
+    await expect(history).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(history).toBeHidden();
+    await page.waitForTimeout(400);
+    expect(await depth(page)).toBe(1);
   });
 });
