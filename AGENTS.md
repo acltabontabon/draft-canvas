@@ -176,7 +176,9 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   `commands/arrange.ts`, which shows a preview first. The work runs on the agent worker
   (`agent/layoutPlan.ts` through `offThread.ts`, Cancel included) and is bounded by a deterministic
   work budget (`route.ts`'s `withBudget`), never a wall-clock deadline: the same diagram gives the
-  same preview on any machine, and a result that ran out says `partial`.
+  same preview on any machine, and a result that ran out says `partial`. The budget must bind before
+  the far-off clock backstop (`layoutPlan.ts`), which is only a hang guard; a run it stopped also
+  says `timedOut`.
 
 ### Outage walk
 
