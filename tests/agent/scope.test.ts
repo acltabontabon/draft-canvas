@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { compose } from '../../src/agent/compile';
 import { AgentError } from '../../src/agent/errors';
 import { applyUpdate } from '../../src/agent/patch';
+import { readDiagram } from '../../src/agent/read';
 import { deserializeDocument } from '../../src/export/project';
 import type { DraftDocument } from '../../src/document/types';
 
@@ -215,6 +216,21 @@ describe('update_diagram and what the person set', () => {
     expect(at(next, 'user')).toEqual(at(file, 'user'));
     const free = applyUpdate({ ...file, nodes: file.nodes.map((n) => ({ ...n, held: undefined })) }, [], [{ op: 'arrange' }], undefined).file;
     expect(at(free, 'user')).not.toEqual(at(file, 'user'));
+  });
+
+  it('says why an arrange moved nothing when what it would move is held, and reads say what is held', () => {
+    // A held shape inside a boundary holds that whole boundary.
+    const file = held(base({ flow: false }), 'api');
+    const scoped = applyUpdate(file, [], [{ op: 'arrange', scope: { group: 'sys' } }], undefined);
+    expect(scoped.file).toBe(file);
+    expect(scoped.advisories.join('\n')).toMatch(/Nothing was arranged: "api" is held in place by the person/);
+    const everything = { ...file, nodes: file.nodes.map((n) => ({ ...n, held: true })) };
+    const whole = applyUpdate(everything, [], [{ op: 'arrange' }], undefined);
+    expect(whole.file).toBe(everything);
+    expect(whole.advisories.join('\n')).toMatch(/Nothing was arranged: "sys", "api", "db", "user" are held in place/);
+    const read = readDiagram(file, {}, 'r1', 'd') as { elements: { id: string; held?: true }[]; groups: { id: string; held?: true }[] };
+    expect(read.elements.filter((element) => element.held).map((element) => element.id)).toEqual(['api']);
+    expect(read.groups.some((group) => group.held)).toBe(false);
   });
 
   it('keeps a kind the agent names when the technology changes afterwards', () => {

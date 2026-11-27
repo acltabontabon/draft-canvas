@@ -448,8 +448,10 @@ function project(
         ? { attachments: node.attachments.map((a) => attachmentOf(a, includes.has('fullText'))) }
         : { attachmentCount: node.attachments.length }
       : {};
+    // Held in place by the person: arrange leaves it (and the boundary it is in, or what it holds) be.
+    const held = node.held ? { held: true } : {};
     if (node.type === 'group') {
-      groups.push({ id: node.id, label: node.text ?? '', kind: groupKindOf(node.boundaryPreset), ...(node.parentId ? { parent: node.parentId } : {}), ...(node.accent ? { color: node.accent } : {}), ...attachments, ...geometry });
+      groups.push({ id: node.id, label: node.text ?? '', kind: groupKindOf(node.boundaryPreset), ...(node.parentId ? { parent: node.parentId } : {}), ...(node.accent ? { color: node.accent } : {}), ...held, ...attachments, ...geometry });
       continue;
     }
     if (node.type === 'sequence') {
@@ -491,6 +493,7 @@ function project(
       ...(node.link ? { link: node.link } : {}),
       // Set by create, add and set.color; read back so an edit can keep or change it knowingly.
       ...(node.accent ? { color: node.accent } : {}),
+      ...held,
       ...group,
       // "No role, no scope" is what every element says before a level is set: not worth ~80 bytes each.
       ...(c4 && (c4.role !== 'unspecified' || c4.scope !== 'unspecified') ? { c4 } : {}),

@@ -336,11 +336,26 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       // Arrange in the editor (`layoutPlan.ts`): the rest is arranged around them.
       const fixed = fixedIds(view.nodes);
       if (fixed.size > 0) {
+        // Said, as the editor's Arrange bar says it: an arrange that moved nothing for this reason
+        // used to come back "unchanged" with no word of why.
+        const holding = view.nodes.filter((n) => n.held).map((n) => `"${n.id}"`);
+        const names = `${holding.slice(0, 6).join(', ')}${holding.length > 6 ? ` and ${holding.length - 6} more` : ''}`;
+        const one = holding.length === 1;
+        const still = `Nothing was arranged: ${names} ${one ? 'is' : 'are'} held in place by the person, which keeps the boundary a held shape is in, and what a held boundary holds, where it is. Ask them to let go of ${one ? 'it' : 'them'} (Let go, in ⌘K) to arrange ${one ? 'it' : 'them'}.`;
         if (request.scope?.group !== undefined) {
-          if (fixed.has(request.scope.group)) return;
+          if (fixed.has(request.scope.group)) {
+            advisories.push(still);
+            return;
+          }
         } else {
           const moving = (request.scope?.nodes ?? view.nodes.map((n) => n.id)).filter((id) => !fixed.has(id));
-          if (moving.length === 0) return;
+          if (moving.length === 0) {
+            advisories.push(still);
+            return;
+          }
+          if (moving.length < (request.scope?.nodes ?? view.nodes).length) {
+            advisories.push(`Arranged around ${names}, which the person holds in place with what ${one ? 'it keeps' : 'they keep'} where it is; Let go, in ⌘K, frees ${one ? 'it' : 'them'}.`);
+          }
           request = { ...request, scope: { nodes: moving }, keepOutsideFixed: true, bothDirections: false };
         }
       }

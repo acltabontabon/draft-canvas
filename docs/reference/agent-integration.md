@@ -529,6 +529,8 @@ names a direction keeps it, and says so when the other direction reads clearly b
 | `move` | `false` only re-anchors connectors. |
 
 Ids, labels, attachments, note text and flows never change. To keep a shape fixed, leave it out of `scope`.
+A shape the person holds in place (`held: true` in reads) stays where it is, with the boundary it is
+in or what it holds; an advisory says so, also when that leaves nothing to arrange.
 
 ### Exact placement and routing
 
