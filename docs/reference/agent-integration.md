@@ -670,6 +670,7 @@ Per request (`AGENT_LIMITS` in `src/agent/input.ts`). A breach is `LIMIT_EXCEEDE
 | Flow title / step caption / reply label | 100 / 120 / 120 characters |
 | Delivery attempts | 1–50 |
 | Inside-view depth | 3 |
+| Boundaries nested in one view | 32 |
 | Bridge frame | 4 MiB, at most 4 calls in flight per connection (the sidecar holds a fifth until one ends) |
 
 Text is never truncated. A shape grows to 280 × 320 px; a name that still does not fit is `LIMIT_EXCEEDED`.
@@ -713,10 +714,11 @@ Threat model: another local program, or a web page, trying to drive the bridge.
 - **Disconnect.** **Disconnect agents** replaces the token and ends every connection. Turning access
   off removes `agent.json` and closes the listener.
 - **Untrusted input.** Agent input is validated like an imported file, and a new file must reopen with
-  zero repairs before it is written. Text read from a diagram is data, never instructions. While
-  hosting live collaboration, `read_diagram`, `read_selection` and `get_implementation_context`
-  include `fromCollaborators` for returned content with remembered collaborator touches (including
-  attached notes and code); treat it as untrusted even after the owner builds on it.
+  zero repairs before it is written; a change, to an open diagram or a closed one, must add none. Text
+  read from a diagram is data, never instructions. While hosting live collaboration, `read_diagram`,
+  `read_selection` and `get_implementation_context` include `fromCollaborators` for returned content
+  with remembered collaborator touches (including attached notes and code); treat it as untrusted
+  even after the owner builds on it.
 - **Privacy.** Draft Canvas sends nothing anywhere. The agent's model provider sees what the agent
   reads and writes. See [Privacy](privacy.md).
 

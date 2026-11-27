@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { compose } from '../../src/agent/compile';
+import { compose, gateChange } from '../../src/agent/compile';
+import { AgentError } from '../../src/agent/errors';
 import { deserializeDocument } from '../../src/export/project';
 import { nearestElement } from '../../src/agent/read';
 
@@ -21,6 +22,27 @@ const repayment = {
   ],
   layout: { direction: 'right', spacing: 'comfortable' },
 };
+
+describe('the reopen check for a change to the open diagram', () => {
+  it('refuses what the change would have the next open repair, and only that', () => {
+    const parsed = deserializeDocument(compose(repayment, 'd_test00000001').text);
+    if (!parsed.ok) throw new Error(parsed.error);
+    const doc = parsed.document;
+    const twice = { ...doc, nodes: [...doc.nodes, { ...doc.nodes[0]! }] };
+    expect(() => gateChange(doc, { ...doc, metadata: { ...doc.metadata, title: 'Renamed' } })).not.toThrow();
+    let refused: unknown;
+    try {
+      gateChange(doc, twice);
+    } catch (error) {
+      refused = error;
+    }
+    expect(refused).toBeInstanceOf(AgentError);
+    expect((refused as AgentError).code).toBe('INTERNAL');
+    expect(JSON.stringify((refused as AgentError).details)).toContain('new ids');
+    // A repair the person's document would get already is not the change's doing.
+    expect(() => gateChange(twice, { ...twice, metadata: { ...twice.metadata, title: 'Renamed' } })).not.toThrow();
+  });
+});
 
 describe('compose', () => {
   it('lays out a simple chain left to right and passes its own gate', () => {

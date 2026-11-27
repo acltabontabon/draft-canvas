@@ -17,6 +17,7 @@ import { useUiStore } from '../../src/store/uiStore';
 import { COLLAB_AT_REST, useCollabStore } from '../../src/store/collabStore';
 import { collaboratorTouches, startHosting, stopHosting } from '../../src/store/collabBridge';
 import { createAttachment, createNode } from '../../src/document/factory';
+import { LIMITS } from '../../src/document/limits';
 import type { DraftDocument } from '../../src/document/types';
 import { watchTyping } from '../../src/lib/recentTyping';
 import { withPhysChunk } from '../../src/render/png/phys';
@@ -36,6 +37,20 @@ vi.mock('../../src/render/png/rasterize', async (importOriginal) => {
       rasterized.push({ svg, options });
       // Stamped as the real one stamps what the encoder hands it: `render_diagram` adds nothing itself.
       return new Blob([withPhysChunk(new Uint8Array(ONE_PIXEL_PNG), Number(options.scale ?? 2))], { type: 'image/png' });
+    }),
+  };
+});
+
+// The edit as worked out for the open document, alterable for the one test that needs a result only
+// the reopen check would refuse; every other request gets the real one.
+const workedOut = vi.hoisted(() => ({ alter: undefined as ((file: DraftDocument) => DraftDocument) | undefined }));
+vi.mock('../../src/agent/offThread', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/agent/offThread')>();
+  return {
+    ...actual,
+    runOffThread: vi.fn(async (...args: Parameters<typeof actual.runOffThread>) => {
+      const result = await actual.runOffThread(...args);
+      return workedOut.alter && result.kind === 'update' ? { ...result, file: workedOut.alter(result.file) } : result;
     }),
   };
 });
@@ -405,6 +420,24 @@ describe('agent requests on desktop', () => {
     useEditorStore.getState().undo();
     expect(fileOf(useEditorStore.getState()).nodes.map((n) => n.id)).not.toContain('mail');
     expect(currentRevision()).not.toBe(out.value!.revision);
+  });
+
+  // A change the next open would repair, held to the check a create and a closed file's update get.
+  it('refuses a change to the open document that its next open would repair, and changes nothing', async () => {
+    const handle = await openOrders();
+    const before = currentRevision();
+    const deep = Array.from({ length: LIMITS.maxGroupDepth + 2 }, (_, i) => ({ id: `g${i}`, label: `G${i}`, ...(i ? { parent: `g${i - 1}` } : {}) }));
+    const nested = await request('update_diagram', { ...addMailer(before), ops: [{ op: 'add', groups: deep, nodes: [{ id: 'deep', type: 'service', label: 'Deep', group: `g${deep.length - 1}` }] }] }, { handle, open: true, diagramId: 'd_orders000001' });
+    expect(nested.error?.code).toBe('LIMIT_EXCEEDED');
+    // What the ops can't be refused for on their own: the worked-out file, past what a load keeps.
+    workedOut.alter = (file) => ({ ...file, nodes: [...file.nodes, { ...file.nodes[0]! }] });
+    const repaired = await request('update_diagram', addMailer(before), { handle, open: true, diagramId: 'd_orders000001' });
+    workedOut.alter = undefined;
+    expect(repaired.error?.code).toBe('INTERNAL');
+    expect(repaired.error?.message).toContain('next open');
+    expect(currentRevision()).toBe(before);
+    expect(fileOf(useEditorStore.getState()).nodes.map((n) => n.id)).not.toContain('mail');
+    expect(h.agent.gates).not.toContain(nextId - 1);
   });
 
   it('accepts the file revision for a clean document, and refuses a stale one without touching anything', async () => {

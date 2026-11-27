@@ -35,6 +35,7 @@ import {
   descendantsOf,
   detachFromEdge,
   detachFromNode,
+  fitsGroupDepth,
   hasAttachmentRoom,
   removeAttachment,
   removeEdgeAttachment,
@@ -67,6 +68,7 @@ import { naturalCodeSize, naturalTextSize } from '../nodes/describe';
 import { AgentError, Problems } from './errors';
 import {
   AGENT_LIMITS,
+  boundaryDepths,
   extrasOf,
   readDeliveryAttempts,
   readLink, readReplicas,
@@ -384,6 +386,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
         relationshipSemantics: new Map(view.edges.map((e) => [e.id, e.semantic])),
         pairs: pairsOf(view.edges),
         flows: new Map(view.flows.map((f) => [f.id, f.variantOf])),
+        groupDepths: boundaryDepths(view.nodes),
       };
       const room = readRoom(r, op, at, { taken, depth: path.length, existing, junctionLabels });
       const anchorable = new Set([...existing.elements, ...existing.relationships, ...room.nodes.map((n) => n.id), ...room.relationships.map((e) => e.id)]);
@@ -1118,6 +1121,10 @@ function updateOne(
           }
           seen.add(at2);
           at2 = view.nodes.find((n) => n.id === at2)?.parentId;
+        }
+        // As the editor's own grouping refuses it: past this the next open cuts a grouping link.
+        if (!fitsGroupDepth(view, [id], set.group)) {
+          r.problems.add('LIMIT_EXCEEDED', `${at}/group`, `boundaries nest at most ${LIMITS.maxGroupDepth} deep, and "${id}", with what it holds, would go past that inside "${set.group}"; put it in a boundary further out`);
         }
         patch.parentId = set.group;
       } else r.problems.add('INVALID_REFERENCE', `${at}/group`, `no group "${String(set.group)}" in this view`);

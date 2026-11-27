@@ -588,3 +588,21 @@ export function gate(document: DraftDocument): string {
   }
   return text;
 }
+
+/**
+ * `gate` for a change to the diagram open in the editor, which commits a document rather than
+ * writing text: refused for what the change would have its next open repair. The open document is
+ * the person's, and a repair it would get already is not the change's doing. Without this the open
+ * diagram took what a create or a closed file's update is refused for, and the next open repaired it.
+ */
+export function gateChange(before: DraftDocument, after: DraftDocument): void {
+  const repairsOf = (document: DraftDocument): string[] => {
+    const parsed = deserializeDocument(serializeDocument(document));
+    return parsed.ok ? parsed.repairs : ['It would not read back.'];
+  };
+  const now = repairsOf(after);
+  if (now.length === 0) return;
+  const was = new Set(repairsOf(before));
+  const added = now.filter((repair) => !was.has(repair));
+  if (added.length > 0) throw new AgentError('INTERNAL', 'The changed diagram would be altered on its next open. Nothing changed.', { details: { repairs: added.slice(0, 5) } });
+}
