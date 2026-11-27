@@ -27,6 +27,7 @@ import {
   type RecoveryEntry,
   type RunSnapshot,
   type SavedAs,
+  type SaveResult,
   type StartLocation,
   type UpdateSnapshot,
 } from '../../src/desktop/api';
@@ -194,11 +195,14 @@ export function createHarness() {
       if (!file) throw new DesktopError('InvalidHandle', 'That file is no longer available.');
       return opened(handle, file);
     }),
-    saveDocument: vi.fn(async (handle: string, bytes: Uint8Array, expectedStamp: string | undefined) => {
+    saveDocument: vi.fn(async (handle: string, bytes: Uint8Array, expectedStamp: string | null | undefined): Promise<SaveResult> => {
       const file = files.get(handle);
       if (!file) throw new DesktopError('NotFound', 'Draft Canvas couldn’t find that file.');
       if (file.readOnly) throw new DesktopError('ReadOnly', `Draft Canvas couldn’t save ${file.name}.draftcanvas because the file is read-only.`);
-      if (expectedStamp !== undefined && expectedStamp !== stampOf(file)) return { outcome: 'conflict' as const };
+      // `null` asks for a file that has gone, and every file here is there: a conflict, as in the shell.
+      if (expectedStamp === null || (expectedStamp !== undefined && expectedStamp !== stampOf(file))) {
+        return { outcome: 'conflict' as const, current: stampOf(file) };
+      }
       file.text = decoder.decode(bytes);
       file.version += 1;
       return { outcome: 'saved' as const, stamp: stampOf(file) };

@@ -381,7 +381,12 @@ export interface DesktopApi {
 
   // Documents. `null` is the user cancelling a dialog, never an error.
   openHandle(handle: Handle): Promise<OpenedDoc>;
-  saveDocument(handle: Handle, bytes: Uint8Array, expectedStamp: string | undefined): Promise<SaveResult>;
+  /**
+   * Writes the file only if it is still the version `expectedStamp` names, else answers `conflict`
+   * with the version there now. `null` writes it only if there is still no file (a conflict found it
+   * gone); `undefined` writes whatever is there.
+   */
+  saveDocument(handle: Handle, bytes: Uint8Array, expectedStamp: string | null | undefined): Promise<SaveResult>;
   saveAs(suggestedName: string, bytes: Uint8Array, startIn?: StartLocation): Promise<SavedAs | null>;
   /** "Rename file…": changes the file's name in place. Never touches the document's own title. */
   renameFile(handle: Handle, newStem: string): Promise<RenamedFile>;

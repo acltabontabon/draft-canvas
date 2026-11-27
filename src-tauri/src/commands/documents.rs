@@ -4,8 +4,8 @@ use super::raw::{raw_request, raw_request_up_to, MAX_EXPORT_BYTES};
 use super::{last_dir, recents_changed, remember_dir, remember_file, run_blocking};
 use crate::dialogs::{self, FileFilter};
 use crate::docio::{
-    self, ensure_document_size, is_read_only, read_document, rename_atomic, write_atomic,
-    write_unconditional, write_unstamped, StampCheck, WriteOutcome,
+    self, create_new_atomic, ensure_document_size, is_read_only, read_document, rename_atomic,
+    write_atomic, write_unconditional, write_unstamped, StampCheck, WriteOutcome,
 };
 use crate::errors::{AppError, ErrorKind};
 use crate::grants::Handle;
@@ -40,8 +40,15 @@ pub struct SavedAs {
 #[derive(Debug, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(tag = "outcome", rename_all = "lowercase")]
 pub enum SaveResult {
-    Saved { stamp: String },
-    Conflict,
+    Saved {
+        stamp: String,
+    },
+    /// Nothing was written: the file isn't the version the save was made against.
+    Conflict {
+        /// The stamp of what is there now, or `None` when there is no file. An Overwrite the person
+        /// agrees to is sent with this, so it replaces that version and nothing that changes later.
+        current: Option<String>,
+    },
 }
 
 /// Grants the file, reads it, and puts it at the top of Recent: everything "open" means, whether the
@@ -77,6 +84,10 @@ pub async fn open_handle(app: AppHandle, handle: String) -> Result<OpenedDoc, Ap
 struct SaveMeta {
     handle: Handle,
     expected_stamp: Option<String>,
+    /// The file must not be there: it had gone when the person agreed to write it again, so one that
+    /// has appeared since is a conflict, not replaced unseen.
+    #[serde(default)]
+    expect_missing: bool,
 }
 
 fn save_document_now(
@@ -86,12 +97,34 @@ fn save_document_now(
 ) -> Result<SaveResult, AppError> {
     ensure_document_size(bytes.len())?;
     let grant = state.file(&meta.handle)?;
-    Ok(
-        match write_atomic(&grant.path, bytes, meta.expected_stamp.as_deref())? {
-            WriteOutcome::Saved { stamp } => SaveResult::Saved { stamp },
-            WriteOutcome::Conflict => SaveResult::Conflict,
+    let outcome = if meta.expect_missing {
+        match create_new_atomic(&grant.path, bytes) {
+            Ok(stamp) => WriteOutcome::Saved { stamp },
+            Err(e) if e.kind == ErrorKind::AlreadyExists => WriteOutcome::Conflict,
+            Err(e) => return Err(e),
+        }
+    } else {
+        write_atomic(&grant.path, bytes, meta.expected_stamp.as_deref())?
+    };
+    Ok(match outcome {
+        WriteOutcome::Saved { stamp } => SaveResult::Saved { stamp },
+        // Read after the check, as the explorer's save does: whatever it finds is still from before
+        // the person is asked, and a change after that makes the Overwrite a conflict in turn. Without
+        // it the Overwrite was unconditional, and an outside change made while the question was up
+        // was replaced without ever being seen.
+        WriteOutcome::Conflict => SaveResult::Conflict {
+            current: current_stamp(&grant.path)?,
         },
-    )
+    })
+}
+
+/// The stamp of the file as it is now, or `None` when there is none.
+fn current_stamp(path: &Path) -> Result<Option<String>, AppError> {
+    match read_document(path) {
+        Ok(doc) => Ok(Some(doc.stamp)),
+        Err(e) if e.kind == ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e),
+    }
 }
 
 #[tauri::command]
@@ -397,6 +430,7 @@ mod tests {
         let meta = SaveMeta {
             handle: opened.handle.clone(),
             expected_stamp: Some(opened.stamp.clone()),
+            expect_missing: false,
         };
         let SaveResult::Saved { stamp } = save_document_now(&state, &meta, b"new").unwrap() else {
             panic!("expected a save");
@@ -405,6 +439,7 @@ mod tests {
         let again = SaveMeta {
             handle: opened.handle,
             expected_stamp: Some(stamp),
+            expect_missing: false,
         };
         assert!(matches!(
             save_document_now(&state, &again, b"newer").unwrap(),
@@ -421,10 +456,13 @@ mod tests {
         let meta = SaveMeta {
             handle: opened.handle,
             expected_stamp: Some(opened.stamp),
+            expect_missing: false,
         };
         assert_eq!(
             save_document_now(&state, &meta, b"mine again").unwrap(),
-            SaveResult::Conflict
+            SaveResult::Conflict {
+                current: Some(read_document(&path).unwrap().stamp)
+            }
         );
         assert_eq!(
             fs::read_to_string(&path).unwrap(),
@@ -433,11 +471,89 @@ mod tests {
     }
 
     #[test]
+    fn overwriting_after_a_conflict_replaces_only_the_version_the_person_was_asked_about() {
+        let (dir, state) = test_state();
+        let path = doc(&dir, "a.draftcanvas", "mine");
+        let opened = opened_doc(&state, &path).unwrap();
+        let save = |expected: Option<String>, bytes: &[u8]| {
+            let meta = SaveMeta {
+                handle: opened.handle.clone(),
+                expected_stamp: expected,
+                expect_missing: false,
+            };
+            save_document_now(&state, &meta, bytes).unwrap()
+        };
+        fs::write(&path, "a sync client's edit").unwrap();
+        let SaveResult::Conflict {
+            current: Some(asked),
+        } = save(Some(opened.stamp.clone()), b"x")
+        else {
+            panic!("expected a conflict naming what is there");
+        };
+
+        // Changed again while the question was up: the Overwrite is a conflict too, and asks again.
+        fs::write(&path, "a teammate's later edit").unwrap();
+        let SaveResult::Conflict {
+            current: Some(again),
+        } = save(Some(asked), b"mine")
+        else {
+            panic!("expected the overwrite to meet the newer change");
+        };
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "a teammate's later edit"
+        );
+
+        // Untouched since it was asked about, it is replaced.
+        assert!(matches!(
+            save(Some(again), b"mine"),
+            SaveResult::Saved { .. }
+        ));
+        assert_eq!(fs::read_to_string(&path).unwrap(), "mine");
+    }
+
+    #[test]
+    fn overwriting_a_file_that_had_gone_keeps_one_that_has_come_back() {
+        let (dir, state) = test_state();
+        let path = doc(&dir, "a.draftcanvas", "mine");
+        let opened = opened_doc(&state, &path).unwrap();
+        let save = |expected: Option<String>, expect_missing: bool| {
+            let meta = SaveMeta {
+                handle: opened.handle.clone(),
+                expected_stamp: expected,
+                expect_missing,
+            };
+            save_document_now(&state, &meta, b"mine").unwrap()
+        };
+        fs::remove_file(&path).unwrap();
+        assert_eq!(
+            save(Some(opened.stamp.clone()), false),
+            SaveResult::Conflict { current: None }
+        );
+
+        // Restored while the question was up (a sync client, a checkout): it is not written over.
+        fs::write(&path, "restored").unwrap();
+        assert_eq!(
+            save(None, true),
+            SaveResult::Conflict {
+                current: Some(read_document(&path).unwrap().stamp)
+            }
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), "restored");
+
+        // Still gone, it is written again.
+        fs::remove_file(&path).unwrap();
+        assert!(matches!(save(None, true), SaveResult::Saved { .. }));
+        assert_eq!(fs::read_to_string(&path).unwrap(), "mine");
+    }
+
+    #[test]
     fn saving_needs_a_handle_rust_issued() {
         let (_dir, state) = test_state();
         let meta = SaveMeta {
             handle: "h_made-up".into(),
             expected_stamp: None,
+            expect_missing: false,
         };
         assert_eq!(
             save_document_now(&state, &meta, b"x").err().unwrap().kind,
@@ -454,6 +570,7 @@ mod tests {
         let meta = SaveMeta {
             handle: opened.handle,
             expected_stamp: None,
+            expect_missing: false,
         };
         assert!(matches!(
             save_document_now(&state, &meta, b"forced").unwrap(),
@@ -678,8 +795,15 @@ mod tests {
             json!({"outcome": "saved", "stamp": "v1:1:2:ab"})
         );
         assert_eq!(
-            serde_json::to_value(SaveResult::Conflict).unwrap(),
-            json!({"outcome": "conflict"})
+            serde_json::to_value(SaveResult::Conflict {
+                current: Some("v1:3:4:cd".into())
+            })
+            .unwrap(),
+            json!({"outcome": "conflict", "current": "v1:3:4:cd"})
+        );
+        assert_eq!(
+            serde_json::to_value(SaveResult::Conflict { current: None }).unwrap(),
+            json!({"outcome": "conflict", "current": null})
         );
         let opened = OpenedDoc {
             handle: "h_1".into(),
@@ -731,8 +855,12 @@ mod tests {
         let save: SaveMeta =
             serde_json::from_value(json!({"handle": "h_1", "expectedStamp": "s"})).unwrap();
         assert_eq!(save.expected_stamp.as_deref(), Some("s"));
+        assert!(!save.expect_missing);
         let bare: SaveMeta = serde_json::from_value(json!({"handle": "h_1"})).unwrap();
         assert!(bare.expected_stamp.is_none());
+        let gone: SaveMeta =
+            serde_json::from_value(json!({"handle": "h_1", "expectMissing": true})).unwrap();
+        assert!(gone.expect_missing && gone.expected_stamp.is_none());
         let save_as: SaveAsMeta = serde_json::from_value(json!({"suggestedName": "Plan"})).unwrap();
         assert_eq!(save_as.suggested_name, "Plan");
         assert!(save_as.start_in.is_none());

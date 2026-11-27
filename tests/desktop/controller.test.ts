@@ -272,8 +272,45 @@ describe('saving', () => {
 
       expect(h.asked[0]!.buttons).toEqual(['Overwrite', 'Save As…', 'Cancel']);
       expect(h.api.saveDocument).toHaveBeenCalledTimes(2);
-      expect(h.api.saveDocument.mock.calls[1]![2]).toBeUndefined();
+      // Over the version it asked about, which the conflict named.
+      expect(h.api.saveDocument.mock.calls[1]![2]).toBe('v1:2');
       expect(decoder.decode(h.api.saveDocument.mock.calls[1]![1])).toBe(edited());
+      expect(h.files.get(handle)!.text).toBe(edited());
+      expect(doc()).toMatchObject({ dirty: false });
+    });
+
+    /** The file changes once more while the first question is up: a sync client, a `git pull`. */
+    function changedAgainWhileAsking(handle: string): string {
+      const again = documentText('Changed again');
+      const ask = h.api.ask.getMockImplementation()!;
+      h.api.ask.mockImplementationOnce(async (...args) => {
+        const file = h.files.get(handle)!;
+        file.text = again;
+        file.version += 1;
+        return ask(...args);
+      });
+      return again;
+    }
+
+    it('asks again, rather than writing over a change made while it was asking', async () => {
+      const handle = await conflicted();
+      const again = changedAgainWhileAsking(handle);
+      h.answer(0, 2);
+      await h.controller.save();
+
+      expect(h.asked).toHaveLength(2);
+      expect(h.asked[1]!.message).toContain('changed again while you were deciding');
+      expect(h.files.get(handle)!.text).toBe(again);
+      expect(doc()).toMatchObject({ dirty: true });
+    });
+
+    it('overwrites the newer change once it is the one asked about', async () => {
+      const handle = await conflicted();
+      changedAgainWhileAsking(handle);
+      h.answer(0, 0);
+      await h.controller.save();
+
+      expect(h.api.saveDocument.mock.calls.map(([, , stamp]) => stamp)).toEqual(['v1:1', 'v1:2', 'v1:3']);
       expect(h.files.get(handle)!.text).toBe(edited());
       expect(doc()).toMatchObject({ dirty: false });
     });

@@ -1082,10 +1082,15 @@ export class DesktopController {
       this.store.update({ saving: true });
       const bytes = encoder.encode(text);
       let result = await this.api.saveDocument(session.handle, bytes, session.stamp);
-      if (result.outcome === 'conflict') {
+      // Overwrite replaces the version the person was asked about and nothing newer: a file that
+      // changes again while the question is up (a sync client, a pull) is asked about again. Written
+      // unconditionally, that second change was replaced without anyone ever seeing it.
+      for (let again = false; result.outcome === 'conflict'; again = true) {
         const choice = await this.api.ask(
           `${session.name}.draftcanvas changed on disk`,
-          'It was changed by something else since you opened it. Overwriting it replaces those changes with what is on your screen.',
+          again
+            ? 'It changed again while you were deciding. Overwriting it replaces that change too with what is on your screen.'
+            : 'It was changed by something else since you opened it. Overwriting it replaces those changes with what is on your screen.',
           ['Overwrite', 'Save As…', 'Cancel'],
         );
         if (choice === 2) return;
@@ -1093,9 +1098,8 @@ export class DesktopController {
           await this.saveAsFlow();
           return;
         }
-        result = await this.api.saveDocument(session.handle, bytes, undefined);
+        result = await this.api.saveDocument(session.handle, bytes, result.current);
       }
-      if (result.outcome !== 'saved') return;
       await this.finishSave(session, result.stamp, text);
     });
   }
