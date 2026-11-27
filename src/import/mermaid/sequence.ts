@@ -239,6 +239,12 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
     const word = (line.split(/\s+/)[0] ?? '').toLowerCase();
     const rest = line.slice(word.length).trim();
 
+    // One diagram per text: what an export of several wrote before it wrote Markdown, read on into one.
+    if (word === 'sequencediagram') {
+      unsupported.add('another sequence diagram in the text (not imported)');
+      break;
+    }
+
     if (word === 'title') {
       title = decode(rest.replace(/^:\s*/, ''));
       continue;

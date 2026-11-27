@@ -123,7 +123,9 @@ pairing stays free; an unusual one gets guidance, not rejection.
 - A selected flow acts as a lighter lens, except during presentation or focus, or when empty.
 - Playback, emphasis and camera guidance are never saved, undone or exported. A presenter's pan takes
   the camera until guidance is requested again.
-- Sequence export writes every playable flow, and every native sequence, to one Mermaid or PlantUML file. The text is the product.
+- Sequence export writes every playable flow, and every native sequence, to one file: PlantUML, or
+  Mermaid, which is Markdown with one Mermaid block per diagram when there is more than one. The
+  text is the product.
 - Nothing infers timing, outcomes or execution.
 
 ## Sequences

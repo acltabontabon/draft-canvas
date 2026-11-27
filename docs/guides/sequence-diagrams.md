@@ -185,6 +185,9 @@ frame it is in lights with it, and the caption names its condition or branch.
 - **Share → Export… → Other formats → Sequences** writes each sequence and each flow as **Mermaid**
   or **PlantUML**, with conditions, loops, work bars and groups. Attached cards stay in the
   `.draftcanvas` file; image exports show their chips.
+- A Mermaid file holds one diagram, so a canvas with more than one (a sequence beside its flows, or
+  flows on several levels) exports as Markdown (`.md`), one Mermaid block per diagram. PlantUML
+  keeps them all in one `.puml`.
 - Paste or import a Mermaid `sequenceDiagram` to get an editable sequence; anything not drawn is
   listed. See the [Mermaid import reference](../reference/mermaid-import.md#sequence-diagrams).
 - An [AI agent](connect-an-ai-agent.md) can add, read and change sequences.

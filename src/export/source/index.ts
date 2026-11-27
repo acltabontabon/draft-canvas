@@ -8,8 +8,8 @@
 import type { DraftDocument } from '../../document/types';
 import { downloadText } from '../download';
 import { fileNameFor } from '../project';
-import { sequenceSourceFor } from '../sequence';
-import { SOURCE_FORMAT_INFO, type SourceFormat } from './formats';
+import { countSequenceDiagrams, sequenceSourceFor } from '../sequence';
+import { MARKDOWN_EXTENSION, SOURCE_FORMAT_INFO, type SourceFormat } from './formats';
 import { c4PlantUmlSource } from './c4plantuml';
 import { drawioSource } from './drawio';
 import { mermaidFlowchartSource } from './mermaidFlowchart';
@@ -33,7 +33,9 @@ export function sourceTextFor(document: DraftDocument, format: SourceFormat): st
 }
 
 export function sourceFileNameFor(document: DraftDocument, format: SourceFormat): string {
-  return fileNameFor(document.metadata.title, SOURCE_FORMAT_INFO[format].extension);
+  // Several sequence diagrams are written as Markdown, one Mermaid block each (`sequenceSourceFor`).
+  const markdown = format === 'mermaid' && countSequenceDiagrams(document) > 1;
+  return fileNameFor(document.metadata.title, markdown ? MARKDOWN_EXTENSION : SOURCE_FORMAT_INFO[format].extension);
 }
 
 export function exportSourceFile(document: DraftDocument, format: SourceFormat): Promise<void> {

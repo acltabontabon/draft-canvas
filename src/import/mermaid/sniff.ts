@@ -11,7 +11,11 @@ export const DEFAULT_IMPORT_TITLE = 'Imported diagram';
 export const MERMAID_TEXT_LIMIT = 512 * 1024;
 
 export const HEADER = /^(?:flowchart|graph)(?:\s+(TD|TB|LR|RL|BT))?\s*$/i;
-const FENCE = /```\s*mermaid[^\n]*\n([\s\S]*?)```/gi;
+/**
+ * A fence opens and closes at the start of a line, as Markdown has it: one closed by three backticks
+ * anywhere ended a block at a message saying "returns ```json".
+ */
+const FENCE = /^[ \t]*```[ \t]*mermaid[^\n]*\n([\s\S]*?)^[ \t]*```/gim;
 export const FRONT_MATTER = /^\s*---\s*\n([\s\S]*?)\n---\s*\n/;
 
 /**

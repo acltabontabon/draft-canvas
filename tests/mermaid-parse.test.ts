@@ -1,6 +1,9 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import mermaid from 'mermaid';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createNode } from '../src/document/factory';
+import { deserializeDocument } from '../src/export/project';
 import { messagesOf } from '../src/document/sequenceModel';
 import { createMessage, createNote, createReply } from '../src/document/sequenceOps';
 import type { DraftSequence, SeqParticipant } from '../src/document/types';
@@ -105,6 +108,32 @@ describe('the Mermaid export parses with Mermaid', () => {
     const text = toMermaid(m);
     expect(text).not.toMatch(/%%\{/);
     expect(await parses(text)).toBe(true);
+  });
+});
+
+describe('a source with several diagrams', () => {
+  const root = join(__dirname, 'fixtures', 'starters', 'starters');
+  const files = (dir: string): string[] =>
+    readdirSync(dir).flatMap((name) => (statSync(join(dir, name)).isDirectory() ? files(join(dir, name)) : name.endsWith('.draftcanvas') ? [join(dir, name)] : []));
+  const starters = files(root).map((path) => {
+    const read = deserializeDocument(readFileSync(path, 'utf8'));
+    if (!read.ok) throw new Error(`${path} does not open`);
+    return [relative(root, path).replaceAll('\\', '/'), read.document] as const;
+  });
+  /** What a reader renders: the text itself, or each Mermaid block of a Markdown one. */
+  const diagrams = (text: string): string[] => (text.startsWith('```mermaid\n') ? [...text.matchAll(/^```mermaid\n([\s\S]*?)^```$/gm)].map((block) => block[1]!) : [text]);
+
+  beforeAll(() => {
+    mermaid.initialize({ startOnLoad: false });
+  });
+
+  // Flows in several rooms, or a sequence beside them, made one text with a `sequenceDiagram`
+  // header each, which Mermaid refuses: fifteen of these eighteen exported that way.
+  it.each(starters)('%s parses diagram by diagram', async (_name, document) => {
+    const text = sequenceSourceFor(document, 'mermaid');
+    const each = diagrams(text);
+    expect(each.length).toBe((text.match(/^sequenceDiagram$/gm) ?? []).length);
+    for (const diagram of each) expect(await parses(diagram)).toBe(true);
   });
 });
 

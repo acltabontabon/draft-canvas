@@ -6,6 +6,8 @@
 
 export const MERMAID_EXTENSION = '.mmd';
 export const PLANTUML_EXTENSION = '.puml';
+/** Mermaid sequence source with more than one diagram: one Mermaid block each (`export/sequence.ts`). */
+export const MARKDOWN_EXTENSION = '.md';
 
 export const SOURCE_FORMATS = ['mermaid', 'plantuml', 'mermaid-flowchart', 'c4-plantuml', 'structurizr', 'drawio'] as const;
 export type SourceFormat = (typeof SOURCE_FORMATS)[number];
