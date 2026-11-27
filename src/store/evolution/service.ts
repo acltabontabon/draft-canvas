@@ -254,8 +254,8 @@ export class HistoryService {
     session.store = store;
     session.meta = meta;
     session.tip = tip;
-    session.paused = meta.paused === true;
-    if (meta.paused) this.setCapture(session, { kind: 'off', reason: 'diagram' });
+    session.paused = binding.paused === true || meta.paused === true;
+    if (session.paused) this.setCapture(session, { kind: 'off', reason: 'diagram' });
     if (tip) {
       const parsed = await this.deps.compute.parse(await store.readSnapshot(tip));
       session.tipBlob = parsed.blobId;
@@ -483,14 +483,25 @@ export class HistoryService {
     session.tip = null;
   }
 
-  /** Stops (or resumes) recording this diagram's history. What is already recorded stays. */
+  /**
+   * Stops (or resumes) recording this diagram's history. What is already recorded stays. Kept on
+   * this copy's binding: a copy that continued another diagram's history shares its `repo.json`, and
+   * a pause kept there paused the other diagram too.
+   */
   async setPaused(paused: boolean): Promise<void> {
     const session = this.session;
-    if (!session?.store || !session.meta) return;
-    const meta = { ...session.meta, paused: paused || undefined };
-    if (!paused) delete meta.paused;
-    await session.store.writeMeta(meta);
-    session.meta = meta;
+    if (!session?.store || !session.binding) return;
+    const binding: Binding = { ...session.binding, paused };
+    if (!paused) delete binding.paused;
+    await this.deps.backend().putBinding(binding);
+    session.binding = binding;
+    if (!paused && session.meta?.paused) {
+      // A pause an earlier version kept for the whole history: resuming this copy lifts it.
+      const meta = await session.store.meta();
+      delete meta.paused;
+      await session.store.writeMeta(meta);
+      session.meta = meta;
+    }
     session.paused = paused;
     if (paused) {
       this.setCapture(session, { kind: 'off', reason: 'diagram' });
@@ -535,16 +546,33 @@ export class HistoryService {
     return { bytes, title: session.meta.title };
   }
 
+  /** How many other working copies on this device record into this diagram's history (copies that continued it). */
+  async sharedWith(): Promise<number> {
+    const session = this.session;
+    if (!session?.store) return 0;
+    return this.othersOn(session, session.store.repoId);
+  }
+
+  private async othersOn(session: Session, repoId: string): Promise<number> {
+    return (await this.deps.backend().bindings()).filter((binding) => binding.repoId === repoId && binding.copyId !== session.copyId).length;
+  }
+
   /**
    * Removes this diagram's history from this device, after the person confirmed. The diagram itself
    * is untouched, and copies already published or exported are not affected — the person is told so
    * before they confirm. Recording starts afresh with the next change unless history is paused.
+   *
+   * A history another copy continues is theirs too: removing it here once deleted the other
+   * diagram's revisions, alternatives and milestones, behind a warning about this diagram alone.
+   * Then this diagram only lets go of it, unless the person chose to remove it for `everywhere`.
    */
-  async removeHistory(): Promise<void> {
+  async removeHistory(options: { everywhere?: boolean } = {}): Promise<void> {
     const session = this.session;
     if (!session?.store) return;
     const repoId = session.store.repoId;
-    await this.deps.backend().remove(repoId);
+    const backend = this.deps.backend();
+    if (!options.everywhere && (await this.othersOn(session, repoId)) > 0) await backend.deleteBinding(session.copyId);
+    else await backend.remove(repoId);
     session.store = null;
     session.meta = null;
     session.binding = null;
@@ -578,7 +606,8 @@ export class HistoryService {
   async adoptHistory(repoId: string): Promise<void> {
     const session = this.session;
     if (!session) return;
-    const binding: Binding = { copyId: session.copyId, repoId, altId: null, documentId: session.documentId, lastSeen: null, at: this.deps.clock.now() };
+    // A pause is this diagram's, and stays with it into the history it now continues.
+    const binding: Binding = { copyId: session.copyId, repoId, altId: null, documentId: session.documentId, lastSeen: null, at: this.deps.clock.now(), ...(session.paused ? { paused: true } : {}) };
     await this.deps.backend().putBinding(binding);
     session.store = null;
     session.tip = null;

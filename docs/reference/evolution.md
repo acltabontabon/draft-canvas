@@ -66,7 +66,7 @@ flowchart LR
 | Document identity | `metadata.id`: a lineage hint that travels with the file, so two files may share it |
 | History identity | `repoId`, minted when a history starts |
 | Working copy | A library entry (`lib_<id>`), a Quick Draft (`draft_<recovery id>`) or a saved file (`file_<path>`) |
-| Binding | `copyId → { repoId, altId }`, kept beside the histories, never in the file |
+| Binding | `copyId → { repoId, altId, paused }`, kept beside the histories, never in the file |
 | Alternative | A stable `altId`; its branch is `refs/heads/alt/<altId>`, and its name is display only |
 | Editor session | One history session per open working copy (`service.ts`, a token every async step checks) |
 | Generation | `editorStore.revision`, which grows with every edit and load |
@@ -85,6 +85,10 @@ Rules:
   compare-and-swap.
 - **Active alternative.** Which alternative a copy is on lives in its binding, not in the repository,
   so two sessions never fight over a global "current branch".
+- **Per copy, not per history.** A pause lives in the binding too, so copies continuing one history
+  pause separately (`repo.json`'s old `paused` is only read, and lifted on resume). Removing history
+  from one of them deletes only its binding while another copy is bound to it; deleting the shared
+  history is a separate choice the person makes.
 
 ### ADR-3: one recoverable operation protocol
 

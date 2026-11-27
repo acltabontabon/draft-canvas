@@ -24,6 +24,9 @@ pub struct Binding {
     pub document_id: String,
     pub last_seen: Option<String>,
     pub at: i64,
+    /// Recording is paused for this copy: kept per copy, since two copies may continue one history.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paused: Option<bool>,
 }
 
 impl Binding {

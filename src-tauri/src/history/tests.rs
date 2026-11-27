@@ -670,6 +670,7 @@ fn bindings_round_trip_under_validation() {
         document_id: "d_1".into(),
         last_seen: Some("a".repeat(40)),
         at: 5,
+        paused: None,
     };
     assert_eq!(history.binding_get(&binding.copy_id).unwrap(), None);
     history.binding_put(&binding).unwrap();
@@ -682,6 +683,21 @@ fn bindings_round_trip_under_validation() {
         serde_json::to_value(&binding).unwrap(),
         json!({"copyId": binding.copy_id, "repoId": "r1", "altId": null, "documentId": "d_1", "lastSeen": "a".repeat(40), "at": 5})
     );
+    // A pause is the copy's own and is kept with it (two copies may continue one history).
+    let paused = Binding {
+        paused: Some(true),
+        ..binding.clone()
+    };
+    history.binding_put(&paused).unwrap();
+    assert_eq!(
+        history.binding_get(&binding.copy_id).unwrap(),
+        Some(paused.clone())
+    );
+    assert_eq!(
+        serde_json::to_value(&paused).unwrap()["paused"],
+        json!(true)
+    );
+    history.binding_put(&binding).unwrap();
     for bad in [
         Binding {
             repo_id: "../x".into(),

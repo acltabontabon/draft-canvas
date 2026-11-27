@@ -118,7 +118,10 @@ export interface RepoMeta {
   lineage?: { repoId: string; oid: Oid };
   /** Alternatives by stable id: their names are display only. */
   alternatives: AlternativeMeta[];
-  /** Capture is off for this history (the existing history is kept). */
+  /**
+   * Capture is off for every copy of this history. Only read: a pause is kept on the copy's
+   * `Binding` now, and resuming any copy lifts this one, written by earlier versions.
+   */
   paused?: boolean;
   remote?: RemoteMeta;
 }
@@ -189,6 +192,11 @@ export interface Binding {
   /** The ref value this copy last saw, to tell another copy moving the same history apart. */
   lastSeen: Oid | null;
   at: number;
+  /**
+   * Recording is paused for this copy (the history it has stays). Kept here, like `altId`, and not
+   * in the shared `repo.json`: two copies may continue one history, and pausing one paused both.
+   */
+  paused?: boolean;
 }
 
 /** Hard limits every backend enforces on untrusted history. */

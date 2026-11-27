@@ -39,7 +39,14 @@ const BINDING = 'binding:';
 
 function isBinding(value: unknown): value is Binding {
   const b = value as Partial<Binding> | null;
-  return !!b && typeof b.copyId === 'string' && typeof b.repoId === 'string' && isSafeId(b.repoId) && (b.altId === null || (typeof b.altId === 'string' && isSafeId(b.altId)));
+  return (
+    !!b &&
+    typeof b.copyId === 'string' &&
+    typeof b.repoId === 'string' &&
+    isSafeId(b.repoId) &&
+    (b.altId === null || (typeof b.altId === 'string' && isSafeId(b.altId))) &&
+    (b.paused === undefined || typeof b.paused === 'boolean')
+  );
 }
 
 export class BrowserBackend implements HistoryBackend {

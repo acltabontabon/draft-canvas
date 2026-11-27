@@ -4,6 +4,7 @@ import { addNodes, updateNode } from '../../src/document/operations';
 import type { DraftDocument } from '../../src/document/types';
 import { BrowserBackend, MemoryState } from '../../src/evolution/browser/backend';
 import { KvFs, MemoryKv } from '../../src/evolution/browser/kvfs';
+import { copyIdOf } from '../../src/evolution/identity';
 import { MAIN_REF } from '../../src/evolution/refs';
 import { DEFAULT_SCHEDULE } from '../../src/evolution/scheduler';
 import { parseMessage } from '../../src/evolution/trailers';
@@ -47,12 +48,11 @@ async function settle(rounds = 50) {
   for (let i = 0; i < rounds; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-function harness(initial: DraftDocument) {
+function harness(initial: DraftDocument, backend = new BrowserBackend(new KvFs(new MemoryKv()), new MemoryState(), processLocks())) {
   let file = initial;
   let generation = 1;
   let gesture = false;
   const clock = new ManualClock();
-  const backend = new BrowserBackend(new KvFs(new MemoryKv()), new MemoryState(), processLocks());
   const service = new HistoryService({
     backend: () => backend,
     compute,
@@ -182,6 +182,22 @@ describe('the history service', { timeout: 30_000 }, () => {
     expect(await revisions(h.backend)).toHaveLength(2);
   });
 
+  it('honours a pause an earlier version kept in repo.json, and lifts it on resume', async () => {
+    const h = harness(doc());
+    const key = { kind: 'library' as const, documentId: h.file.metadata.id };
+    await h.service.attach(key);
+    await h.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+    const store = h.service.store!;
+    await store.writeMeta({ ...(await store.meta()), paused: true });
+    await h.service.detach();
+    await h.service.attach(key);
+    expect(h.service.paused).toBe(true);
+    await h.service.setPaused(false);
+    expect(h.service.paused).toBe(false);
+    expect((await store.meta()).paused).toBeUndefined();
+    expect((await h.backend.binding(copyIdOf(key)))?.paused).toBeUndefined();
+  });
+
   it('finishes a capture into the history it began with when another diagram opens meanwhile', async () => {
     const h = harness(doc());
     await h.service.attach({ kind: 'library', documentId: h.file.metadata.id });
@@ -194,6 +210,70 @@ describe('the history service', { timeout: 30_000 }, () => {
     const metas = await h.backend.list();
     expect(metas.map((meta) => meta.title)).toEqual(['Payments']);
     expect(useEvolutionStore.getState().copyId).toBe(`lib_${other.metadata.id}`);
+  });
+
+  describe('a history two copies continue', () => {
+    const ORIGINAL = { kind: 'file' as const, path: '/work/payments.draftcanvas' };
+    const COPY = { kind: 'file' as const, path: '/work/payments-v2.draftcanvas' };
+
+    /** The original records two revisions; a Save As copy then continues its history. */
+    async function shared() {
+      const one = harness(doc());
+      await one.service.attach(ORIGINAL);
+      await one.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+      one.edit(updateNode(one.file, 'n_api', { text: 'Gateway' }));
+      await one.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+      const repoId = one.service.store!.repoId;
+      const main = (await one.service.store!.readRef(MAIN_REF))!;
+      await one.service.detach();
+      const two = harness(one.file, one.backend);
+      await two.service.attach(COPY);
+      await two.service.answerIdentity(true);
+      expect(two.service.binding).toMatchObject({ repoId });
+      return { one, two, repoId, main };
+    }
+
+    it('pauses one copy without pausing the other', async () => {
+      const { one, two, main } = await shared();
+      await two.service.setPaused(true);
+      await two.service.detach();
+      // Pausing lived in the history's repo.json, so pausing the copy paused the original too.
+      await one.service.attach(ORIGINAL);
+      expect(one.service.paused).toBe(false);
+      one.edit(updateNode(one.file, 'n_api', { text: 'Edge' }));
+      await one.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+      expect(await one.service.store!.readRef(MAIN_REF)).not.toBe(main);
+      await one.service.detach();
+      await two.service.attach(COPY);
+      expect(two.service.paused).toBe(true);
+      expect(useEvolutionStore.getState().capture).toEqual({ kind: 'off', reason: 'diagram' });
+    });
+
+    it('removing it from one copy keeps it whole for the other', async () => {
+      const { one, two, repoId, main } = await shared();
+      expect(await two.service.sharedWith()).toBe(1);
+      // This once deleted the original's revisions, alternatives and milestones, and its binding.
+      await two.service.removeHistory();
+      expect(await one.backend.binding(copyIdOf(COPY))).toBeUndefined();
+      expect(await one.backend.binding(copyIdOf(ORIGINAL))).toMatchObject({ repoId });
+      expect(await (await one.backend.open(repoId))!.readRef(MAIN_REF)).toBe(main);
+      expect(useEvolutionStore.getState().capture).toEqual({ kind: 'empty' });
+      // The copy's next change starts a history of its own.
+      two.edit(updateNode(two.file, 'n_api', { text: 'Copy' }));
+      await two.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+      expect(two.service.store!.repoId).not.toBe(repoId);
+      await two.service.detach();
+      await one.service.attach(ORIGINAL);
+      expect(one.service.store!.repoId).toBe(repoId);
+      expect(useEvolutionStore.getState().tip).toBe(main);
+    });
+
+    it('removes it for every copy only when asked to', async () => {
+      const { one, two, repoId } = await shared();
+      await two.service.removeHistory({ everywhere: true });
+      expect(await one.backend.open(repoId)).toBeUndefined();
+      expect(await one.backend.binding(copyIdOf(ORIGINAL))).toBeUndefined();
+    });
   });
 
   it('asks before continuing another copy’s history, and starts fresh when told to', async () => {

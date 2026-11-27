@@ -230,14 +230,17 @@ Open **History settings…** from the clock's details or `⌘K`, or **Settings �
 - **Let agents read past revisions in full** (desktop): see [Agents and history](#agents-and-history).
 - **Recorded as**: the name and email revisions carry. Left empty, they say "Draft Canvas". It is a
   label, not a sign-in.
-- **Record this diagram's history**: pause or resume one diagram.
+- **Record this diagram's history**: pause or resume one diagram. A copy that continues another
+  diagram's history pauses on its own.
 - **Export history…**: saves the whole history, archived alternatives included, as a `.bundle` file.
   Anyone with Git can open it: `git clone history.bundle`.
 - **Import history…**: brings a `.bundle` in. This diagram then continues that history; its earlier
   history stays on the device. Branches that are not diagram history are left out.
 - **Remove this diagram's history…**: deletes its revisions from this device, after asking. The
   diagram itself is unchanged, and exported or published copies are not affected. Recording starts
-  again with your next change unless you turn it off first.
+  again with your next change unless you turn it off first. When another diagram on this device
+  continues the same history, it is kept for that diagram and this one only stops using it;
+  **Delete the shared history…** deletes it for both.
 - **History on this device**: how much space histories use.
 
 ## Privacy
