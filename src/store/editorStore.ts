@@ -1882,9 +1882,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!active) return;
     // Only in the room it began in; anywhere else the baseline is no longer ours to put back.
     if (get().document === active.document || !samePath(active.path, get().path)) return;
-    set((s) => ({ document: active.document, selection: active.selection, revision: s.revision + 1 }));
+    // Stamped like any change to what is stored, as `restoreSnapshot` does: the baseline's own stamp
+    // is older than one autosave may have written mid-gesture, and the Library's edited time ran
+    // backwards (a reload's stash comparison misjudged which copy was newer, too).
+    const restored = touch(active.document);
+    set((s) => ({ document: restored, selection: active.selection, revision: s.revision + 1 }));
     settleSubSelections(active.selection);
-    closeStaleAttachmentDetail(active.document);
+    closeStaleAttachmentDetail(restored);
   },
 
   addNode(input) {

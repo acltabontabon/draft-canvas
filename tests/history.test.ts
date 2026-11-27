@@ -1,6 +1,6 @@
 import { DEFAULTS, LIMITS } from '../src/document/limits';
 import { parseDocument } from '../src/document/validate';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDocument, createNode } from '../src/document/factory';
 import { addFlow, createFlow, deleteFlow } from '../src/document/flow';
 import { HISTORY_LIMIT } from '../src/history/HistoryStack';
@@ -116,6 +116,28 @@ describe('undo and redo', () => {
     expect(store.getState().document.nodes[0]!.width).toBe(260);
     store.getState().undo();
     expect(store.getState().document.nodes[0]!.width).toBe(176);
+  });
+
+  /**
+   * Giving a gesture up put its baseline back with the baseline's own, older stamp: after an autosave
+   * mid-drag, the Library's edited time ran backwards and a reload misjudged which copy was newer.
+   */
+  it('a gesture given up is put back stamped as a change, never with its older stamp', () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    try {
+      const node = store.getState().addNode({ type: 'note', x: 0, y: 0 });
+      now.mockReturnValue(2_000);
+      store.getState().beginInteraction('Make room');
+      store.getState().pushRoom(store.getState().document, { axis: 'x', at: -10, delta: 50 });
+      expect(store.getState().document.nodes[0]!.x).toBe(node.x + 50);
+      now.mockReturnValue(3_000);
+      store.getState().abandonInteraction();
+      expect(store.getState().document.nodes[0]!.x).toBe(node.x);
+      expect(store.getState().document.metadata.updatedAt).toBe(3_000);
+      expect(store.getState().history.past).toHaveLength(1);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it('creates no entry for a click that moved nothing', () => {
