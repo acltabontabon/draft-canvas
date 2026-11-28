@@ -1,0 +1,58 @@
+name: Draft Canvas architecture review
+description: >-
+  Says what a pull request changes about the architecture in every .draftcanvas diagram of the
+  repository, and which findings came with it. Reads files only: no code from the repository is
+  run and nothing is uploaded.
+author: Draft Canvas
+branding:
+  icon: git-pull-request
+  color: gray-dark
+
+inputs:
+  version:
+    description: >-
+      The Draft Canvas release whose command-line tool to use, as its tag (v2.0.0). Defaults to
+      the tag this action was referenced by.
+    required: false
+    default: ''
+  base:
+    description: The revision to compare with. Defaults to the pull request's base commit.
+    required: false
+    default: ''
+  repo:
+    description: The checked-out repository to review.
+    required: false
+    default: '.'
+  fail-on:
+    description: Fail the step when a new finding is at least this severe (error, warning, info or never).
+    required: false
+    default: error
+  cli-path:
+    description: >-
+      Use this already-built draftcanvas.mjs and download nothing. For repositories that build
+      Draft Canvas themselves.
+    required: false
+    default: ''
+
+outputs:
+  report:
+    description: The path of the Markdown report.
+    value: ${{ steps.review.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    # Every input and every value from the event reaches the script through the environment, never
+    # pasted into a command line: a branch name or a path is someone else's text.
+    - id: review
+      shell: bash
+      env:
+        DC_VERSION: ${{ inputs.version }}
+        DC_ACTION_REF: ${{ github.action_ref }}
+        DC_BASE: ${{ inputs.base }}
+        DC_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        DC_REPO: ${{ inputs.repo }}
+        DC_FAIL_ON: ${{ inputs.fail-on }}
+        DC_CLI: ${{ inputs.cli-path }}
+        GH_TOKEN: ${{ github.token }}
+      run: node "$GITHUB_ACTION_PATH/scripts/architecture-review-action.mjs"

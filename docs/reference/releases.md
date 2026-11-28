@@ -68,6 +68,10 @@ updates.
 - The desktop release publishes nothing and moves no update channel until the version and updater
   signatures check out, the arm64 macOS app starts, and the Windows app installs and starts. The
   Intel macOS package is cross-compiled and never started in CI.
+- The headless CLI is built in the release's own `cli` job, with read access and no secrets, run
+  once, and published as `Draft-Canvas_<version>_cli.mjs` beside the installers: it is in
+  `SHA256SUMS.txt` and under the same build attestation. The architecture review action
+  (`action.yml`) downloads that file and refuses it unless both check out.
 - The web deploy publishes the artifact verified in the same run and checks its recorded commit.
 - Performance budgets gate tag pushes only; see [Performance](performance.md#performance-acceptance).
 - Keep release tags and publishing workflows limited to trusted maintainers.
