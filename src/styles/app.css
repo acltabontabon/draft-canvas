@@ -6434,6 +6434,7 @@ button.dc-export-stage:focus-visible .dc-export-stage-hint {
   .dc-status-right > .dc-muted,
   .dc-status-right > .dc-inspector-divider,
   .dc-status-right > button.dc-status-outage,
+  .dc-status-right > button.dc-status-checks,
   .dc-status-right > button.dc-status-open-points,
   .dc-status-right > button.dc-status-level {
   display: none;
@@ -6917,6 +6918,114 @@ button.dc-status-open-points[aria-expanded='true'] {
 
 button.dc-status-open-points[data-none] .dc-status-open-points-glyph {
   border-color: var(--dc-text-faint);
+}
+
+/* The status bar's count of what the checks found: the same chip as the open points beside it. */
+button.dc-status-checks {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+button.dc-status-checks:hover,
+button.dc-status-checks:focus-visible,
+button.dc-status-checks[aria-expanded='true'] {
+  color: var(--dc-text);
+}
+
+/* A small diamond: a mark to look at, where the open point beside it is a square. */
+.dc-status-checks-glyph {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border: 1.4px solid var(--dc-text-muted);
+  transform: rotate(45deg);
+}
+
+button.dc-status-checks[data-quiet] .dc-status-checks-glyph {
+  border-color: var(--dc-text-faint);
+}
+
+/* The Checks list, on the same panel surface as the open points (`.dc-points`). */
+.dc-checks-main {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  padding: 5px 4px;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  color: var(--dc-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-checks-row {
+  display: flex;
+}
+
+.dc-checks-main:hover,
+.dc-checks-main:focus-visible {
+  background: var(--dc-surface-hover);
+}
+
+/* Shape as well as weight tells the three apart: filled diamond, open diamond, small dot. */
+.dc-checks-glyph {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-top: 5px;
+  border: 1.4px solid var(--dc-text-muted);
+  transform: rotate(45deg);
+}
+
+.dc-checks-row[data-severity='error'] .dc-checks-glyph {
+  border-color: var(--dc-text);
+  background: var(--dc-text);
+}
+
+.dc-checks-row[data-severity='info'] .dc-checks-glyph {
+  width: 5px;
+  height: 5px;
+  margin: 6px 1px 0;
+  border-radius: 50%;
+  border-color: var(--dc-text-faint);
+  transform: none;
+}
+
+.dc-checks-words {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.dc-checks-kind {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.05em;
+  color: var(--dc-text-muted);
+}
+
+.dc-checks-text {
+  font-size: 12.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 /* The overview's rows, on the panel surface above (`.dc-points`). */
@@ -7465,6 +7574,7 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
   .dc-status .dc-button,
   .dc-status button.dc-zoom-value,
   .dc-status button.dc-status-outage,
+  .dc-status button.dc-status-checks,
   .dc-status button.dc-status-open-points,
   .dc-status button.dc-status-level {
     min-height: 40px;

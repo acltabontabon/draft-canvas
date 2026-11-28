@@ -236,6 +236,11 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - Checks reach a repository only through a `RepoReader` (`checks/evidence/reader.ts`) someone
   handed them. `src/checks/` touches no file system. Findings carry paths, names and line numbers,
   never file contents. A name found in a file means "anchor intact", never "relationship verified".
+- Checks in the editor are a view (`store/checks.ts`, `ui/Editor/ChecksPanel.tsx`,
+  `uiStore.checksPanelOpen`): never saved, undone, shared or exported, and they change nothing.
+  `checksOf` keeps its answer while shapes are only moved or restyled; a drag must not read the
+  file again. The editor imports `checks/rules` and `checks/finding`, never `checks/index`, which
+  would bring the evidence adapters and their parser into the editor's bundle.
 - A declared rule (`checks/assertions.ts`, `draftcanvas.json`) is data from a fixed vocabulary:
   no expression language, nothing evaluated, unknown fields refused. Rules and waivers never go in
   the diagram, where a collaborator or an agent's proposal could relax them. A rule that selects
