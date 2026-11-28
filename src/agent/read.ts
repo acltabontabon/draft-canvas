@@ -22,6 +22,9 @@ import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, Dr
 import { AgentError } from './errors';
 import { reviewView, type ReviewFinding } from './review';
 import { analyzeTraffic, outageOf, outageReview, type Outage, type OutageReviewEntry } from '../traffic';
+import { countBySeverity, sortFindings } from '../checks/finding';
+import { impactOf } from '../checks/impact';
+import { builtinFindings } from '../checks/rules';
 import { sequenceRead } from './sequences';
 import { groupKindOf, lineStyleOf, typeWordOf } from './vocabulary';
 import { routeGeometry } from './route';
@@ -38,7 +41,7 @@ export const READ_LIMITS = {
   views: 100,
 } as const;
 
-const INCLUDES = ['geometry', 'attachments', 'suggestions', 'fullText', 'views'] as const;
+const INCLUDES = ['geometry', 'attachments', 'suggestions', 'fullText', 'views', 'checks'] as const;
 type Include = (typeof INCLUDES)[number];
 
 export interface ReadArgs {
@@ -47,6 +50,7 @@ export interface ReadArgs {
   include?: unknown;
   cursor?: unknown;
   outage?: { element?: unknown; allInstances?: unknown; connector?: unknown };
+  impact?: { element?: unknown };
 }
 
 export function viewPathOf(file: DraftDocument, view: unknown): DepthPath {
@@ -249,7 +253,12 @@ export function readDiagram(file: DraftDocument, args: ReadArgs, revision: strin
   const review = offsets.every((offset) => offset === 0)
     ? reviewView(view.nodes, view.edges, { level, nested: path.length > 0 }).filter((finding) => !scope || finding.ids.some((id) => scope.has(id)))
     : [];
-  const outage = offsets.every((offset) => offset === 0) ? outageRead(view, args.outage) : undefined;
+  const first = offsets.every((offset) => offset === 0);
+  const outage = first ? outageRead(view, args.outage) : undefined;
+  // File-wide readings, on the first page only: what the checks find in every view, and what a
+  // change to one part touches wherever it leads.
+  const checks = first && includes.has('checks') ? checksRead(file) : undefined;
+  const impact = first ? impactRead(file, args.impact) : undefined;
   // Fitting a UTF-8 page may project it several times. Route each connector once for this snapshot.
   const geometryCache = new Map<string, ReturnType<typeof routeGeometry>>();
   const sizes = [READ_LIMITS.elementsPerPage, READ_LIMITS.relationshipsPerPage, READ_LIMITS.flows, 50];
@@ -258,6 +267,8 @@ export function readDiagram(file: DraftDocument, args: ReadArgs, revision: strin
     const page = all.slice(offsets[0], offsets[0]! + sizes[0]!);
     const result = project(file, view, page, all, path, level, ownLevel, owner, includes, revision, diagramId, offsets, sizes, scope !== undefined, signature, args.focus, geometryCache, review);
     if (outage) result.outage = outage;
+    if (checks) result.checks = checks;
+    if (impact) result.impact = impact;
     if (new TextEncoder().encode(JSON.stringify(result)).length <= READ_LIMITS.bytes) return result;
     if (sizes.every((size) => size <= 1)) {
       // Several individually bounded items can exceed the ceiling together. A page may exhaust
@@ -319,6 +330,47 @@ function outageRead(view: { nodes: readonly DraftNode[]; edges: readonly DraftEd
     connectors: review.connectors.map(row),
     oneInstanceOfSeveral: review.covered.map((item) => item.id),
     nothingElseChanges: review.spared.map((item) => item.id),
+  };
+}
+
+/** Findings listed for an agent; the rest are counted. */
+const CHECKS_LISTED = 40;
+/** Ids listed under each heading of an impact reading. */
+const IMPACT_LISTED = 60;
+
+/**
+ * What the checks find in the drawing, every view (`checks/rules.ts`): the same findings the
+ * headless CLI reports, without a repository. Evidence is not held against files here: an agent
+ * that has the repository can read the cited paths itself.
+ */
+function checksRead(file: DraftDocument): Record<string, unknown> {
+  const findings = sortFindings(builtinFindings(file));
+  return {
+    basis: 'Read from the drawing alone, every view. Evidence is not checked against files here.',
+    counts: countBySeverity(findings),
+    findings: findings.slice(0, CHECKS_LISTED).map((entry) => ({ id: entry.id, rule: entry.rule, class: entry.class, severity: entry.severity, ids: entry.subjects, ...(entry.room ? { view: entry.room } : {}), message: entry.message })),
+    ...(findings.length > CHECKS_LISTED ? { more: findings.length - CHECKS_LISTED } : {}),
+  };
+}
+
+/** What a change to one element or group touches, anywhere in the file (`checks/impact.ts`). */
+function impactRead(file: DraftDocument, input: ReadArgs['impact']): Record<string, unknown> | undefined {
+  if (input === undefined || input === null) return undefined;
+  if (typeof input !== 'object' || Array.isArray(input) || typeof input.element !== 'string') throw new AgentError('INVALID_INPUT', 'impact is {element: "<element or group id>"}.');
+  const read = impactOf(file, input.element);
+  if (!read) throw new AgentError('INVALID_INPUT', 'impact.element is not an element or group of this diagram.', { hint: 'Read the view first and pass one of its element or group ids.' });
+  const reach = (side: typeof read.downstream) => ({ ids: side.ids.slice(0, IMPACT_LISTED), total: side.total, ...(side.truncated ? { truncated: true } : {}) });
+  return {
+    element: read.id,
+    basis: read.basis,
+    ...(read.room.length ? { view: read.room } : {}),
+    ...(read.contains.length ? { contains: read.contains.slice(0, IMPACT_LISTED) } : {}),
+    reaches: reach(read.downstream),
+    reachedBy: reach(read.upstream),
+    ...(read.crossings.length ? { crossings: read.crossings.slice(0, IMPACT_LISTED) } : {}),
+    ...(read.shares.length ? { shares: read.shares.slice(0, IMPACT_LISTED) } : {}),
+    ...(read.flows.length ? { flows: read.flows.map((flow) => flow.id) } : {}),
+    ...(read.openPoints.length ? { openPoints: read.openPoints } : {}),
   };
 }
 
