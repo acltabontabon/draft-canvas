@@ -11,6 +11,12 @@ The product principle is **your architecture, your agents, your decisions**
 ([Principles](CONTRIBUTING.md#principles)): no account or server that sees diagrams, the person's own
 agent, and every agent change reviewed before it lands. Design new features to keep it.
 
+Two more that bind every change, from the same page: Draft Canvas is free and open source in full
+(no paid tier, licence check or telemetry, and no boundary in the code that exists for one), and
+the native file is the interchange format. Do not add an exporter to another diagram tool's
+format, a converter to one, or a plugin mechanism for them; output is the native file, PNG and
+SVG, and machine-readable access is the file's own schema, the CLI's versioned reports and MCP.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, commands and the repository map;
 [docs/index.md](docs/index.md) for guides and reference material.
 

@@ -13,6 +13,24 @@ Draft Canvas is built on **your architecture, your agents, your decisions**:
 - An agent is limited to what the person allowed, and Draft Canvas enforces that limit itself.
 - The canvas stays the subject. Agent surfaces point at the diagram; they don't take it over.
 
+Draft Canvas is free and open source, all of it, and stays that way:
+
+- There is no paid edition, premium feature, subscription, licence check or telemetry, and no part
+  of the design exists to make room for one. Everything it can do, everyone can use.
+- What a diagram says is checked by reading files, not by asking a model. An agent may explain a
+  finding or propose a fix; it is never what decides one.
+
+The `.draftcanvas` file is the open format, and it is the interchange format:
+
+- First-party output is the native file, with everything in it, and pictures of it (PNG and SVG).
+  Draft Canvas does not export to other diagram tools' formats: they cannot carry what a diagram
+  means here, and keeping them faithful would hold the model back.
+- Anything else that wants a diagram reads the native file, the headless CLI's reports or the MCP
+  tools, which are documented and versioned. A converter to another format is welcome as its own
+  project; it does not live in this repository, and there is no plugin framework for one.
+- Importing from another tool is judged on its own: it stays while it helps people bring their
+  diagrams in and can be kept correct.
+
 ## Setup
 
 You need **Node 22.22.2+** and npm. There is no backend and no environment to configure.
