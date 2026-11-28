@@ -135,9 +135,10 @@ test.describe('Export dialog', () => {
     await page.keyboard.press('ArrowRight');
     await expect(dialog.getByRole('radio', { name: /Use in a README/ })).toBeFocused();
     await expect(dialog.getByRole('radio', { name: /Use in a README/ })).toBeChecked();
-    // Use in a README is the last choice: one more wraps round to the first.
-    await page.keyboard.press('ArrowRight');
-    await expect(dialog.getByRole('radio', { name: /Share a link/ })).toBeFocused();
-    await expect(dialog.getByRole('radio', { name: /Share a link/ })).toBeChecked();
+    // And back again. Whether one more press past the last choice wraps round to the first is the
+    // browser's own radio behaviour (WebKit stays put), so it is not asserted here.
+    await page.keyboard.press('ArrowLeft');
+    await expect(dialog.getByRole('radio', { name: /Save an image/ })).toBeFocused();
+    await expect(dialog.getByRole('radio', { name: /Save an image/ })).toBeChecked();
   });
 });
