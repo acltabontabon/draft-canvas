@@ -17,7 +17,6 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Evidence that is checked** — `draftcanvas check --repo` holds the files and names a diagram
   cites against the repository, and says which are gone, moved or no longer there. A Docker Compose
   file the diagram refers to is compared with it too.
-
 - **Linked Junctions count** — A connector drawn in two halves that meet at a linked Junction is
   read as one relation by checks, impact, rules and the architecture diff, in one view or across
   views.
