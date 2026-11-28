@@ -59,6 +59,7 @@ script is described in the [development reference](docs/reference/development.md
 | `src/commands/` | Command palette, context menus and search |
 | `src/presentation/`, `src/sequence/` | Presenting; sequence diagrams |
 | `src/gallery/`, `src/traffic/`, `src/openPoints/` | Starters gallery, outage walk, open points |
+| `src/model/`, `src/checks/`, `cli/` | The architecture read out of a file, the checks on it and its evidence, the headless CLI |
 | `src/collab/` | Live collaboration; network code only in `src/collab/transport/` |
 | `src/agent/`, `src/layout/` | Agent operations and automatic layout |
 | `src/storage/`, `src/export/`, `src/import/` | Persistence, export and import |

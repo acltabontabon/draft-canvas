@@ -18,6 +18,7 @@ the web editor, desktop front end and Rust crates, and the apps link it from **A
 | [Zustand](https://github.com/pmndrs/zustand) | Editor and interface state |
 | [idb](https://github.com/jakearchibald/idb) | IndexedDB document storage |
 | [fflate](https://github.com/101arrowz/fflate) | ZIP backups and compressed collaboration invites |
+| [yaml](https://github.com/eemeli/yaml) | Reading Docker Compose files when a diagram's evidence is checked |
 | [Marked](https://github.com/markedjs/marked) | Markdown in Text shapes; documentation pages on the website |
 | [refractor](https://github.com/wooorm/refractor) and [Prism](https://github.com/PrismJS/prism) | Syntax highlighting in code blocks |
 | [Simple Icons](https://github.com/simple-icons/simple-icons) | Technology logos |

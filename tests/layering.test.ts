@@ -177,7 +177,13 @@ describe('the dependency rules are kept', () => {
     ['document', within('lib')],
     ['depth', within('document')],
     ['gallery', within('document')],
-    ['traffic', within('document')],
+    // The loop finder is shared with the architecture model (`model/scc.ts`), the one implementation.
+    ['traffic', within('document', 'model')],
+    // The architecture read out of the file: derived from the model and the room tree, nothing else.
+    ['model', within('document', 'depth')],
+    // Checks read the file, the model and how work travels, and reach a repository only through
+    // the reader they are handed (`checks/evidence/reader.ts`).
+    ['checks', within('document', 'depth', 'model', 'traffic')],
     ['ink', within('document')],
     // Linked Junctions read the file, room by room, and nothing of the editor.
     ['junctions', within('document', 'depth')],
@@ -207,6 +213,11 @@ describe('the dependency rules are kept', () => {
   );
 
   // The history worker loads `evolution/` alone: nothing of the editor may come with it.
+  // The headless CLI and the agent worker load these with no editor around them.
+  it.each(['model', 'checks'])('%s/ never reaches the editor', (layer) => {
+    expect(strays(layer, (to) => !EDITOR.includes(layerOf(to)))).toEqual([]);
+  });
+
   it('evolution/ never reaches the editor', () => {
     expect(strays('evolution', (to) => !EDITOR.includes(layerOf(to)))).toEqual([]);
   });
@@ -231,7 +242,7 @@ describe('the dependency rules are kept', () => {
   // "`src/document/` imports neither React nor React Flow." The same holds for the other layers that
   // are React-free by rule (`collab/`, `ink/`, `agent/`) or by what they are. `edges/` is not
   // listed: `routing.ts` builds its paths with React Flow's own path functions.
-  it.each(['document', 'collab', 'ink', 'agent', 'depth', 'traffic', 'gallery', 'history', 'layout', 'sequence', 'junctions', 'evolution'])(
+  it.each(['document', 'collab', 'ink', 'agent', 'depth', 'traffic', 'gallery', 'history', 'layout', 'sequence', 'junctions', 'evolution', 'model', 'checks'])(
     '%s/ imports neither React, React Flow nor the store library',
     (layer) => {
       const packages = IMPORTS.filter((entry) => !entry.relative && layerOf(entry.from) === layer && /^(react|react-dom|@xyflow\/|zustand)/.test(entry.to));

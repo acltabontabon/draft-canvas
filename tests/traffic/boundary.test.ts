@@ -5,7 +5,7 @@ import { analyzeTraffic } from '../../src/traffic';
 import { edge, node } from './helpers';
 
 describe('traffic module boundary', () => {
-  it('imports only sibling traffic modules and document modules', () => {
+  it('imports only sibling traffic modules, document modules and the shared loop finder', () => {
     const trafficDirectory = join(process.cwd(), 'src/traffic');
     const files = ['analyze.ts', 'classify.ts', 'eligibility.ts', 'graph.ts', 'index.ts', 'outage.ts', 'sketchLayout.ts', 'technology.ts', 'types.ts'];
     const imports = /(?:from|import\()\s*['"]([^'"]+)['"]/g;
@@ -13,7 +13,8 @@ describe('traffic module boundary', () => {
       const source = readFileSync(join(trafficDirectory, file), 'utf8');
       for (const match of source.matchAll(imports)) {
         const path = match[1]!;
-        expect(path.startsWith('./') || path.startsWith('../document/'), `${file} imports ${path}`).toBe(true);
+        // The loop finder is shared with the architecture model: one implementation, in `model/scc.ts`.
+        expect(path.startsWith('./') || path.startsWith('../document/') || path === '../model/scc', `${file} imports ${path}`).toBe(true);
       }
     }
   });

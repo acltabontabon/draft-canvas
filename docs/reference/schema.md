@@ -36,6 +36,12 @@ the same shape.
 - `textFont` and `textBackground` on Text nodes, and `actorFrame` on Actors, came without a version
   bump. Absent, a Text node uses its role's face with no background, and an Actor is drawn framed;
   new Actors are `borderless`.
+- A shape or connector may carry `evidence` (`SourceEvidence`, `src/document/evidence.ts`): up to 8
+  references to where it comes from in a repository. Each has a repository-relative `path`, a
+  `basis` of `observed` or `inferred`, and optionally a `symbol`, `line`, `commit` and
+  `explanation`. A reference names code; it grants no access to it and is never fetched. An entry
+  with an absolute path, a `..` segment or an unknown field is dropped. Whether a reference still
+  holds is checked, never stored ([Checking a diagram](../guides/checking-a-diagram.md)).
 - Compensating actions are ordinary `compensates` connectors, and `compensationFor` links one to the
   interaction it counteracts. An invalid link is removed and the action kept. Older unlinked ones
   stay unlinked: migration never guesses which operation they counteract.

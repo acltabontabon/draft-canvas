@@ -12,7 +12,7 @@
  */
 
 import { continuationsFor } from '../continuation';
-import { classify, type C4Classification } from '../depth/c4';
+import { classify, systemBoundaryOf, type C4Classification } from '../depth/c4';
 import { effectiveLevel } from '../depth/level';
 import { canCreateInside, hasInside, ownerAt, resolvePath, roomsOf, viewOf, type DepthPath } from '../depth/tree';
 import { groupLabel, membersOf } from '../junctions/groups';
@@ -476,7 +476,7 @@ function project(
       });
       continue;
     }
-    const systemBoundary = [...ancestorsOf(node, byId)].map((id) => byId.get(id)).find((g) => g?.boundaryPreset === 'system');
+    const systemBoundary = systemBoundaryOf(node, byId);
     const c4 = c4Of(classify(node, { level, ...(owner ? { insideOwner: owner } : {}), ...(systemBoundary ? { systemBoundary } : {}) }));
     const inside = hasInside(node) && node.inside
       ? { inside: { level: node.inside.level ?? null, elements: node.inside.nodes.length, relationships: node.inside.edges.length } }
