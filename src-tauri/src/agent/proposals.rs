@@ -487,6 +487,22 @@ mod tests {
         assert!(store.get("accepted").is_none(), "terminal, aged out");
     }
 
+    /// Builds up to 1.22 stamped a proposal with the companion run that submitted it. The field is
+    /// gone; the proposals that carry it are not, and one waiting for review must still be there.
+    #[test]
+    fn a_proposal_an_older_build_stamped_with_a_run_still_loads() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut record = serde_json::to_value(proposal("old", ProposalStatus::Pending, 0)).unwrap();
+        record["run"] = json!("0b0f4a1e-6f5b-4a39-9a55-2f3d1c6f7a10");
+        fs::write(dir.path().join("proposals.jsonl"), format!("{record}\n")).unwrap();
+        let store = Proposals::open(dir.path(), 0).unwrap();
+        assert_eq!(
+            store.get("old").map(|p| p.status),
+            Some(ProposalStatus::Pending)
+        );
+        assert!(!dir.path().join("proposals.jsonl.corrupt").exists());
+    }
+
     #[test]
     fn the_resolved_cap_drops_the_oldest_first() {
         let dir = tempfile::tempdir().unwrap();
