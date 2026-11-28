@@ -52,7 +52,7 @@ table as `tool`, with its arguments in `args`.
 | --- | --- | --- |
 | `get_capabilities({tool?, topics?, starter?})` | read | With `tool`, that tool's complete input schema; with `starter`, one starter's element keys and flows. Otherwise an index of topics and common word lists, plus each of `topics` in full (`types`, `relationships`, `c4`, `flows`, `notes`, `sequences`, `starters`, `limits`, `layout`, `readability`). Starters are only those the person downloaded from the [starters gallery](../guides/getting-started.md#start-from-a-starter). |
 | `list_diagrams({query?, project?, cursor?, limit?})` | read | Diagrams in allowed folders, plus `active` (the open one) and `thisSession` (ones this session changed). |
-| `read_diagram({diagramId, query?, view?, focus?, include?, outage?, cursor?, format?})` | read | One view, semantically ([Reading](#reading)). |
+| `read_diagram({diagramId, query?, view?, focus?, include?, outage?, impact?, cursor?, format?})` | read | One view, semantically ([Reading](#reading)). |
 | `read_attachment({diagramId, expectedRevision, attachmentId, offset?, view?})` | read | Full note or code text in 8,192-character chunks: repeat with `offset: nextOffset` until `nextOffset` is `null`. A changed revision is refused. |
 | `read_selection({diagramId})` | read | The current selection ([Selection-aware editing](#selection-aware-editing)). |
 | `diagram_history({diagramId, action, revision?, against?, alternative?, name?, query?, limit?})` | read | The open diagram's history. `action`: `summary`, `list`, `compare`, `read` (only when the person allows it), `preview_restore`, `preview_merge` or `suggest_milestone` ([ADR-13](evolution.md#adr-13-diagram_history-a-reviewed-view-for-agents)). |
@@ -154,6 +154,8 @@ is bound to the revision and read options; a change answers `CURSOR_STALE`.
 | `include: ["views"]` | An outline of every inside view. |
 | `outage: {element, allInstances?}` / `{connector}` | What the drawing says follows if that element or group goes down, or that relationship while both its ends stay up: `headline`, `affected` (id and state), `unaffected`, `notes` (an open question carrying `open`, a quoted product behaviour its `sources`) and `flows` (each flow's `state`, and the `step` it breaks at). First page only. |
 | `outage: {}` | Every element, group and relationship whose loss changes something drawn: `review` and `connectors` (each with `reaches`, `flows`, `affected`, `open` and a sentence), `oneInstanceOfSeveral` and `nothingElseChanges`. An order, not a severity. |
+| `impact: {element}` | What a change to that element or group touches, anywhere in the file: `reaches` and `reachedBy` (ids nearest first, with a `total`), `contains`, `crossings` (the boundaries its relationships cross), `shares`, `flows` and `openPoints`. Follows the relationships as drawn, through junctions and linked junctions into other views. Read from the drawing, never measured. |
+| `include: ["checks"]` | What the drawing itself says is unfinished or tangled, across every view: `counts` by severity and `findings` (each with a stable `id`, `rule`, `class`, `severity`, `ids`, `view` and a sentence). The same findings `draftcanvas check` reports without a repository; evidence is not held against files here. |
 
 | `format` | Returns |
 | --- | --- |
@@ -313,7 +315,7 @@ and people travel between them.
   changed, and a review or proposal lists each with its view.
 - A junction joining a group (`add` with `link`, or `set.link` alone) takes the group's label, with
   an advisory when that replaced its own.
-- A link adds no relationship: flows, semantics and outage reads follow drawn relationships only.
+- A link adds no relationship for flows, semantics and outage reads, which follow drawn relationships only. An `impact` read and the `checks` do follow it: two halves that meet at linked junctions are one relationship there.
 - `link` on any other element type is `UNSUPPORTED`.
 
 ## Selection-aware editing

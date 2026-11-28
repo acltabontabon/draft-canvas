@@ -22,7 +22,7 @@ can present and share.
 | --- | --- |
 | [Flows and presenting](guides/flows-and-presentation.md) | Record a path and walk through it step by step |
 | [Outage](guides/outage.md) | Take a shape down and see what fails, what holds and what's left open |
-| [Checking a diagram](guides/checking-a-diagram.md) | Check a diagram and the evidence it cites from the command line or CI |
+| [Checking a diagram](guides/checking-a-diagram.md) | What the drawing says is unfinished, in the editor; evidence and your own rules from the command line or CI |
 
 ## Save and share
 

@@ -1,5 +1,26 @@
 # Checking a diagram
 
+Draft Canvas checks a diagram by reading it: what the drawing itself says is unfinished or
+tangled, whether the evidence it cites still holds, and whether your own rules do. Nothing here
+changes a diagram, and none of it asks a model.
+
+## In the editor
+
+When the drawing has something to say, the status bar shows a count, such as **2 to check**. Click
+it, or choose **Check this diagram** from the command palette (`⌘K`), to open the list.
+
+- Each row is one finding, in every view of the file: a queue nothing consumes, a database two
+  services write, services that call each other in a loop, connectors that lead nowhere.
+- Click a row to go to the shape or connector it is about, into another view if that is where it is.
+- A finding is something to look at, not a verdict. Change the diagram and the list follows; a
+  diagram with nothing to report shows no count at all.
+
+The list reads the drawing alone. It is never saved with the diagram, shared, exported or undone.
+Evidence and your own rules are checked from the command line, where there is a repository to
+hold them against.
+
+## From the command line
+
 `draftcanvas` is the headless side of Draft Canvas: a command-line tool that reads `.draftcanvas`
 files with the same code the editor uses and tells you what it finds. It never changes a diagram,
 has no network code and runs no other program, so it is safe to point at a checkout in CI.

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReactFlow, useViewportStore } from '@xyflow/react';
-import { flowFitViewNodes, hasSomethingToFit, useEditorStore, viewLevel } from '../../store/editorStore';
+import { fileOf, flowFitViewNodes, hasSomethingToFit, useEditorStore, viewLevel } from '../../store/editorStore';
 import { useShallow } from 'zustand/react/shallow';
 import { CanvasSettingsButton, HelpMenu } from './HelpMenu';
 import { useCollabStore } from '../../store/collabStore';
@@ -16,6 +16,7 @@ import { DesktopStatus } from '../../desktop/ui/DesktopStatus';
 import { hostKind } from '../../host/hostInfo';
 import { useUiStore } from '../../store/uiStore';
 import { pointsOf } from '../../document/openPoints';
+import { checksOf } from '../../store/checks';
 import { roomMayHaveOutage } from '../../store/outage';
 import { toggleOutage } from '../../commands/outage';
 import type { SaveFailure } from '../../storage/saveFailure';
@@ -279,6 +280,7 @@ export function StatusBar({ durable, presenting = false, onResolveConflict, onSa
 
       <div className="dc-status-right">
         <OutageChip />
+        <ChecksChip />
         <OpenPointsChip />
         <LevelChip />
         <ZoomControls />
@@ -314,6 +316,47 @@ function OutageChip() {
           <button type="button" className="dc-status-outage" aria-pressed={active} onClick={toggleOutage} {...tip}>
             <span className="dc-status-outage-glyph" aria-hidden="true" />
             Outage
+          </button>
+        )}
+      </Tooltip>
+      <span className="dc-inspector-divider" />
+    </>
+  );
+}
+
+/**
+ * What the drawing itself says is unfinished or tangled, counted, and the way to the list
+ * (`ChecksPanel.tsx`). Absent while there is nothing to say: a diagram with no findings never
+ * grows a chip that reads "0". Counted once per edit, and `checksOf` keeps its answer across a
+ * move or a restyle, so a drag costs nothing here.
+ */
+function ChecksChip() {
+  const revision = useEditorStore((state) => state.revision);
+  const checks = useMemo(() => {
+    void revision;
+    return checksOf(fileOf(useEditorStore.getState()));
+  }, [revision]);
+  const panelOpen = useUiStore((state) => state.checksPanelOpen);
+  const total = checks.findings.length;
+  if (total === 0 && !panelOpen) return null;
+  const pressing = checks.counts.error + checks.counts.warning;
+  const label = pressing > 0 ? `${pressing} to check` : count(total, 'note');
+  return (
+    <>
+      <Tooltip content={{ title: 'Checks', description: total === 0 ? 'Nothing found in the drawing.' : `${count(total, 'finding')} in the drawing. Open the list to go to each one.` }}>
+        {(tip) => (
+          <button
+            type="button"
+            className="dc-status-checks"
+            data-quiet={pressing === 0 || undefined}
+            // The name a screen reader or a voice command uses holds the words on the chip itself.
+            aria-label={total === 0 ? 'Checks, nothing found' : `Checks: ${label}, review`}
+            aria-expanded={panelOpen}
+            onClick={() => useUiStore.getState().setChecksPanelOpen(!panelOpen)}
+            {...tip}
+          >
+            <span className="dc-status-checks-glyph" aria-hidden="true" />
+            {total === 0 ? 'checks' : label}
           </button>
         )}
       </Tooltip>

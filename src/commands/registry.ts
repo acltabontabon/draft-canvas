@@ -6,6 +6,7 @@ import { fitPadding } from '../lib/fitPadding';
 import { ALL_PRESETS, DEV_PRESETS, PRESET_KEYWORDS, type Preset } from '../lib/presets';
 import { CONCEPT_PRESETS, conceptKeywords } from '../lib/conceptPresets';
 import { sequenceCommands, sequenceFromSelectionCommands, sequenceQuickCommands } from './sequence';
+import { checksOf } from '../store/checks';
 import { sequenceActions } from '../store/sequenceActions';
 import { bridgeProblems } from '../document/splice';
 import { CONVERTIBLE_TYPES, CONVERTIBLE_TYPE_NAMES, isConvertibleType } from '../document/convert';
@@ -402,6 +403,18 @@ export function openPointCommands(ctx: CommandContext): Command[] {
       // dispatched by `EditorScreen`'s `useKeyboard`, like every other bare key.
       shortcut: 'I',
       run: (inner) => inner.ui.setOpenPointPopover({ anchor, targets, creating: true }),
+    });
+  }
+
+  if (mode !== 'present') {
+    const found = checksOf(fileOf(ctx.editor)).findings.length;
+    commands.push({
+      id: 'checks',
+      title: 'Check this diagram',
+      group: 'view',
+      keywords: ['checks', 'findings', 'review', 'problems', 'lint', 'validate', 'loop', 'cycle', 'unfinished'],
+      hint: found > 0 ? count(found, 'finding') : 'Nothing found',
+      run: (inner) => inner.ui.setChecksPanelOpen(true),
     });
   }
 
@@ -2435,6 +2448,8 @@ const READ_SAFE_COMMANDS: ReadonlySet<string> = new Set([
   'seq-present',
   // Open points: the panel and Focus are views; raising or resolving one is not.
   'open-points',
+  // A list of what the drawing says, and a way to each part: it changes nothing.
+  'checks',
   'open-points-focus',
   // Camera, depth and spotlight — all transient view state.
   'fit',

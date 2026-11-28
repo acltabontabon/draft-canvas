@@ -584,6 +584,8 @@ export interface UiStore {
   openPointsPanelOpen: boolean;
   /** Whether the overview's resolved section is unfolded — kept for the session, like a disclosure. */
   openPointsResolvedOpen: boolean;
+  /** Whether the Checks list (`ChecksPanel.tsx`) is showing. It shares the Open points corner. */
+  checksPanelOpen: boolean;
   /** Whether the Flows panel — the one surface for flows (`FlowPanel.tsx`) — is visible. */
   flowPanelOpen: boolean;
   /** Whether the Outline — this view as a navigable list (`OutlinePanel.tsx`) — is docked open. */
@@ -860,6 +862,7 @@ export interface UiStore {
   setOpenPointPopover: (state: OpenPointPopoverState | null) => void;
   setOpenPointsPanelOpen: (open: boolean) => void;
   setOpenPointsResolvedOpen: (open: boolean) => void;
+  setChecksPanelOpen: (open: boolean) => void;
   setFlowPanelOpen: (open: boolean) => void;
   setOutlinePanelOpen: (open: boolean) => void;
   /** Opens it on `tab` (Styles when not said), or closes it. */
@@ -1078,6 +1081,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   openPointPopover: null,
   openPointsPanelOpen: false,
   openPointsResolvedOpen: false,
+  checksPanelOpen: false,
   flowPanelOpen: false,
   outlinePanelOpen: false,
   stylePanelOpen: false,
@@ -1235,7 +1239,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   resetPresentation: () =>
     set((state) => (state.presentation === PRESENTATION_AT_REST ? state : { presentation: PRESENTATION_AT_REST })),
   setOpenPointPopover: (openPointPopover) => set({ openPointPopover }),
-  setOpenPointsPanelOpen: (openPointsPanelOpen) => set({ openPointsPanelOpen }),
+  // Open points and Checks grow out of the same corner of the status bar: one at a time.
+  setOpenPointsPanelOpen: (openPointsPanelOpen) => set(openPointsPanelOpen ? { openPointsPanelOpen, checksPanelOpen: false } : { openPointsPanelOpen }),
+  setChecksPanelOpen: (checksPanelOpen) => set(checksPanelOpen ? { checksPanelOpen, openPointsPanelOpen: false } : { checksPanelOpen }),
   setOpenPointsResolvedOpen: (openPointsResolvedOpen) => set({ openPointsResolvedOpen }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
   // One panel is docked beside the canvas at a time: two would leave little canvas to look at.

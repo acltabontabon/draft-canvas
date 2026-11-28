@@ -127,11 +127,13 @@
               "attachments",
               "suggestions",
               "fullText",
-              "views"
+              "views",
+              "checks"
             ]
           }
         },
         "outage": {},
+        "impact": {},
         "cursor": {
           "type": "string"
         },

@@ -10,10 +10,13 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Added
 
+- **Checks** — The status bar counts what the drawing itself says is unfinished or tangled: a
+  queue nothing consumes, services that call each other in a loop, connectors that lead nowhere.
+  Open the list to go to each one, in any view. <!-- highlight -->
 - **Check a diagram from the command line** — `draftcanvas` reads a diagram with the editor's own
   code and reports what it finds: `inspect`, `check`, `impact`, `diff`, `review` and `render`. It never
   changes a diagram and has no network code. See
-  [Checking a diagram](docs/guides/checking-a-diagram.md). <!-- highlight -->
+  [Checking a diagram](docs/guides/checking-a-diagram.md).
 - **Evidence that is checked** — `draftcanvas check --repo` holds the files and names a diagram
   cites against the repository, and says which are gone, moved or no longer there. A Docker Compose
   file the diagram refers to is compared with it too.
@@ -23,6 +26,8 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Linked Junctions count** — A connector drawn in two halves that meet at a linked Junction is
   read as one relation by checks, impact, rules and the architecture diff, in one view or across
   views.
+- **Checks and impact for agents** — An agent can ask `read_diagram` for what the checks find
+  (`include: ["checks"]`) and for what a change to one element touches (`impact: {element}`).
 - **Rules of your own** — Declare what must hold in a `draftcanvas.json` (a client goes through
   the gateway, one writer per data store, nothing outside a boundary reaches its database) and
   `draftcanvas check` reports what breaks them. A waiver needs a reason and can expire.

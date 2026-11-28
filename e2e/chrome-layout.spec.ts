@@ -23,16 +23,16 @@ test.describe('narrow windows', () => {
       await page.setViewportSize({ width, height: 700 });
       await newCanvas(page, `Status bar ${width}`);
       // The chips that earn no room on a phone: stand-ins carry exactly the classes the real ones do,
-      // so the rule is exercised without drawing a runtime connector, an open point and a C4 level.
+      // so the rule is exercised without drawing a runtime connector, a finding, an open point and a C4 level.
       await page.locator('.dc-status-right').evaluate((right) => {
-        for (const name of ['dc-status-outage', 'dc-status-open-points', 'dc-status-level']) {
+        for (const name of ['dc-status-outage', 'dc-status-checks', 'dc-status-open-points', 'dc-status-level']) {
           const chip = document.createElement('button');
           chip.className = name;
           chip.textContent = name;
           right.prepend(chip);
         }
       });
-      for (const name of ['dc-status-outage', 'dc-status-open-points', 'dc-status-level']) {
+      for (const name of ['dc-status-outage', 'dc-status-checks', 'dc-status-open-points', 'dc-status-level']) {
         await expect(page.locator(`.dc-status-right > button.${name}`)).toBeHidden();
       }
       const bar = await page.locator('.dc-status').evaluate((element) => {

@@ -62,6 +62,7 @@ import { presentationScope, revealIn } from '../../presentation/presentationAtta
 import { useThemeValue } from '../../theme/useTheme';
 import { backOut, lookInside } from '../../commands/depthNavigation';
 import { OpenPointsPanel } from './OpenPointsPanel';
+import { ChecksPanel } from './ChecksPanel';
 import { OutlinePanel } from './OutlinePanel';
 import { StylePanel } from './StylePanel';
 import { useEditorDress } from '../../canvas/useEditorDress';
@@ -818,6 +819,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
             </Suspense>
           )}
           {!presenting && !tracing && <OpenPointsPanel buildCommandContext={buildCommandContext} />}
+          {!presenting && !tracing && <ChecksPanel buildCommandContext={buildCommandContext} />}
           <FlowBar playback={playback} follower={collabFollowing && mode !== 'present'} />
           <FocusIndicator />
           <LayoutBusyBar />
@@ -1446,6 +1448,11 @@ export function useKeyboard({
           // Escape of a walkthrough do nothing at all.
           if (useUiStore.getState().openPointsPanelOpen && state.mode !== 'present') {
             useUiStore.getState().setOpenPointsPanelOpen(false);
+            return;
+          }
+          // The Checks list is the same kind of surface, in the same corner.
+          if (useUiStore.getState().checksPanelOpen && state.mode !== 'present') {
+            useUiStore.getState().setChecksPanelOpen(false);
             return;
           }
           // A presenter's reveal closes first — Escape backs out one thing, not the whole presentation.
