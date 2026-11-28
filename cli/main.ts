@@ -22,6 +22,9 @@ Usage
       crosses, which flows run over it, and what the drawing says fails if it stops.
   draftcanvas diff <before> <after> [--json]
       What changed between two versions, in the diagram's own terms.
+  draftcanvas review --base <revision> [--repo <folder>] [--output <file.md>] [--json]
+      For a pull request: what every diagram in the repository changes about the architecture
+      since the base revision, as Markdown. Reads the repository's history; runs no git.
   draftcanvas render <diagram> [--output <file.svg>] [--theme light|dark] [--view <ids>] [--transparent]
       The diagram as SVG. The same bytes on every machine.
 
@@ -30,7 +33,7 @@ Exit codes
 `;
 
 /** Options that take the next argument as their value. */
-const VALUED = new Set(['repo', 'fail-on', 'output', 'theme', 'view', 'config', 'today']);
+const VALUED = new Set(['repo', 'fail-on', 'output', 'theme', 'view', 'config', 'today', 'base']);
 const SHORT: Record<string, string> = { o: 'output', h: 'help', v: 'version' };
 
 export function parseArgs(argv: readonly string[]): { command?: string; args: Args; error?: string } {

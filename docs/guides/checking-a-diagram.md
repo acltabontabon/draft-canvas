@@ -162,6 +162,28 @@ draftcanvas diff before.draftcanvas after.draftcanvas
   the same parts when their names and places make that unambiguous.
 - **Findings** the change introduced or resolved.
 
+## Reviewing a pull request
+
+```bash
+draftcanvas review --base origin/main --output review.md
+```
+
+`review` compares every diagram in the repository with the same file at the base revision and
+writes Markdown: per diagram, what changed in the architecture and which findings the change
+brought in or settled. Diagrams that did not change are left out. It exits `1` when a new finding
+reaches `--fail-on`.
+
+- The base revision is read from the repository's own history with a Git library. No `git`
+  program runs, so no hook, filter or setting in the repository takes part, and nothing is fetched:
+  in CI, fetch the base branch before the review.
+- Every name in the report is escaped. A label in a diagram from a fork cannot add a link, an
+  image, a mention or markup to the page.
+- Run it in the main checkout. A linked worktree or a submodule keeps its history elsewhere, and
+  `review` will not follow that.
+
+In a workflow, write the report to the job summary. Use the `pull_request` event with read
+permissions only, and never check out or build a fork's code with secrets present.
+
 ## A picture
 
 ```bash

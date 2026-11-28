@@ -25,6 +25,7 @@ import { deserializeDocument } from '../src/export/project';
 import { architectureChanges, labelOf, modelOf, type ArchModel } from '../src/model';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { fileSystemReader, RepoError } from './repo';
+import { review as reviewRepo, reviewMarkdown, ReviewError } from './review';
 
 export const EXIT = { ok: 0, findings: 1, usage: 2, failed: 3 } as const;
 
@@ -56,14 +57,16 @@ export async function run(command: string, args: Args, version: string): Promise
         return diff(args, version);
       case 'impact':
         return impact(args, version);
+      case 'review':
+        return await review(args, version);
       case 'render':
         return render(args);
       default:
-        throw new UsageError(`Unknown command "${command}". Try: inspect, check, impact, diff, render.`);
+        throw new UsageError(`Unknown command "${command}". Try: inspect, check, impact, diff, review, render.`);
     }
   } catch (error) {
     if (error instanceof UsageError) return { code: EXIT.usage, stdout: '', stderr: `${error.message}\n` };
-    if (error instanceof Failure || error instanceof RepoError) return { code: EXIT.failed, stdout: '', stderr: `${error.message}\n` };
+    if (error instanceof Failure || error instanceof RepoError || error instanceof ReviewError) return { code: EXIT.failed, stdout: '', stderr: `${error.message}\n` };
     return { code: EXIT.failed, stdout: '', stderr: `draftcanvas could not finish: ${error instanceof Error ? error.message : String(error)}\n` };
   }
 }
@@ -103,7 +106,8 @@ function text(args: Args, flag: string): string | undefined {
 function write(args: Args, input: string, content: string): Outcome {
   const target = text(args, 'output');
   if (!target) return out(content);
-  if (resolve(target) === resolve(input)) throw new UsageError('The output would overwrite the diagram.');
+  if (input && resolve(target) === resolve(input)) throw new UsageError('The output would overwrite the diagram.');
+  if (target.endsWith('.draftcanvas')) throw new UsageError('The output would be written as a diagram. Give it another name.');
   try {
     writeFileSync(target, content);
   } catch {
@@ -344,6 +348,22 @@ function impact(args: Args, version: string): Outcome {
     lines.push('', 'The drawing says nothing about what happens if it stops.');
   }
   return out(lines.join('\n'));
+}
+
+// --- review ----------------------------------------------------------------------------------
+
+async function review(args: Args, version: string): Promise<Outcome> {
+  only(args, ['json', 'repo', 'base', 'fail-on', 'output']);
+  const base = text(args, 'base');
+  if (!base) throw new UsageError('Name the revision to compare with: --base main.');
+  const threshold = text(args, 'fail-on') ?? 'error';
+  if (threshold !== 'never' && !(SEVERITIES as readonly string[]).includes(threshold)) throw new UsageError('--fail-on takes error, warning, info or never.');
+  const result = await reviewRepo(text(args, 'repo') ?? '.', base);
+  const introduced = result.diagrams.flatMap((diagram) => diagram.introduced);
+  const code = threshold !== 'never' && reaches(introduced, threshold as Severity) ? EXIT.findings : EXIT.ok;
+  const content = args.flags.json ? `${JSON.stringify({ schema: 'draftcanvas.review/1', tool: { name: 'draftcanvas', version }, ...result }, null, 2)}\n` : reviewMarkdown(result);
+  const written = write(args, '', content);
+  return { ...written, code };
 }
 
 // --- render ----------------------------------------------------------------------------------
