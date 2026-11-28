@@ -103,7 +103,7 @@ export function releaseScreenshots(tag, audience = 'all', mediaDirectory = relea
     }
     const { file, alt, platform } = screenshot;
     // A single lowercase filename, never a directory, URL, traversal or symlink outside the tag.
-    if (typeof file !== 'string' || !/^[a-z0-9][a-z0-9-]*\.png$/.test(file)) throw invalid('file must be a lowercase PNG filename, such as nodi.png.');
+    if (typeof file !== 'string' || !/^[a-z0-9][a-z0-9-]*\.png$/.test(file)) throw invalid('file must be a lowercase PNG filename, such as review-panel.png.');
     if (seen.has(file)) throw invalid(`duplicate image "${file}".`);
     seen.add(file);
     if (typeof alt !== 'string' || !alt.trim() || /[\r\n]/.test(alt)) throw invalid(`"${file}" needs a single-line alt description.`);

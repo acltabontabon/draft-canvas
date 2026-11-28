@@ -249,10 +249,15 @@ It previews first: **Apply** (`Enter`) is one undo step, **Cancel** (`Esc`) chan
 
 - Choose **Across →** or **Down ↓**. The bar counts the shapes that move and the connector
   crossings before and after.
+- **Spacing** is **Snug**, **Standard** or **Roomy**: closer together for a small screen, or more
+  room between everything.
 - **Result**, **Before** and **Moves** compare the layouts; **Moves** draws a trail from each
   shape's old place to its new one.
 - With flows, **Follow** (or **Arrange around a flow…** in `⌘K`) lays one flow out in a straight
   line and the rest around it.
+
+`⌘K` also opens the preview already set one way: **Arrange left to right**, **Arrange top down**,
+**Arrange with more room** and **Arrange snug**.
 
 ![The Arrange preview following a flow: its steps in one line, the rest around it.](../media/guides/arrange-follow-flow.png)
 

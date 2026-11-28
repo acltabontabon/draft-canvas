@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReactFlow, useViewportStore } from '@xyflow/react';
 import { flowFitViewNodes, hasSomethingToFit, useEditorStore, viewLevel } from '../../store/editorStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -12,7 +12,6 @@ import { Icon } from '../common/Icon';
 import { Tooltip, TooltipGroup } from '../common/Tooltip';
 import { toolbarLabel, toolbarTooltip } from './toolbar/toolbarTooltips';
 import { motionMs } from '../../lib/motion';
-import { retryableLazy } from '../common/retryableLazy';
 import { DesktopStatus } from '../../desktop/ui/DesktopStatus';
 import { hostKind } from '../../host/hostInfo';
 import { useUiStore } from '../../store/uiStore';
@@ -21,10 +20,6 @@ import { roomMayHaveOutage } from '../../store/outage';
 import { toggleOutage } from '../../commands/outage';
 import type { SaveFailure } from '../../storage/saveFailure';
 import { HistoryStatus } from './history/HistoryStatus';
-
-// Nodi's bunk, desktop-only like the companion it belongs to, and lazy like it: `__DESKTOP__` drops it
-// from the web build. Imported here as it was, the mascot it draws shipped in every web editor.
-const NodiDockChunk = __DESKTOP__ ? retryableLazy(() => import('../../desktop/ui/NodiDock').then((module) => ({ default: module.NodiDock }))) : null;
 
 /**
  * The save indicator is the only place the local-first promise is visible while
@@ -289,12 +284,6 @@ export function StatusBar({ durable, presenting = false, onResolveConflict, onSa
         <ZoomControls />
         <CanvasSettingsButton />
         <HelpMenu />
-        {/* Where the agent companion waits between conversations: the far end, under where it stands. */}
-        {NodiDockChunk && hostKind() === 'desktop' && (
-          <Suspense fallback={null}>
-            <NodiDockChunk.Component />
-          </Suspense>
-        )}
       </div>
     </footer>
   );

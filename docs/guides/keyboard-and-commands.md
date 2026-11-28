@@ -66,7 +66,6 @@ suggestions** from `⌘K`, or use the switch on the **Canvas** tab of
 | `F` | Flows panel |
 | `I` | Add an open point to the selection |
 | `⌘⇧E` or `⌘E` | Export |
-| `⌘J` | Desktop: show or hide [Nodi](connect-an-ai-agent.md#ask-nodi-on-the-canvas) |
 
 | While editing | New line | Finish | `Esc` |
 | --- | --- | --- | --- |

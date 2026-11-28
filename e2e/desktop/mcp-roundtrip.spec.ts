@@ -142,8 +142,8 @@ test('real MCP sidecar: inspect a candidate, commit, submit a semantic proposal,
 });
 
 
-for (const local of [false, true]) {
-  test(`real ${local ? 'local receipt confirmation' : 'MCP dispatcher'} renames without a read, preserves the file and supports undo`, async ({ page }) => {
+{
+  test('real MCP dispatcher renames without a read, preserves the file and supports undo', async ({ page }) => {
     await installMockShell(page);
     await page.goto('/');
     const handle = await page.evaluate(async () => {
@@ -161,21 +161,10 @@ for (const local of [false, true]) {
       const before = JSON.parse((await connection.file())!.text);
       expect(connection.client.schemaBytes).toBeLessThanOrEqual(700);
       const args = { diagramId: 'd_mcp00000001', requestId: randomUUID(), from: 'Orders API', to: 'Checkout API' };
-      if (local) {
-        const events = await connection.localRename(args);
-        expect(events).toEqual([
-          { type: 'tool-call', id: 'final-edit', tool: 'update_diagram', status: 'in-progress' },
-          { type: 'tool-call-update', id: 'final-edit', status: 'completed', error: null },
-          { type: 'message-chunk', text: 'Renamed the shape and saved the diagram. You can undo it in the editor.' },
-          { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: null, usage: null },
-        ]);
-        expect(connection.client.records).toEqual([]);
-      } else {
-        const renamed = await connection.client.call('diagram_tool', { tool: 'rename_element', args });
-        expect(renamed.ok, JSON.stringify(renamed.value)).toBe(true);
-        expect(renamed.value).toMatchObject({ applied: true, persisted: true, state: 'saved', undo: 'editor', updated: 1 });
-        expect(connection.client.records.map(record => record.tool)).toEqual(['diagram_tool']);
-      }
+      const renamed = await connection.client.call('diagram_tool', { tool: 'rename_element', args });
+      expect(renamed.ok, JSON.stringify(renamed.value)).toBe(true);
+      expect(renamed.value).toMatchObject({ applied: true, persisted: true, state: 'saved', undo: 'editor', updated: 1 });
+      expect(connection.client.records.map(record => record.tool)).toEqual(['diagram_tool']);
       const after = JSON.parse((await connection.file())!.text);
       const expected = structuredClone(before);
       expected.nodes.find((node: { id: string }) => node.id === 'api').text = 'Checkout API';

@@ -5,7 +5,6 @@
 
 pub mod agent;
 pub mod collab;
-pub mod companion;
 pub mod docs;
 pub mod documents;
 pub mod explorer;

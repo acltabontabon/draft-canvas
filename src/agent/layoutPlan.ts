@@ -30,7 +30,7 @@ import { tidyView } from './tidy';
 
 export type PlanDirection = 'right' | 'down';
 
-/** What a layout skill asks of an Arrange beyond its defaults. */
+/** What is asked of an Arrange beyond its defaults. */
 export interface ArrangePreset {
   direction?: PlanDirection;
   spacing?: 'compact' | 'comfortable' | 'spacious';
@@ -165,7 +165,7 @@ export function reuseOf(base: DraftDocument, view: DraftDocument): DraftDocument
 
 /**
  * Works out what Arrange would do to `doc` — the whole room, or `selection` (shape ids) — and applies
- * none of it. `preset` is a layout skill's ask: a direction kept as asked, a spacing, a flow to lay out
+ * none of it. `preset` is what was asked beyond the defaults: a direction kept as asked, a spacing, a flow to lay out
  * straight.
  */
 export function planArrange(doc: DraftDocument, ask: { selection?: readonly string[]; preset?: ArrangePreset } = {}): ArrangePlanResult {

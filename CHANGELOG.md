@@ -6,6 +6,29 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+### Shared
+
+#### Added
+
+- **Arrange your way** — The Arrange preview has **Spacing** (Snug, Standard or Roomy) and always
+  offers both reading directions. `⌘K` has **Arrange left to right**, **Arrange top down**,
+  **Arrange with more room** and **Arrange snug**.
+
+### Desktop
+
+#### Changed
+
+- **Connect your agent** — Settings → AI agents opens on whether an agent is connected, with
+  one-click setup for an agent found on your computer.
+
+#### Removed
+
+- **Nodi** — The built-in companion is gone, and `⌘J` with it. Your own coding agent does the same
+  work once connected in **Settings → AI agents**: it reads your diagrams, and you review what it
+  proposes on the canvas. Nodi's layout skills are now Arrange's own choices; **Straighten
+  connectors** and **Present** are in `⌘K` as before. Earlier conversations stay in your agent's
+  own history.
+
 ## [1.22.1] - 2026-11-27
 
 ### Shared

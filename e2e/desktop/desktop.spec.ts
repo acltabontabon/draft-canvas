@@ -232,7 +232,7 @@ test('Open file shares the explorer with file selection, previews, and native me
   await expect(page.locator('.dc-title-input')).toHaveValue('Selected from explorer');
 
   // Cancelling a file switch leaves both unsaved work and the file explorer intact.
-  // A corner clear of the node and of the agent companion, which rests in the bottom-right.
+  // A corner clear of the node.
   const pane = await page.locator(CANVAS).boundingBox();
   await drawService(page, { x: pane!.width - 60, y: 80 });
   await page.evaluate(() => { window.__shell.answer(2); window.__shell.emit({ type: 'menu', command: 'open' }); });
@@ -313,7 +313,7 @@ test('explorer opens a selected diagram without adding a project', async ({ page
   await expect(dialog).toBeHidden();
   await expect(page.locator('.dc-title-input')).toHaveValue('Opened in explorer');
   expect(await page.evaluate(() => window.__shell.calls().filter(call => call.command === 'explorer_add_project').length)).toBe(0);
-  // A corner clear of the node and of the agent companion, which rests in the bottom-right.
+  // A corner clear of the node.
   const pane = await page.locator(CANVAS).boundingBox();
   await drawService(page, { x: pane!.width - 60, y: 80 });
   await expect(status(page)).toContainText('Unsaved changes');
@@ -933,8 +933,7 @@ test('opens a file, says when it has unsaved changes, and asks before leaving it
 
   // Opening an existing diagram now frames its content, so the one node here sits centred in the
   // pane rather than near its old default position — draw well into a corner instead of a fixed
-  // centre-ish point, so this doesn't land back on top of it. The top-right one: the agent companion
-  // rests in the bottom-right.
+  // centre-ish point, so this doesn't land back on top of it.
   const pane = await page.locator(CANVAS).boundingBox();
   await drawService(page, { x: pane!.width - 60, y: 80 });
   await expect(status(page)).toContainText('Unsaved changes');
@@ -1329,10 +1328,16 @@ test('Settings moves between pages by keyboard, shows one agent setup at a time,
   await expect(general).toHaveAttribute('aria-selected', 'true');
   await agents.click();
 
+  // The page opens on the person's own agent: nothing can connect, and nothing is offered, while access is off.
+  const start = settings.getByRole('region', { name: 'Connect your agent' });
+  await expect(start.getByRole('status')).toHaveText('Agent access is off, so no agent can connect.');
+  await expect(start.getByRole('button')).toHaveCount(0);
+
   // Nothing to disconnect until access is on.
   const disconnect = settings.getByRole('button', { name: 'Disconnect agents' });
   await expect(disconnect).toBeDisabled();
   await settings.getByRole('switch', { name: 'Allow agent access' }).check();
+  await expect(start.getByRole('status')).toHaveText('No agent is connected yet.');
   await expect(disconnect).toBeEnabled();
 
   // A ticked folder reaches the folder inside it — said on the inner row, whose own box is left alone.
@@ -1353,7 +1358,11 @@ test('Settings moves between pages by keyboard, shows one agent setup at a time,
   // Codex is set up by the shell itself; the by-hand entry stays tucked away until asked for.
   const toml = settings.getByText(/\[mcp_servers\.draft-canvas\]/);
   await expect(toml).toBeHidden();
-  await settings.getByRole('button', { name: 'Add to Codex' }).click();
+  // The same one-click setup is at the top of the page, for the first agent the shell can set up
+  // itself: done there, it is done in the steps too.
+  await expect(settings.getByRole('button', { name: 'Add to Codex' })).toHaveCount(2);
+  await start.getByRole('button', { name: 'Add to Codex' }).click();
+  await expect(start.getByText('Codex is set up. Start a new Codex chat, then ask it to list your Draft Canvas diagrams.')).toBeVisible();
   await expect(settings.getByRole('status').filter({ hasText: 'Set up in ~/.codex/config.toml.' })).toBeVisible();
   // The same three steps for every agent. The first is ticked off, the agent is marked in the picker, and the
   // last says what "set up" can't: whether an agent has actually got through.
@@ -1365,6 +1374,7 @@ test('Settings moves between pages by keyboard, shows one agent setup at a time,
   await expect(steps.nth(2).getByRole('status')).toHaveText('No agent connected yet.');
   await page.evaluate(() => window.__shell.setAgent({ connections: 1 }));
   await expect(steps.nth(2).getByRole('status')).toHaveText('1 agent connected.');
+  await expect(start.getByRole('status')).toHaveText('1 agent is connected.');
   await expect(steps.nth(2).getByRole('heading', { name: 'Try it (done)' })).toBeVisible();
   await page.evaluate(() => window.__shell.setAgent({ connections: 0 }));
   await expect(steps.nth(2).getByRole('heading', { name: 'Try it', exact: true })).toBeVisible();

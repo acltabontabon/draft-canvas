@@ -53,8 +53,9 @@ pub struct Settings {
     /// Agent access as a whole (`agent/`). Off by default; turned on in Settings, never by the page's
     /// ordinary settings patch.
     pub agent_access: bool,
-    /// Project folders Nodi's runs may always read (read-only, `agent/code.rs`), as the person
-    /// answered "Always for this folder". Written by Rust on that answer, and let go from Settings.
+    /// Project folders the person allowed to be read (read-only, `agent/code.rs`). Nothing writes or
+    /// reads the list in this build: it is kept as stored so the folders a person already allowed are
+    /// still there when evidence checks reuse `agent/code.rs`.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub code_folders: Vec<String>,
     /// The project folder a diagram's code is in, when the person chose one: otherwise it is worked
@@ -63,7 +64,9 @@ pub struct Settings {
     pub code_folder_of: std::collections::BTreeMap<String, String>,
 }
 
-/// How many folders Nodi may always read, and diagrams with a folder chosen, are remembered.
+/// How many folders that may be read, and diagrams with a folder chosen, are remembered. Unused
+/// until evidence checks write the lists again.
+#[allow(dead_code)]
 pub const CODE_FOLDERS_CAP: usize = 100;
 
 /// How many projects are remembered. Past this the oldest is let go; its folder is untouched, and adding

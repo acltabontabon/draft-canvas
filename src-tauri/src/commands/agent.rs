@@ -86,17 +86,6 @@ pub struct AgentSettings {
     #[serde(flatten)]
     pub status: AgentStatus,
     pub projects: Vec<AgentProject>,
-    /// Project folders Nodi may always read, as the person allowed them in its chat.
-    pub code_folders: Vec<AgentCodeFolder>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentCodeFolder {
-    /// As stored: what `forgetCode` names to let it go.
-    pub path: String,
-    pub name: String,
-    pub display_path: String,
 }
 
 fn background(agent: &Agent) -> BackgroundSupport {
@@ -150,21 +139,6 @@ fn settings_of(state: &AppState, agent: &Agent) -> AgentSettings {
             background: background(agent),
         },
         projects,
-        code_folders: settings
-            .code_folders
-            .iter()
-            .map(|path| {
-                let folder = Path::new(path);
-                AgentCodeFolder {
-                    path: path.clone(),
-                    name: folder
-                        .file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| path.clone()),
-                    display_path: crate::paths::display_path(folder),
-                }
-            })
-            .collect(),
     }
 }
 
@@ -202,8 +176,6 @@ pub struct AgentPatch {
     pub project: Option<ProjectAccess>,
     /// Issue a new token: every connected agent is turned away and must reconnect.
     pub rotate: Option<bool>,
-    /// A folder Nodi may read, by the path `codeFolders` lists it under, to stop letting it.
-    pub forget_code: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -260,23 +232,7 @@ pub(crate) fn configure(
 pub async fn agent_configure(app: AppHandle, patch: AgentPatch) -> Result<AgentSettings, AppError> {
     run_blocking(&app, move |app, state| {
         let agent = app.state::<Arc<Agent>>();
-        let turning_off = patch.enabled == Some(false);
-        if let Some(path) = &patch.forget_code {
-            state
-                .settings
-                .update(|s| s.code_folders.retain(|f| f != path))?;
-            if let Some(companion) = app.try_state::<Arc<crate::companion::Companion>>() {
-                companion.forget_code_now(Path::new(path));
-            }
-            agent.runs.forget_code(Path::new(path));
-        }
         configure(state, &agent, patch)?;
-        // A companion run can't reach the diagram any more; it is stopped rather than left to fail.
-        if turning_off {
-            if let Some(companion) = app.try_state::<Arc<crate::companion::Companion>>() {
-                companion.stop_all(std::time::Duration::ZERO);
-            }
-        }
         state.events.emit(HostEvent::AgentChanged);
         Ok(settings_of(state, &agent))
     })
@@ -428,7 +384,6 @@ fn proposal_json(proposal: &Proposal, diagram: Option<&scope::Diagram>) -> Value
         "assumptions": proposal.assumptions,
         "openQuestions": proposal.open_questions,
         "sourceRef": proposal.source_ref,
-        "run": proposal.run,
         "createdAt": proposal.created_at,
         "updatedAt": proposal.updated_at,
         "resolvedAt": proposal.resolved_at,

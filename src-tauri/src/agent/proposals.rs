@@ -111,9 +111,6 @@ pub struct Proposal {
     pub open_questions: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_ref: Option<Value>,
-    /// The companion run that submitted it, so the companion can show its own proposal.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub run: Option<String>,
     pub created_at: u64,
     pub updated_at: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -379,7 +376,6 @@ mod tests {
             assumptions: vec![],
             open_questions: vec![],
             source_ref: None,
-            run: None,
             created_at: updated_at,
             updated_at,
             resolved_at: if status.is_terminal() {

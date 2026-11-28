@@ -1,6 +1,6 @@
 /**
  * Starting Arrange and Tidy up. Every way in — the palette, the context menu, the toolbar, the
- * desktop menu, Nodi's layout skills — goes through here, so every one of them gets the same answer:
+ * desktop menu, the Arrange bar's own choices — goes through here, so every one of them gets the same answer:
  * a preview to decide on (`ArrangeBar`, `TidyBar`), never a diagram that changed under the person's
  * hands. Only `editorStore.commitArrange` and `commitTidy` apply one.
  *
@@ -22,7 +22,7 @@ export interface LayoutHost {
 
 const live = (): LayoutHost => ({ editor: useEditorStore.getState(), ui: useUiStore.getState() });
 
-/** What a start came to, for a caller that has more to say (Nodi). */
+/** What a start came to, for a caller that has more to do (the Arrange bar keeps the direction shown). */
 export type LayoutOutcome = 'preview' | 'unchanged' | 'no-room' | 'nothing';
 
 /** The failure toast: a layout that ran past its limit says so; anything else is the load failure. */
@@ -51,7 +51,8 @@ async function busy<T>(kind: LayoutBusy['kind'], scoped: boolean, work: (signal:
 /**
  * Arrange diagram (and, with `selection`, Arrange selection): the view laid out again from scratch,
  * shown first as a preview with its reading direction to choose (`ArrangeBar`), applied only on
- * Apply. A `preset` is a layout skill's ask (a direction kept as asked, a spacing, a flow in a line).
+ * Apply. A `preset` is what was asked beyond the defaults (a direction kept as asked, a spacing, a
+ * flow in a line): `ARRANGE_PRESETS` names the ones ⌘K and the Arrange bar offer.
  */
 export async function startArrange(options: { selection?: boolean; preset?: ArrangePreset } = {}, host: LayoutHost = live()): Promise<LayoutOutcome> {
   try {
@@ -65,13 +66,26 @@ export async function startArrange(options: { selection?: boolean; preset?: Arra
       host.ui.notify('Already arranged.');
       return 'unchanged';
     }
-    host.ui.setArrangePreview(options.preset ? { ...plan, motion: true } : plan);
+    const spacing = options.preset?.spacing;
+    host.ui.setArrangePreview(options.preset ? { ...plan, motion: true, ...(spacing && spacing !== 'comfortable' ? { spacing } : {}) } : plan);
     return 'preview';
   } catch (error) {
     failed(error);
     return 'nothing';
   }
 }
+
+/**
+ * The named arrangements: Arrange with one thing said — which way to read, or how much room. Each is
+ * a ⌘K command (`commands/registry.ts`) and a choice in the Arrange bar (`ArrangeBar`); a flow laid
+ * out in a line is the bar's Follow and ⌘K's "Arrange around a flow".
+ */
+export const ARRANGE_PRESETS = [
+  { id: 'arrange-across', title: 'Arrange left to right', hint: 'Preview this view reading across, like a pipeline', keywords: ['across', 'horizontal', 'pipeline', 'right'], preset: { direction: 'right' } },
+  { id: 'arrange-down', title: 'Arrange top down', hint: 'Preview this view reading down, callers above what they call', keywords: ['down', 'vertical', 'top to bottom', 'hierarchy'], preset: { direction: 'down' } },
+  { id: 'arrange-roomy', title: 'Arrange with more room', hint: 'Preview this view with more space between everything', keywords: ['roomy', 'spacious', 'space', 'spread', 'breathe', 'wider'], preset: { spacing: 'spacious' } },
+  { id: 'arrange-snug', title: 'Arrange snug', hint: 'Preview this view closer together, for a smaller screen', keywords: ['snug', 'compact', 'tight', 'dense', 'closer', 'smaller'], preset: { spacing: 'compact' } },
+] as const satisfies readonly { id: string; title: string; hint: string; keywords: readonly string[]; preset: ArrangePreset }[];
 
 /**
  * Check layout: what reads badly as the diagram stands (names stacked into columns, captions with no

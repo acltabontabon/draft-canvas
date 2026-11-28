@@ -2,7 +2,7 @@
 name: draft-canvas
 description: Draft Canvas diagrams.
 metadata:
-  version: "35"
+  version: "100"
   contract: "3"
 ---
 

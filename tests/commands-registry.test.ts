@@ -51,9 +51,9 @@ describe('commandsFor — edit mode', () => {
 
   it('a shared (read-only) diagram offers no document-wide edits, but keeps Canvas settings', () => {
     useEditorStore.getState().addNode({ type: 'service', x: 0, y: 0, text: 'API' });
-    expect(ids(stubContext())).toEqual(expect.arrayContaining(['arrange', 'find-replace', 'settings']));
+    expect(ids(stubContext())).toEqual(expect.arrayContaining(['arrange', 'arrange-across', 'arrange-down', 'arrange-roomy', 'arrange-snug', 'find-replace', 'settings']));
     const shared = ids(stubContext({ ui: { ...useUiStore.getState(), readOnly: { sharedTitle: 'Shared' } } }));
-    expect(shared).not.toContain('arrange');
+    expect(shared.filter((id) => id.startsWith('arrange'))).toEqual([]);
     expect(shared).not.toContain('find-replace');
     // Personality is a device preference; only the document's Background is hidden in the dialog.
     expect(shared).toContain('settings');

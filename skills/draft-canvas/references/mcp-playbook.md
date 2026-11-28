@@ -173,7 +173,6 @@ Read the message and any `hint` before trying again.
 | `CONTAINMENT_CYCLE` | A boundary would end up inside itself, or an owner inside its own view | Pick another parent or owner |
 | `REQUEST_ID_MISMATCH` | That id belongs to another request | Use the original payload to check its outcome. Use a fresh UUID for a separate change |
 | `CANCELLED` | The person stopped the request | Ask before sending it again |
-| `PROPOSAL_ONLY`, `RUN_LIMIT` | In a Nodi run: changes go through review, and only to the run's diagram | Send the same ops with `submit_proposal`; work only on that diagram |
 | `UNSUPPORTED` | The app doesn't draw it that way: a second ordinary relationship in one direction, a self-loop, a behaviour the pairing doesn't offer, `link` or `replicas` on the wrong shape, a type change across shapes. The message says what to send instead. Rarely, the file itself can't be read as a diagram | Change the request as the message says and resend. A file that can't be read: tell the person, and don't overwrite it |
 
 Never answer a failed update by creating a new diagram.

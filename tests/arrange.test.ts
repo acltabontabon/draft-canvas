@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createAttachment, createDocument } from '../src/document/factory';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { LAYOUT_BACKSTOP_MS } from '../src/agent/layoutPlan';
-import { startArrange, startTidy } from '../src/commands/arrange';
+import { ARRANGE_PRESETS, startArrange, startTidy } from '../src/commands/arrange';
 import { useUiStore, type ArrangePreview } from '../src/store/uiStore';
 
 /**
@@ -184,13 +184,32 @@ describe('starting Arrange', () => {
     expect(await startArrange()).toBe('preview');
   });
 
-  it('a layout skill\'s ask is a preview too, set up to play its motion on Apply', async () => {
+  it('a preset\'s ask is a preview too, set up to play its motion on Apply', async () => {
     stacked();
     expect(await startArrange({ preset: { direction: 'down' } })).toBe('preview');
     const preview = useUiStore.getState().arrangePreview!;
     // Asked for "down": that is the one direction offered, and nothing has moved.
     expect(Object.keys(preview.options)).toEqual(['down']);
     expect(preview.motion).toBe(true);
+    expect(preview.spacing).toBeUndefined();
+  });
+
+  it('a preview remembers the spacing it was asked for, so the bar shows it and keeps it', async () => {
+    stacked();
+    expect(await startArrange({ preset: { spacing: 'spacious' } })).toBe('preview');
+    expect(useUiStore.getState().arrangePreview).toMatchObject({ spacing: 'spacious', motion: true });
+    useUiStore.getState().setArrangePreview(null);
+    expect(await startArrange({ preset: { spacing: 'comfortable' } })).toBe('preview');
+    expect(useUiStore.getState().arrangePreview!.spacing).toBeUndefined();
+  });
+
+  it('names an arrangement for each direction and each spacing, for ⌘K and the bar', () => {
+    expect(ARRANGE_PRESETS.map((named) => [named.id, named.preset])).toEqual([
+      ['arrange-across', { direction: 'right' }],
+      ['arrange-down', { direction: 'down' }],
+      ['arrange-roomy', { spacing: 'spacious' }],
+      ['arrange-snug', { spacing: 'compact' }],
+    ]);
   });
 
   it('does not offer a preview of a room that changed while it was worked out', async () => {

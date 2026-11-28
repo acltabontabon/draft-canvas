@@ -37,7 +37,7 @@ can present and share.
 | Guide | Covers |
 | --- | --- |
 | [Desktop app](guides/desktop.md) | Install, open project folders, manage updates |
-| [Bring your own agent](guides/connect-an-ai-agent.md) | Connect a coding agent, review its changes, ask Nodi |
+| [Bring your own agent](guides/connect-an-ai-agent.md) | Connect a coding agent and review its changes |
 | [Self-hosting](guides/self-hosting.md) | Build and serve the web app |
 
 ## Reference
