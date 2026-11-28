@@ -417,11 +417,49 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # The headless CLI (`cli/`), as one file to download and run with Node. Built here with read access
+  # and no secrets, tried once, and handed to `publish` beside the installers: named like them, so it
+  # gets the same checksum and build attestation. The architecture review action (`action.yml`)
+  # downloads exactly this file.
+  cli:
+    needs: [verify, acceptance, draft]
+    if: ${{ !cancelled() && needs.verify.result == 'success' && needs.acceptance.result == 'success' && needs.draft.result != 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.verify.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22.22.2
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+        timeout-minutes: 5
+      - name: Build and try the CLI
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          npm run cli:build
+          node dist-cli/draftcanvas.mjs --version
+          node dist-cli/draftcanvas.mjs check tests/fixtures/starters/starters/architectures/bff/bff.draftcanvas
+          mkdir -p installers
+          cp dist-cli/draftcanvas.mjs "installers/Draft-Canvas_${VERSION}_cli.mjs"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: desktop-package-${{ github.run_id }}-cli
+          path: installers/*
+          if-no-files-found: error
+          retention-days: 7
+
   # Checksums, the update manifest and a build attestation. A preview then goes out as a prerelease,
   # never "Latest"; a stable release leaves draft only after every package passed.
   publish:
-    needs: [verify, build]
-    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    needs: [verify, build, cli]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.cli.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -25,12 +25,17 @@ hold them against.
 files with the same code the editor uses and tells you what it finds. It never changes a diagram,
 has no network code and runs no other program, so it is safe to point at a checkout in CI.
 
-It is built from this repository and is not published as a package yet:
+It is one file that runs on Node 20 or later. Each release attaches it as
+`Draft-Canvas_<version>_cli.mjs`, listed in the release's `SHA256SUMS.txt` and covered by the same
+build attestation as the installers:
 
 ```bash
-npm run cli:build
-node dist-cli/draftcanvas.mjs --help
+gh release download v2.0.0 --repo acltabontabon/draft-canvas --pattern 'Draft-Canvas_2.0.0_cli.mjs'
+gh attestation verify Draft-Canvas_2.0.0_cli.mjs --repo acltabontabon/draft-canvas
+node Draft-Canvas_2.0.0_cli.mjs --help
 ```
+
+Or build it from this repository with `npm run cli:build`, which writes `dist-cli/draftcanvas.mjs`.
 
 The examples below call it `draftcanvas`.
 
@@ -203,8 +208,41 @@ reaches `--fail-on`.
 - Run it in the main checkout. A linked worktree or a submodule keeps its history elsewhere, and
   `review` will not follow that.
 
-In a workflow, write the report to the job summary. Use the `pull_request` event with read
-permissions only, and never check out or build a fork's code with secrets present.
+### As a GitHub Action
+
+```yaml
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  architecture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the base revision has to be in the checkout
+      - uses: acltabontabon/draft-canvas@v2.0.0
+```
+
+The action downloads the command-line tool attached to the release it is pinned to, checks it
+against that release's checksum and build attestation, runs `review` against the pull request's
+base commit and writes the report to the job summary. It fails the step when a new finding
+reaches `fail-on` (`error` unless you say otherwise).
+
+| Input | Default | |
+| --- | --- | --- |
+| `version` | the tag the action is pinned to | The release whose tool to use, such as `v2.0.0` |
+| `base` | the pull request's base commit | The revision to compare with |
+| `repo` | `.` | The checked-out repository |
+| `fail-on` | `error` | `error`, `warning`, `info` or `never` |
+| `cli-path` | | An already-built `draftcanvas.mjs` to use instead of downloading one |
+
+- Use the `pull_request` event with read permissions. The action runs nothing from the repository
+  under review, so a pull request from a fork is safe to review; it needs no secrets.
+- The only thing that leaves the runner is the download of the release file. No diagram, finding or
+  file from your repository is sent anywhere; the report stays in the job summary.
+- Pin it to a release tag, or to a commit with `version` set, so the tool it runs cannot change
+  under you.
 
 ## A picture
 
