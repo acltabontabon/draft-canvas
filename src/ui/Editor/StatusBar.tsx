@@ -349,7 +349,8 @@ function ChecksChip() {
             type="button"
             className="dc-status-checks"
             data-quiet={pressing === 0 || undefined}
-            aria-label={total === 0 ? 'Checks, nothing found' : `Checks: ${count(total, 'finding')}, review`}
+            // The name a screen reader or a voice command uses holds the words on the chip itself.
+            aria-label={total === 0 ? 'Checks, nothing found' : `Checks: ${label}, review`}
             aria-expanded={panelOpen}
             onClick={() => useUiStore.getState().setChecksPanelOpen(!panelOpen)}
             {...tip}

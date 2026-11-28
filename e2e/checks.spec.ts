@@ -45,6 +45,8 @@ test.describe('Checks', () => {
     await importDocument(page, store(), 'store.draftcanvas');
     await expect(chip(page)).toHaveText('2 to check');
     await expect(chip(page)).toHaveAttribute('aria-expanded', 'false');
+    // Its accessible name carries the words it shows.
+    await expect(chip(page)).toHaveAttribute('aria-label', 'Checks: 2 to check, review');
 
     await chip(page).click();
     await expect(panel(page)).toBeVisible();
