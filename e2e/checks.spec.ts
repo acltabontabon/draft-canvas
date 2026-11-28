@@ -38,7 +38,7 @@ async function importDocument(page: Page, document: unknown, fileName: string) {
 
 const chip = (page: Page) => page.locator('button.dc-status-checks');
 const panel = (page: Page) => page.getByRole('complementary', { name: 'Checks' });
-const selected = (page: Page) => page.locator('.react-flow__node.selected');
+const shape = (page: Page, id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
 
 test.describe('Checks', () => {
   test('counts what the drawing says and lists it, in this view and inside others', async ({ page }) => {
@@ -65,11 +65,13 @@ test.describe('Checks', () => {
     const rows = panel(page).locator('.dc-checks-main');
 
     await rows.nth(0).click();
-    await expect(selected(page)).toHaveAttribute('data-id', 'orders');
+    await expect(shape(page, 'orders')).toHaveClass(/\bselected\b/);
 
     await rows.nth(1).click();
-    await expect(page.locator('.react-flow__node[data-id="q"]')).toBeVisible();
-    await expect(selected(page)).toHaveAttribute('data-id', 'q');
+    // Asked of the shape itself: the one being left behind stays marked for a moment while the
+    // canvas moves into the other view, so "whatever is selected" can briefly be two things.
+    await expect(shape(page, 'q')).toBeVisible();
+    await expect(shape(page, 'q')).toHaveClass(/\bselected\b/);
     // The list is of the whole file, so it is still there, and still counts both.
     await expect(panel(page)).toBeVisible();
     await expect(chip(page)).toHaveText('2 to check');
