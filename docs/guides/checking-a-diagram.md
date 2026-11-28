@@ -23,8 +23,9 @@ draftcanvas inspect orders.draftcanvas
 around it and what connects to what, in every view. `--json` gives the same as data.
 
 A Junction is not a part. `A → Junction → B` is read as one relation from A to B, and a relation a
-Junction divides says so. A connector that ends at a linked Junction ("continues at A") is left
-as it is drawn: the link is a way to travel, not a relationship.
+Junction divides says so. A connector that ends at a linked Junction ("continues at A") carries on
+from the Junction's counterpart, in the same view or another, so the two halves are one relation.
+One whose counterpart is not drawn yet is left out, and is not an error.
 
 ## Checking it
 
@@ -86,15 +87,103 @@ Both are `potential-drift` and never fail a check: a Compose file is one setup, 
 architecture. A Compose file the diagram does not claim is ignored. The file is parsed, never run:
 no variable is expanded and no `include` or `extends` is followed.
 
+## Your own rules
+
+Put a `draftcanvas.json` at the top of the repository (or name one with `--config`) to check rules
+of your own:
+
+```json
+{
+  "version": 1,
+  "rules": [
+    { "id": "clients-use-the-gateway", "type": "must-go-through",
+      "from": { "kind": "actor" }, "to": { "kind": "api" }, "via": { "kind": "gateway" } },
+    { "id": "payments-owns-its-data", "type": "must-not-depend",
+      "from": { "boundary": "Orders" }, "to": { "boundary": "Payments", "kind": "database" },
+      "because": "ADR 12" },
+    { "id": "one-writer", "type": "no-shared-store", "severity": "warning" }
+  ],
+  "waivers": [
+    { "finding": "3f2a9c0e51b7d844", "reason": "Until the read model ships", "expires": "2027-06-30" }
+  ]
+}
+```
+
+| Rule | Holds when |
+| --- | --- |
+| `must-not-depend` | Nothing in `from` has a relation to anything in `to`; with `"transitive": true`, none reaches it at any distance |
+| `must-go-through` | No relation joins `from` and `to` directly: one end is always something in `via` |
+| `no-cycle` | The parts in `among` (all of them, if left out) form no loop |
+| `no-shared-store` | No data store in `store` (all, if left out) is written by more than one part |
+| `crossing-only-via` | Every relation across the named `boundary` has something in `via` at one end |
+| `must-have` | Every part in `of` has what `require` names: `technology`, `description`, `evidence` or `boundary` |
+
+A selector picks parts by `kind` (a shape type such as `service`, or a kind such as `gateway`,
+`api` or `cache`), `name` and `boundary` (`*` stands for anything), `technology`, and `scope`
+(`internal` or `external`). Every field given must match.
+
+- A broken rule is a `violation`, at the rule's `severity` (`error` unless it says otherwise).
+- A rule that matches nothing says so, so a misspelt name does not pass for ever.
+- Rules are data. There is no expression language and nothing in a rule file is run; a file with
+  an unknown field or rule type is refused.
+- A waiver sets one finding aside by its `id`, must give a `reason`, and may expire. After its last
+  day the finding is reported again, along with the waiver. A waiver for something no longer found
+  is reported too.
+
+Rules live beside the code, not in the diagram, so they are reviewed like code. In CI on a pull
+request, read the rule file from the base branch with `--config`: a file from the branch under
+review could waive what it introduces.
+
+## What a change would touch
+
+```bash
+draftcanvas impact orders.draftcanvas "Orders API"
+```
+
+`impact` takes a part's id or its label and lists what its work reaches, what reaches it, the
+boundaries its connectors cross, what it shares with other parts, the flows that run over it, and
+what the [outage walk](outage.md) says fails if it stops.
+
+All of it is read from the drawing: what is drawn as connected, not what was measured. Where the
+drawing says nothing, so does `impact`.
+
 ## What changed
 
 ```bash
 draftcanvas diff before.draftcanvas after.draftcanvas
 ```
 
-`diff` lists what changed between two versions in the diagram's own terms (parts added, connectors
-changed, shapes moved between views), matched by id as [history](history.md#compare-two-versions) does, and the
-findings the change introduced or resolved.
+`diff` reports three things:
+
+- **What changed in the file**, element by element, matched by id as
+  [history](history.md#compare-two-versions) does. Moves and restyles are included.
+- **What changed in the architecture**, as statements: a part added or removed, a relation that
+  became asynchronous, a data store that gained a user, a relation that now crosses a boundary. A
+  diagram that was only rearranged says so. A diagram drawn again with new ids is still read as
+  the same parts when their names and places make that unambiguous.
+- **Findings** the change introduced or resolved.
+
+## Reviewing a pull request
+
+```bash
+draftcanvas review --base origin/main --output review.md
+```
+
+`review` compares every diagram in the repository with the same file at the base revision and
+writes Markdown: per diagram, what changed in the architecture and which findings the change
+brought in or settled. Diagrams that did not change are left out. It exits `1` when a new finding
+reaches `--fail-on`.
+
+- The base revision is read from the repository's own history with a Git library. No `git`
+  program runs, so no hook, filter or setting in the repository takes part, and nothing is fetched:
+  in CI, fetch the base branch before the review.
+- Every name in the report is escaped. A label in a diagram from a fork cannot add a link, an
+  image, a mention or markup to the page.
+- Run it in the main checkout. A linked worktree or a submodule keeps its history elsewhere, and
+  `review` will not follow that.
+
+In a workflow, write the report to the job summary. Use the `pull_request` event with read
+permissions only, and never check out or build a fork's code with secrets present.
 
 ## A picture
 

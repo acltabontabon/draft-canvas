@@ -94,6 +94,42 @@ describe('draftcanvas', () => {
     expect((await main(['check', bad, '--repo', repo, '--fail-on', 'never'])).code).toBe(0);
   });
 
+  it('checks the rules in a rule file, and honours waivers until they expire', async () => {
+    const rulesFile = join(dir, 'rules.json');
+    writeFileSync(rulesFile, JSON.stringify({ version: 1, rules: [{ id: 'no-direct-db', type: 'must-not-depend', from: { name: 'Web' }, to: { kind: 'database' }, transitive: true, because: 'the API owns the data' }] }));
+    const failing = await main(['check', plain, '--config', rulesFile, '--json']);
+    expect(failing.code).toBe(1);
+    const report = JSON.parse(failing.stdout);
+    expect(report.rules).toBe(rulesFile);
+    expect(report.checked.rules).toBe(1);
+    expect(report.findings[0]).toMatchObject({ rule: 'rule/no-direct-db', class: 'violation', severity: 'error', subjects: ['web', 'db'] });
+
+    writeFileSync(rulesFile, JSON.stringify({ version: 1, rules: JSON.parse(readFileSync(rulesFile, 'utf8')).rules, waivers: [{ finding: report.findings[0].id, reason: 'until the read model ships', expires: '2027-06-30' }] }));
+    const waived = await main(['check', plain, '--config', rulesFile, '--today', '2027-06-30']);
+    expect(waived.code).toBe(0);
+    expect(waived.stdout).toContain('1 finding waived');
+    expect((await main(['check', plain, '--config', rulesFile, '--today', '2027-07-01'])).code).toBe(1);
+
+    // With --repo, the rule file at the top of the repository is read without being named.
+    writeFileSync(join(repo, 'draftcanvas.json'), JSON.stringify({ version: 1, rules: [{ id: 'docs', type: 'must-have', of: { kind: 'service' }, require: 'description', severity: 'warning' }] }));
+    const fromRepo = JSON.parse((await main(['check', plain, '--repo', repo, '--json'])).stdout);
+    expect(fromRepo.rules).toBe('draftcanvas.json');
+    expect(fromRepo.counts.warning).toBe(2);
+    rmSync(join(repo, 'draftcanvas.json'));
+  });
+
+  it('refuses a rule file it cannot read exactly', async () => {
+    const bad = join(dir, 'bad-rules.json');
+    writeFileSync(bad, JSON.stringify({ version: 1, rules: [{ id: 'x', type: 'eval', code: 'process.exit()' }] }));
+    const result = await main(['check', plain, '--config', bad]);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain('is not a valid rule file');
+    writeFileSync(bad, '{ nope');
+    expect(await main(['check', plain, '--config', bad])).toMatchObject({ code: 2 });
+    expect(await main(['check', plain, '--config', join(dir, 'none.json')])).toMatchObject({ code: 2 });
+    expect(await main(['check', plain, '--today', 'tomorrow'])).toMatchObject({ code: 2 });
+  });
+
   it('gives the same bytes for the same input', async () => {
     const bad = diagram('same.draftcanvas', shop([{ path: 'src/gone.ts', basis: 'observed' }]));
     for (const argv of [['check', bad, '--repo', repo, '--json'], ['inspect', plain, '--json'], ['render', plain]]) {
@@ -116,8 +152,27 @@ describe('draftcanvas', () => {
     expect(json.schema).toBe('draftcanvas.diff/1');
     expect(json.elements.filter((change: { change: string }) => change.change === 'added').map((change: { id: string }) => change.id).sort()).toEqual(['billing', 'e3', 'e4']);
     expect(json.findings.resolved).toEqual([]);
+    expect(json.architecture.map((change: { kind: string }) => change.kind)).toEqual(['part-added', 'relation-added', 'relation-added']);
+    expect(text.stdout).toContain('"Billing" now has a relation to "Orders" (writes). "Orders" now has 2 users.');
+    // A move alone is a change to the file and none to the architecture.
+    const shifted = diagram('shifted.draftcanvas', { ...before, nodes: before.nodes.map((node) => ({ ...node, y: 400 })) });
+    expect((await main(['diff', plain, shifted])).stdout).toContain('No change to the architecture: layout, style or annotation only.');
     expect((await main(['diff', plain, plain])).stdout).toBe('No changes.\n');
     expect((await main(['diff', plain])).code).toBe(2);
+  });
+
+  it('says what a change to one part touches, by id or by label', async () => {
+    const text = await main(['impact', plain, 'Orders API']);
+    expect(text.code).toBe(0);
+    expect(text.stdout).toContain('Reaches:     Orders');
+    expect(text.stdout).toContain('Reached by:  Web');
+    expect(text.stdout).toContain('not what was measured');
+    const json = JSON.parse((await main(['impact', plain, 'api', '--json'])).stdout);
+    expect(json).toMatchObject({ schema: 'draftcanvas.impact/1', id: 'api', downstream: { ids: ['db'] }, upstream: { ids: ['web'] } });
+    expect(await main(['impact', plain, 'No Such Part'])).toMatchObject({ code: 2 });
+    expect(await main(['impact', plain])).toMatchObject({ code: 2 });
+    const twins = diagram('twins.draftcanvas', { ...shop(), nodes: [service('a', 'Twin', 0), service('b', 'twin', 300)], edges: [] });
+    expect((await main(['impact', twins, 'Twin'])).stderr).toBe('2 parts are called "Twin". Use an id: a, b.\n');
   });
 
   it('renders SVG to a file or to the terminal', async () => {
@@ -211,4 +266,73 @@ describe('the repository reader', () => {
 // Kept last: it only needs the node helper, and shows the fixture still means what the tests assume.
 it('the fixture diagram is a valid file', () => {
   expect(createNode({ id: 'n', type: 'service', ...at }).type).toBe('service');
+});
+
+describe('reviewing a branch', () => {
+  it('escapes names so a diagram cannot add markup, links or mentions to the report', async () => {
+    const { md } = await import('../../cli/review');
+    expect(md('<img src=x onerror=alert(1)> [click](http://evil) @maintainer `code`\n# Heading')).toBe(
+      '&lt;img src=x onerror=alert\\(1\\)&gt; \\[click\\]\\(http:\u200b//evil\\) @\u200bmaintainer \\`code\\` \\# Heading',
+    );
+    expect(md('x'.repeat(500)).length).toBe(200);
+  });
+
+  it('says what each diagram changes since the base revision, without running git', async () => {
+    const git = (await import('isomorphic-git')).default;
+    const fs = await import('node:fs');
+    const work = join(dir, 'reviewed');
+    mkdirSync(join(work, 'docs'), { recursive: true });
+    const author = { name: 'T', email: 't@example.test', timestamp: 0, timezoneOffset: 0 };
+    await git.init({ fs, dir: work, defaultBranch: 'main' });
+    const write = (name: string, document: DraftDocument) => writeFileSync(join(work, name), serializeDocument(document));
+    write('docs/shop.draftcanvas', shop());
+    write('docs/gone.draftcanvas', shop());
+    write('docs/same.draftcanvas', shop());
+    for (const path of ['docs/shop.draftcanvas', 'docs/gone.draftcanvas', 'docs/same.draftcanvas']) await git.add({ fs, dir: work, filepath: path });
+    await git.commit({ fs, dir: work, message: 'base', author });
+
+    const before = shop();
+    write('docs/shop.draftcanvas', {
+      ...before,
+      nodes: [...before.nodes, service('evil', '<b>@team</b> [x](http://e)', 900)],
+      edges: [...before.edges, createEdge({ id: 'e9', source: 'evil', target: 'db', semantic: 'writes', semanticsOrigin: 'explicit' }), createEdge({ id: 'e8', source: 'api', target: 'db', semantic: 'writes', semanticsOrigin: 'explicit' })],
+    });
+    rmSync(join(work, 'docs/gone.draftcanvas'));
+    write('new.draftcanvas', shop());
+    writeFileSync(join(work, 'broken.draftcanvas'), '{ nope');
+
+    const result = await main(['review', '--repo', work, '--base', 'main']);
+    expect(result).toMatchObject({ code: 0, stderr: '' });
+    const report = result.stdout;
+    expect(report).toContain('## Architecture review');
+    expect(report).toContain('### docs/shop.draftcanvas');
+    expect(report).toContain('Added service "&lt;b&gt;@\u200bteam&lt;/b&gt; \\[x\\]\\(http:\u200b//e\\)".');
+    expect(report).not.toContain('<b>');
+    expect(report).toContain('**New findings**');
+    expect(report).toContain('### docs/gone.draftcanvas\n\nThe diagram was removed.');
+    expect(report).toContain('### new.draftcanvas\n\nA new diagram.');
+    expect(report).toContain('### broken.draftcanvas\n\nCould not be reviewed');
+    expect(report).not.toContain('same.draftcanvas');
+
+    const json = JSON.parse((await main(['review', '--repo', work, '--base', 'main', '--json'])).stdout);
+    expect(json.schema).toBe('draftcanvas.review/1');
+    expect(Object.fromEntries(json.diagrams.map((diagram: { path: string; status: string }) => [diagram.path, diagram.status]))).toEqual({
+      'broken.draftcanvas': 'unreadable',
+      'docs/gone.draftcanvas': 'removed',
+      'docs/same.draftcanvas': 'unchanged',
+      'docs/shop.draftcanvas': 'changed',
+      'new.draftcanvas': 'added',
+    });
+    // The shared store is a warning: it fails the review only when asked to.
+    expect((await main(['review', '--repo', work, '--base', 'main', '--fail-on', 'warning'])).code).toBe(1);
+    expect(result.stdout).toBe((await main(['review', '--repo', work, '--base', 'main'])).stdout);
+  });
+
+  it('refuses a base it cannot read, and a folder that is not a repository', async () => {
+    expect(await main(['review', '--repo', join(dir, 'reviewed'), '--base', 'no-such-branch'])).toMatchObject({ code: 3 });
+    expect(await main(['review', '--repo', join(dir, 'reviewed'), '--base', '--upload-pack=x'])).toMatchObject({ code: 3 });
+    expect(await main(['review', '--repo', repo, '--base', 'main'])).toMatchObject({ code: 3 });
+    expect(await main(['review', '--repo', repo])).toMatchObject({ code: 2 });
+    expect(await main(['review', '--repo', join(dir, 'reviewed'), '--base', 'main', '-o', join(dir, 'x.draftcanvas')])).toMatchObject({ code: 2 });
+  });
 });

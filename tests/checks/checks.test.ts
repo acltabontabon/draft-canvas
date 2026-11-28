@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { builtinFindings, checkAnchors, checkCompose, checkDiagram, composeServices, finding, fingerprint, linesNaming, memoryReader, normalizeRepoPath, reaches, sortFindings, type FindingInput, type RepoReader } from '../../src/checks';
+import { applyWaivers, assertFindings, builtinFindings, checkAnchors, checkCompose, checkDiagram, composeServices, finding, fingerprint, impactOf, linesNaming, memoryReader, normalizeRepoPath, parseConfig, reaches, sortFindings, type FindingInput, type RepoReader, type Rule } from '../../src/checks';
 import { createDocument, createEdge, createNode } from '../../src/document/factory';
 import type { DraftDocument, DraftEdge, DraftNode, SourceEvidence } from '../../src/document/types';
 import { modelOf } from '../../src/model';
@@ -200,7 +200,7 @@ describe('Docker Compose', () => {
 describe('checking a diagram', () => {
   it('checks the drawing alone when no repository is given', async () => {
     const report = await checkDiagram(file([service('a', 'A', [seen('src/gone.ts')])]));
-    expect(report).toEqual({ findings: [], counts: { error: 0, warning: 0, info: 0 }, checked: { views: 1, parts: 1, relations: 0 } });
+    expect(report).toEqual({ findings: [], counts: { error: 0, warning: 0, info: 0 }, waived: [], checked: { views: 1, parts: 1, relations: 0 } });
   });
 
   it('holds evidence against a repository and says what it covered', async () => {
@@ -219,5 +219,162 @@ describe('checking a diagram', () => {
   it('gives the same report for the same input', async () => {
     const make = () => checkDiagram(file([service('a', 'A', [seen('src/gone.ts')]), service('b', 'B'), service('c', 'C')], [calls('ab', 'a', 'b'), calls('bc', 'b', 'c'), calls('ca', 'c', 'a')]), { repo: memoryReader({}) });
     expect(JSON.stringify(await make())).toBe(JSON.stringify(await make()));
+  });
+});
+
+describe('impact', () => {
+  const group = (id: string, text: string) => createNode({ id, type: 'group', text, boundaryPreset: 'system', ...at });
+  const inner = service('ctl', 'Controller');
+  const api: DraftNode = { ...service('api', 'Orders API', undefined, { parentId: 'sys' }), inside: { nodes: [inner], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } } };
+  const nodes = [group('sys', 'Shop'), service('web', 'Web'), api, service('billing', 'Billing', undefined, { parentId: 'sys' }), createNode({ id: 'db', type: 'database', databaseKind: 'sql', text: 'Orders', parentId: 'sys', ...at })];
+  const writes = (id: string, source: string) => createEdge({ id, source, target: 'db', semantic: 'writes', semanticsOrigin: 'explicit' });
+  const edges = [calls('1', 'web', 'api'), writes('2', 'api'), writes('3', 'billing')];
+  const shop: DraftDocument = {
+    ...file(nodes, edges),
+    flows: [{ id: 'f1', title: 'Place an order', steps: [{ id: 's1', edgeId: '1' }, { id: 's2', edgeId: '2' }] }, { id: 'f2', title: 'Bill', steps: [{ id: 's1', edgeId: '3' }] }],
+    openPoints: [{ id: 'op1', kind: 'tentative', targets: [{ kind: 'edge', id: '2' }] }, { id: 'op2', kind: 'tentative', targets: [{ kind: 'node', id: 'billing' }] }],
+  };
+
+  it('says what a part reaches, shares and crosses, and which flows and open points touch it', () => {
+    const impact = impactOf(shop, 'api')!;
+    expect(impact).toMatchObject({
+      id: 'api',
+      kind: 'part',
+      name: 'Orders API',
+      room: [],
+      inside: [],
+      contains: ['ctl'],
+      downstream: { ids: ['db'], total: 1, truncated: false },
+      upstream: { ids: ['web'], total: 1, truncated: false },
+      crossings: [{ relation: '1', other: 'web', boundaries: ['sys'] }],
+      shares: [{ id: 'db', with: ['billing'] }],
+      flows: [{ id: 'f1', title: 'Place an order' }],
+      openPoints: ['op1'],
+    });
+    expect(impact.basis).toContain('not what was measured');
+  });
+
+  it('carries the outage walk\'s reading, by the same rules', () => {
+    const impact = impactOf(shop, 'api')!;
+    expect(impact.outage!.headline).toContain('Orders API');
+    expect(impact.outage!.affected.map((entry) => entry.id)).toContain('api');
+    expect(impact.outage!.flows.find((flow) => flow.id === 'f1')).toMatchObject({ state: 'breaks' });
+    expect(impact.outage!.flows.find((flow) => flow.id === 'f2')).toMatchObject({ state: 'unaffected' });
+  });
+
+  it('reads a part inside another, a boundary, and nothing for an id the file does not have', () => {
+    expect(impactOf(shop, 'ctl')).toMatchObject({ room: ['api'], inside: ['api'], contains: [], downstream: { ids: [] } });
+    expect(impactOf(shop, 'ctl')!.outage).toMatchObject({ affected: [{ id: 'ctl', state: 'down' }], notes: [], flows: [] });
+    expect(impactOf(shop, 'sys')).toMatchObject({ kind: 'boundary', name: 'Shop', contains: ['api', 'billing', 'db'] });
+    expect(impactOf(shop, 'nope')).toBeUndefined();
+    expect(impactOf(shop, '2')).toBeUndefined();
+  });
+});
+
+describe('declared rules', () => {
+  const group = (id: string, text: string, parentId?: string) => createNode({ id, type: 'group', text, ...(parentId ? { parentId } : {}), ...at });
+  const store = (id: string, text: string, parentId?: string) => createNode({ id, type: 'database', databaseKind: 'sql', text, technology: 'PostgreSQL 16', ...(parentId ? { parentId } : {}), ...at });
+  const edge = (id: string, source: string, target: string, semantic: 'calls' | 'writes' | 'http' = 'calls') => createEdge({ id, source, target, semantic, semanticsOrigin: 'explicit' });
+  const nodes = [
+    group('pay', 'Payments'),
+    group('ord', 'Orders'),
+    service('web', 'Web App'),
+    service('gw', 'Gateway', undefined, { serviceKind: 'gateway' }),
+    service('orders', 'Orders API', undefined, { parentId: 'ord', serviceKind: 'api' }),
+    service('billing', 'Billing API', undefined, { parentId: 'pay', serviceKind: 'api' }),
+    store('paydb', 'Payments DB', 'pay'),
+  ];
+  const edges = [edge('1', 'web', 'gw', 'http'), edge('2', 'gw', 'orders', 'http'), edge('3', 'web', 'billing', 'http'), edge('4', 'orders', 'paydb', 'writes'), edge('5', 'billing', 'paydb', 'writes'), edge('6', 'billing', 'orders'), edge('7', 'orders', 'billing')];
+  const model = modelOf(file(nodes, edges));
+  const rule = (input: Record<string, unknown>): Rule => {
+    const parsed = parseConfig({ version: 1, rules: [input] });
+    if (!parsed.ok) throw new Error(parsed.errors.join(' '));
+    return parsed.config.rules[0]!;
+  };
+  const found = (input: Record<string, unknown>) => assertFindings(model, [rule(input)]).map((entry) => [entry.class, entry.subjects.slice(0, 3)]);
+
+  it('forbid a dependency, directly or at any distance', () => {
+    expect(found({ id: 'own-data', type: 'must-not-depend', from: { boundary: 'Orders' }, to: { boundary: 'Payments', kind: 'database' } })).toEqual([['violation', ['orders', 'paydb', '4']]]);
+    expect(found({ id: 'far', type: 'must-not-depend', from: { name: 'web*' }, to: { technology: 'postgresql' }, transitive: true })).toEqual([['violation', ['web', 'paydb']]]);
+    expect(found({ id: 'fine', type: 'must-not-depend', from: { name: 'Gateway' }, to: { kind: ['database'] } })).toEqual([]);
+  });
+
+  it('require a way through, and a single way across a boundary', () => {
+    expect(found({ id: 'via-gw', type: 'must-go-through', from: { name: 'Web App' }, to: { kind: 'api' }, via: { kind: 'gateway' } })).toEqual([['violation', ['web', 'billing', '3']]]);
+    expect(found({ id: 'edge', type: 'crossing-only-via', boundary: 'Payments', via: { name: 'Billing API' } })).toEqual([['violation', ['orders', 'paydb', '4']]]);
+  });
+
+  it('forbid loops and shared stores, and require what a part must carry', () => {
+    expect(found({ id: 'acyclic', type: 'no-cycle' })).toEqual([['violation', ['billing', 'orders']]]);
+    expect(found({ id: 'one-writer', type: 'no-shared-store' })).toEqual([['violation', ['paydb', 'orders', 'billing']]]);
+    expect(found({ id: 'tech', type: 'must-have', of: { kind: 'api' }, require: 'technology' })).toEqual([
+      ['violation', ['orders']],
+      ['violation', ['billing']],
+    ]);
+    expect(found({ id: 'tech-db', type: 'must-have', of: { kind: 'database' }, require: 'technology' })).toEqual([]);
+  });
+
+  it('say so when a rule matches nothing, rather than passing in silence', () => {
+    const empty = assertFindings(model, [rule({ id: 'typo', type: 'must-not-depend', from: { boundary: 'Ordres' }, to: {} })]);
+    expect(empty.map((entry) => [entry.class, entry.severity, entry.message])).toEqual([['ambiguous', 'info', 'Rule "typo" checked nothing: no part of the diagram matches its "from".']]);
+  });
+
+  it('carry the severity and the reason the person gave', () => {
+    const [only] = assertFindings(model, [rule({ id: 'one-writer', type: 'no-shared-store', severity: 'warning', because: 'ADR 12' })]);
+    expect(only).toMatchObject({ rule: 'rule/one-writer', severity: 'warning' });
+    expect(only!.message).toBe('"Payments DB" is written by "Orders API", "Billing API"; rule "one-writer" allows one writer. (ADR 12)');
+  });
+
+  it('refuse a rule file that could be misread', () => {
+    const errors = (input: unknown) => {
+      const parsed = parseConfig(input);
+      return parsed.ok ? [] : parsed.errors;
+    };
+    expect(errors([])).toHaveLength(1);
+    expect(errors({ version: 2 })).toEqual(['"version" must be 1.']);
+    expect(errors({ version: 1, rules: [{ id: 'a', type: 'run-script', script: 'rm -rf /' }] })).toEqual(['rules[0].type must be one of: must-not-depend, must-go-through, no-cycle, no-shared-store, crossing-only-via, must-have.']);
+    expect(errors({ version: 1, rules: [{ id: 'a', type: 'no-cycle' }, { id: 'a', type: 'no-cycle' }] })).toEqual(['Two rules are called "a".']);
+    expect(errors({ version: 1, rules: [{ id: 'a', type: 'no-cycle', among: { regex: '.*' } }] })).toEqual(['rules[0].among has an unknown field "regex".']);
+    expect(errors({ version: 1, rules: [{ id: 'a', type: 'must-have', require: 'owner' }] })).toHaveLength(1);
+    expect(errors({ version: 1, rules: [{ id: 'a', type: 'no-cycle', severity: 'fatal' }] })).toHaveLength(1);
+    expect(errors({ version: 1, waivers: [{ finding: 'abc', reason: 'x' }] })).toHaveLength(1);
+    expect(errors({ version: 1, waivers: [{ finding: '0123456789abcdef' }] })).toHaveLength(1);
+    expect(errors({ version: 1, waivers: [{ finding: '0123456789abcdef', reason: 'ok', expires: '2027-02-30' }] })).toHaveLength(1);
+    expect(errors({ version: 1, extra: true })).toEqual(['Unknown field "extra".']);
+    expect(parseConfig({ version: 1 })).toEqual({ ok: true, config: { version: 1, rules: [], waivers: [] } });
+  });
+});
+
+describe('waivers', () => {
+  const make = (rule: string) => finding({ rule, class: 'violation', severity: 'error', subjects: ['a'], message: rule });
+  const a = make('rule/a');
+  const b = make('rule/b');
+
+  it('set a finding aside with its reason, until the day after they expire', () => {
+    const waivers = [{ finding: a.id, reason: 'accepted for the migration', expires: '2027-03-01' }];
+    const during = applyWaivers([a, b], waivers, '2027-03-01');
+    expect(during.findings).toEqual([b]);
+    expect(during.waived).toEqual([{ finding: a, reason: 'accepted for the migration', expires: '2027-03-01' }]);
+    const after = applyWaivers([a, b], waivers, '2027-03-02');
+    expect(after.waived).toEqual([]);
+    expect(after.findings.map((entry) => entry.rule)).toEqual(['rule/a', 'config/expired-waiver', 'rule/b']);
+    expect(after.findings[1]).toMatchObject({ severity: 'warning' });
+  });
+
+  it('report a waiver for something no longer found', () => {
+    const settled = applyWaivers([b], [{ finding: a.id, reason: 'old' }], '2027-01-01');
+    expect(settled.findings.map((entry) => [entry.rule, entry.severity])).toEqual([['rule/b', 'error'], ['config/unused-waiver', 'info']]);
+  });
+
+  it('are applied by a check, which lists what was waived', async () => {
+    const doc = file([service('a', 'A'), service('b', 'B')], [calls('ab', 'a', 'b'), calls('ba', 'b', 'a')]);
+    const config = { version: 1 as const, rules: [], waivers: [] as { finding: string; reason: string }[] };
+    const plain = await checkDiagram(doc, { config, today: '2027-01-01' });
+    expect(rules(plain.findings)).toEqual(['review/call-cycle']);
+    config.waivers.push({ finding: plain.findings[0]!.id, reason: 'two halves of one service' });
+    const waived = await checkDiagram(doc, { config, today: '2027-01-01' });
+    expect(waived.findings).toEqual([]);
+    expect(waived.waived).toMatchObject([{ rule: 'review/call-cycle', reason: 'two halves of one service' }]);
+    expect(waived.checked.rules).toBe(0);
   });
 });

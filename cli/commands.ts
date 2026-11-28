@@ -14,7 +14,7 @@
 
 import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { checkDiagram, builtinFindings, countBySeverity, reaches, sortFindings, SEVERITIES, type CheckReport, type Finding, type Severity } from '../src/checks';
+import { checkDiagram, builtinFindings, countBySeverity, impactOf, parseConfig, reaches, sortFindings, SEVERITIES, type CheckConfig, type CheckReport, type Finding, type RepoReader, type Severity } from '../src/checks';
 import { viewOf } from '../src/depth/tree';
 import { LIMITS } from '../src/document/limits';
 import { CURRENT_VERSION, type DraftDocument } from '../src/document/types';
@@ -22,9 +22,10 @@ import { realRepairs } from '../src/document/validate';
 import { describe } from '../src/evolution/summary';
 import { isEmptyDiff, semanticDiff } from '../src/evolution/diff';
 import { deserializeDocument } from '../src/export/project';
-import { labelOf, modelOf, type ArchModel } from '../src/model';
+import { architectureChanges, labelOf, modelOf, type ArchModel } from '../src/model';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { fileSystemReader, RepoError } from './repo';
+import { review as reviewRepo, reviewMarkdown, ReviewError } from './review';
 
 export const EXIT = { ok: 0, findings: 1, usage: 2, failed: 3 } as const;
 
@@ -54,14 +55,18 @@ export async function run(command: string, args: Args, version: string): Promise
         return await check(args, version);
       case 'diff':
         return diff(args, version);
+      case 'impact':
+        return impact(args, version);
+      case 'review':
+        return await review(args, version);
       case 'render':
         return render(args);
       default:
-        throw new UsageError(`Unknown command "${command}". Try: inspect, check, diff, render.`);
+        throw new UsageError(`Unknown command "${command}". Try: inspect, check, impact, diff, review, render.`);
     }
   } catch (error) {
     if (error instanceof UsageError) return { code: EXIT.usage, stdout: '', stderr: `${error.message}\n` };
-    if (error instanceof Failure || error instanceof RepoError) return { code: EXIT.failed, stdout: '', stderr: `${error.message}\n` };
+    if (error instanceof Failure || error instanceof RepoError || error instanceof ReviewError) return { code: EXIT.failed, stdout: '', stderr: `${error.message}\n` };
     return { code: EXIT.failed, stdout: '', stderr: `draftcanvas could not finish: ${error instanceof Error ? error.message : String(error)}\n` };
   }
 }
@@ -101,7 +106,8 @@ function text(args: Args, flag: string): string | undefined {
 function write(args: Args, input: string, content: string): Outcome {
   const target = text(args, 'output');
   if (!target) return out(content);
-  if (resolve(target) === resolve(input)) throw new UsageError('The output would overwrite the diagram.');
+  if (input && resolve(target) === resolve(input)) throw new UsageError('The output would overwrite the diagram.');
+  if (target.endsWith('.draftcanvas')) throw new UsageError('The output would be written as a diagram. Give it another name.');
   try {
     writeFileSync(target, content);
   } catch {
@@ -168,13 +174,53 @@ function inspect(args: Args, version: string): Outcome {
 
 // --- check -----------------------------------------------------------------------------------
 
+/** The rule file: the one `--config` names, else `draftcanvas.json` at the top of `--repo`, else none. */
+async function configFor(args: Args, repo: RepoReader | undefined): Promise<{ config?: CheckConfig; from?: string }> {
+  const named = text(args, 'config');
+  let source: string | undefined;
+  let from: string | undefined;
+  if (named) {
+    try {
+      if (statSync(named).size > 1024 * 1024) throw new UsageError(`${named} is too large to be a rule file.`);
+      source = readFileSync(named, 'utf8');
+    } catch (error) {
+      if (error instanceof UsageError) throw error;
+      throw new UsageError(`${named} could not be read.`);
+    }
+    from = named;
+  } else if (repo) {
+    const read = await repo.read('draftcanvas.json');
+    if (read.status === 'ok') {
+      source = read.text;
+      from = 'draftcanvas.json';
+    } else if (read.status !== 'missing') {
+      throw new UsageError('draftcanvas.json in the repository could not be read as a rule file.');
+    }
+  }
+  if (source === undefined) return {};
+  let raw: unknown;
+  try {
+    raw = JSON.parse(source);
+  } catch {
+    throw new UsageError(`${from} is not valid JSON.`);
+  }
+  const parsed = parseConfig(raw);
+  if (!parsed.ok) throw new UsageError(`${from} is not a valid rule file:\n${parsed.errors.slice(0, 20).map((line) => `  ${line}`).join('\n')}`);
+  return { config: parsed.config, from };
+}
+
 async function check(args: Args, version: string): Promise<Outcome> {
-  only(args, ['json', 'repo', 'fail-on']);
+  only(args, ['json', 'repo', 'fail-on', 'config', 'today']);
   const threshold = text(args, 'fail-on') ?? 'error';
   if (threshold !== 'never' && !(SEVERITIES as readonly string[]).includes(threshold)) throw new UsageError('--fail-on takes error, warning, info or never.');
   const { path, document, repairs } = load(args.positional[0]);
   const folder = text(args, 'repo');
-  const report = await checkDiagram(document, folder ? { repo: fileSystemReader(folder) } : {});
+  const repo = folder ? fileSystemReader(folder) : undefined;
+  const { config, from } = await configFor(args, repo);
+  // The day decides which waivers have expired. `--today` pins it, so a report can be reproduced.
+  const today = text(args, 'today') ?? new Date().toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) throw new UsageError('--today takes a date as YYYY-MM-DD.');
+  const report = await checkDiagram(document, { ...(repo ? { repo } : {}), ...(config ? { config } : {}), today });
   const findings = sortFindings([...repairFindings(repairs), ...report.findings]);
   const counts = countBySeverity(findings);
   const failed = threshold !== 'never' && reaches(findings, threshold as Severity);
@@ -183,7 +229,7 @@ async function check(args: Args, version: string): Promise<Outcome> {
   const code = broken ? EXIT.failed : failed ? EXIT.findings : EXIT.ok;
 
   if (args.flags.json) {
-    return out(JSON.stringify({ schema: 'draftcanvas.check/1', tool: { name: 'draftcanvas', version }, diagram: { path, title: document.metadata.title, format: CURRENT_VERSION }, checked: report.checked, counts, findings }, null, 2), code);
+    return out(JSON.stringify({ schema: 'draftcanvas.check/1', tool: { name: 'draftcanvas', version }, diagram: { path, title: document.metadata.title, format: CURRENT_VERSION }, ...(from ? { rules: from } : {}), checked: report.checked, counts, findings, waived: report.waived }, null, 2), code);
   }
   return out(checkText(document, path, { ...report, findings, counts }, !!folder), code);
 }
@@ -195,7 +241,8 @@ function checkText(document: DraftDocument, path: string, report: CheckReport, w
   const lines = [`${document.metadata.title} — ${path}`];
   lines.push(
     `${plural(checked.views, 'view')} · ${plural(checked.parts, 'part')} · ${plural(checked.relations, 'relation')}` +
-      (checked.evidence ? ` · ${plural(checked.evidence.cited, 'evidence entry', 'evidence entries')}, ${checked.evidence.intact} intact` : ''),
+      (checked.evidence ? ` · ${plural(checked.evidence.cited, 'evidence entry', 'evidence entries')}, ${checked.evidence.intact} intact` : '') +
+      (checked.rules !== undefined ? ` · ${plural(checked.rules, 'rule')}` : ''),
   );
   if (!withRepo && anyEvidence) lines.push('Evidence was not checked: name the repository with --repo.');
   lines.push('');
@@ -207,6 +254,7 @@ function checkText(document: DraftDocument, path: string, report: CheckReport, w
   if (report.findings.length) lines.push('');
   const { error, warning, info } = report.counts;
   lines.push(report.findings.length === 0 ? 'Nothing found.' : `${plural(error, 'error')}, ${plural(warning, 'warning')}, ${plural(info, 'note')}.`);
+  if (report.waived.length) lines.push(`${plural(report.waived.length, 'finding')} waived: ${report.waived.map((entry) => entry.id).join(', ')}.`);
   return lines.join('\n');
 }
 
@@ -218,6 +266,7 @@ function diff(args: Args, version: string): Outcome {
   const after = load(args.positional[1], 'the later diagram');
   const changes = semanticDiff(before.document, after.document);
   const description = describe(changes);
+  const architecture = architectureChanges(modelOf(before.document), modelOf(after.document));
   const was = new Map(builtinFindings(before.document).map((entry) => [entry.id, entry]));
   const now = new Map(builtinFindings(after.document).map((entry) => [entry.id, entry]));
   const introduced = sortFindings([...now.values()].filter((entry) => !was.has(entry.id)));
@@ -232,6 +281,7 @@ function diff(args: Args, version: string): Outcome {
           before: { path: before.path, title: before.document.metadata.title },
           after: { path: after.path, title: after.document.metadata.title },
           summary: isEmptyDiff(changes) ? 'No changes.' : description.summary,
+          architecture,
           categories: changes.categories,
           elements: changes.elements,
           file: changes.file,
@@ -244,9 +294,76 @@ function diff(args: Args, version: string): Outcome {
   }
   // An unchanged diagram has a summary too (it is worded for a history entry); say the plain thing.
   const lines = isEmptyDiff(changes) ? ['No changes.'] : [description.summary, ...description.body.map((line) => `  ${line}`)];
+  if (!isEmptyDiff(changes)) {
+    lines.push('', 'Architecture');
+    if (architecture.length) lines.push(...architecture.map((change) => `  ${change.text}`));
+    else lines.push('  No change to the architecture: layout, style or annotation only.');
+  }
   if (introduced.length) lines.push('', 'New findings', ...introduced.map((entry) => `  ${entry.severity.padEnd(7)} ${entry.message}`));
   if (resolved.length) lines.push('', 'No longer found', ...resolved.map((entry) => `  ${entry.message}`));
   return out(lines.join('\n'));
+}
+
+// --- impact ----------------------------------------------------------------------------------
+
+/** The part `wanted` names: by id, or by its label when exactly one part carries it. */
+function partFor(model: ArchModel, wanted: string | undefined): string {
+  if (!wanted) throw new UsageError('Name the part: its id, or its label in quotes.');
+  if (model.entities.has(wanted) || model.boundaries.has(wanted)) return wanted;
+  const all = [...model.entities.values(), ...model.boundaries.values()];
+  const plain = (name: string) => name.trim().toLowerCase();
+  const named = all.filter((part) => part.name && plain(part.name) === plain(wanted));
+  if (named.length === 1) return named[0]!.id;
+  if (named.length > 1) throw new UsageError(`${named.length} parts are called "${wanted}". Use an id: ${named.map((part) => part.id).join(', ')}.`);
+  throw new UsageError(`No part has the id or the label "${wanted}". See inspect for what the diagram holds.`);
+}
+
+function impact(args: Args, version: string): Outcome {
+  only(args, ['json']);
+  const { path, document } = load(args.positional[0]);
+  const model = modelOf(document);
+  const report = impactOf(document, partFor(model, args.positional[1]), model)!;
+  if (args.flags.json) {
+    return out(JSON.stringify({ schema: 'draftcanvas.impact/1', tool: { name: 'draftcanvas', version }, diagram: { path, title: document.metadata.title, format: CURRENT_VERSION }, ...report }, null, 2));
+  }
+  const name = (id: string) => {
+    const part = model.entities.get(id) ?? model.boundaries.get(id);
+    return part ? labelOf(part) : id;
+  };
+  const listed = (ids: readonly string[], total = ids.length) => (ids.length ? `${ids.slice(0, 12).map(name).join(', ')}${total > 12 ? ` and ${total - 12} more` : ''}` : 'nothing');
+  const lines = [`${report.name} — ${report.kind === 'boundary' ? 'boundary' : 'part'} in ${document.metadata.title}`, report.basis, ''];
+  if (report.inside.length) lines.push(`Inside:      ${listed(report.inside)}`);
+  if (report.contains.length) lines.push(`Contains:    ${listed(report.contains)}`);
+  lines.push(`Reaches:     ${listed(report.downstream.ids, report.downstream.total)}${report.downstream.truncated ? ' (and possibly more)' : ''}`);
+  lines.push(`Reached by:  ${listed(report.upstream.ids, report.upstream.total)}${report.upstream.truncated ? ' (and possibly more)' : ''}`);
+  for (const crossing of report.crossings) lines.push(`Crosses:     ${listed(crossing.boundaries)} to ${name(crossing.other)}`);
+  for (const shared of report.shares) lines.push(`Shares:      ${name(shared.id)} with ${listed(shared.with)}`);
+  if (report.flows.length) lines.push(`Flows:       ${report.flows.map((flow) => flow.title || 'Untitled flow').join(', ')}`);
+  if (report.openPoints.length) lines.push(`Open points: ${report.openPoints.length}`);
+  if (report.outage) {
+    lines.push('', 'If it stops', `  ${report.outage.headline}`);
+    for (const note of report.outage.notes.slice(0, 12)) lines.push(`  ${note.tone === 'question' ? '?' : note.tone === 'shield' ? '+' : '-'} ${note.text}`);
+    for (const flow of report.outage.flows) if (flow.state !== 'unaffected') lines.push(`  ${flow.title || 'Untitled flow'}: ${flow.note}`);
+  } else {
+    lines.push('', 'The drawing says nothing about what happens if it stops.');
+  }
+  return out(lines.join('\n'));
+}
+
+// --- review ----------------------------------------------------------------------------------
+
+async function review(args: Args, version: string): Promise<Outcome> {
+  only(args, ['json', 'repo', 'base', 'fail-on', 'output']);
+  const base = text(args, 'base');
+  if (!base) throw new UsageError('Name the revision to compare with: --base main.');
+  const threshold = text(args, 'fail-on') ?? 'error';
+  if (threshold !== 'never' && !(SEVERITIES as readonly string[]).includes(threshold)) throw new UsageError('--fail-on takes error, warning, info or never.');
+  const result = await reviewRepo(text(args, 'repo') ?? '.', base);
+  const introduced = result.diagrams.flatMap((diagram) => diagram.introduced);
+  const code = threshold !== 'never' && reaches(introduced, threshold as Severity) ? EXIT.findings : EXIT.ok;
+  const content = args.flags.json ? `${JSON.stringify({ schema: 'draftcanvas.review/1', tool: { name: 'draftcanvas', version }, ...result }, null, 2)}\n` : reviewMarkdown(result);
+  const written = write(args, '', content);
+  return { ...written, code };
 }
 
 // --- render ----------------------------------------------------------------------------------
