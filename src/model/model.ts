@@ -44,6 +44,8 @@ export interface Entity {
   /** First line of the shape's label, trimmed; empty when it has none. */
   name: string;
   type: DraftNodeType;
+  /** The kind picked for the shape (`api`, `gateway`, `cache`, `topic`), when it has one. */
+  kind?: string;
   /** What the capability matrix reads it as (`document/connectorSemantics.ts`). */
   category: NodeCategory;
   /** C4 role and scope, derived (`depth/c4.ts`). Absent where C4 has no element for the shape. */
@@ -218,12 +220,14 @@ function readRoom(nodes: readonly DraftNode[], edges: readonly DraftEdge[], path
     const systemBoundary = systemBoundaryOf(node, byId);
     const c4 = classify(node, { level, ...(owner ? { insideOwner: owner } : {}), ...(systemBoundary ? { systemBoundary } : {}) });
     const product = node.technology ? productOf(node.technology) : null;
+    const kind = node.serviceKind ?? node.databaseKind ?? node.queueKind ?? node.actorKind ?? node.componentKind ?? node.artifactKind;
     entities.push({
       id: node.id,
       room: path,
       ...(owner ? { owner: owner.id } : {}),
       name: nameOf(node),
       type: node.type,
+      ...(kind ? { kind } : {}),
       category: categoryOf(node),
       ...(c4 ? { c4 } : {}),
       ...(node.technology ? { technology: node.technology } : {}),

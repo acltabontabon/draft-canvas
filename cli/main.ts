@@ -13,9 +13,10 @@ const HELP = `draftcanvas ${pkg.version}
 Usage
   draftcanvas inspect <diagram> [--json]
       What the diagram describes: its parts, boundaries and relations, every view.
-  draftcanvas check <diagram> [--repo <folder>] [--fail-on error|warning|info|never] [--json]
-      What the diagram itself says is unfinished, and, with --repo, whether the evidence it
-      cites is still where it says. Reads only; exits 1 when findings reach --fail-on (error).
+  draftcanvas check <diagram> [--repo <folder>] [--config <rules.json>] [--fail-on error|warning|info|never] [--json]
+      What the diagram itself says is unfinished; with --repo, whether the evidence it cites is
+      still where it says; and whether your own rules hold (draftcanvas.json in the repository,
+      or --config). Reads only; exits 1 when findings reach --fail-on (error).
   draftcanvas impact <diagram> <part> [--json]
       What a change to one part touches: what it reaches and is reached by, what it shares and
       crosses, which flows run over it, and what the drawing says fails if it stops.
@@ -29,7 +30,7 @@ Exit codes
 `;
 
 /** Options that take the next argument as their value. */
-const VALUED = new Set(['repo', 'fail-on', 'output', 'theme', 'view']);
+const VALUED = new Set(['repo', 'fail-on', 'output', 'theme', 'view', 'config', 'today']);
 const SHORT: Record<string, string> = { o: 'output', h: 'help', v: 'version' };
 
 export function parseArgs(argv: readonly string[]): { command?: string; args: Args; error?: string } {

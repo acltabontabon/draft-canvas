@@ -8,6 +8,7 @@
 
 import type { DraftDocument } from '../document/types';
 import { modelOf } from '../model/model';
+import { applyWaivers, assertFindings, type CheckConfig } from './assertions';
 import { checkAnchors } from './evidence/anchors';
 import { checkCompose } from './evidence/compose';
 import type { RepoReader } from './evidence/reader';
@@ -15,6 +16,7 @@ import { countBySeverity, finding, sortFindings, type Finding, type Severity } f
 import { builtinFindings } from './rules';
 
 export { builtinFindings } from './rules';
+export { applyWaivers, assertFindings, parseConfig, CONFIG_LIMITS, CONFIG_VERSION, type CheckConfig, type ConfigResult, type Requirement, type Rule, type Selector, type Waived, type Waiver } from './assertions';
 export { impactOf, IMPACT_LIMIT, type Impact, type ImpactOutage, type ImpactReach } from './impact';
 export { checkAnchors, linesNaming, type AnchorReport } from './evidence/anchors';
 export { checkCompose, composeServices } from './evidence/compose';
@@ -24,11 +26,17 @@ export { countBySeverity, finding, fingerprint, reaches, sortFindings, FINDING_C
 export interface CheckOptions {
   /** A repository to hold the diagram's evidence against. Without one, only the drawing is checked. */
   repo?: RepoReader;
+  /** The person's own rules and waivers (`draftcanvas.json`). */
+  config?: CheckConfig;
+  /** `YYYY-MM-DD`, for deciding which waivers have expired. Without it, none has. */
+  today?: string;
 }
 
 export interface CheckReport {
   findings: Finding[];
   counts: Record<Severity, number>;
+  /** Findings a waiver in force set aside. They are not in `findings` and never fail a check. */
+  waived: { id: string; rule: string; message: string; reason: string; expires?: string }[];
   /** What the check covered, so a clean report can't be mistaken for a wider one. */
   checked: {
     views: number;
@@ -36,6 +44,8 @@ export interface CheckReport {
     relations: number;
     /** Evidence entries held against the repository; absent when none was given. */
     evidence?: { cited: number; intact: number };
+    /** Declared rules checked; absent when no rule file was given. */
+    rules?: number;
   };
 }
 
@@ -59,6 +69,12 @@ export async function checkDiagram(file: DraftDocument, options: CheckOptions = 
     }
   }
 
-  const sorted = sortFindings(findings);
-  return { findings: sorted, counts: countBySeverity(sorted), checked };
+  if (options.config) {
+    findings.push(...assertFindings(model, options.config.rules));
+    checked.rules = options.config.rules.length;
+  }
+  const settled = applyWaivers(findings, options.config?.waivers ?? [], options.today ?? '0000-00-00');
+  const sorted = sortFindings(settled.findings);
+  const waived = settled.waived.map(({ finding: entry, reason, expires }) => ({ id: entry.id, rule: entry.rule, message: entry.message, reason, ...(expires ? { expires } : {}) }));
+  return { findings: sorted, counts: countBySeverity(sorted), waived, checked };
 }

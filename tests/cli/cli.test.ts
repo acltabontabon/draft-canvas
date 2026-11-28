@@ -94,6 +94,42 @@ describe('draftcanvas', () => {
     expect((await main(['check', bad, '--repo', repo, '--fail-on', 'never'])).code).toBe(0);
   });
 
+  it('checks the rules in a rule file, and honours waivers until they expire', async () => {
+    const rulesFile = join(dir, 'rules.json');
+    writeFileSync(rulesFile, JSON.stringify({ version: 1, rules: [{ id: 'no-direct-db', type: 'must-not-depend', from: { name: 'Web' }, to: { kind: 'database' }, transitive: true, because: 'the API owns the data' }] }));
+    const failing = await main(['check', plain, '--config', rulesFile, '--json']);
+    expect(failing.code).toBe(1);
+    const report = JSON.parse(failing.stdout);
+    expect(report.rules).toBe(rulesFile);
+    expect(report.checked.rules).toBe(1);
+    expect(report.findings[0]).toMatchObject({ rule: 'rule/no-direct-db', class: 'violation', severity: 'error', subjects: ['web', 'db'] });
+
+    writeFileSync(rulesFile, JSON.stringify({ version: 1, rules: JSON.parse(readFileSync(rulesFile, 'utf8')).rules, waivers: [{ finding: report.findings[0].id, reason: 'until the read model ships', expires: '2027-06-30' }] }));
+    const waived = await main(['check', plain, '--config', rulesFile, '--today', '2027-06-30']);
+    expect(waived.code).toBe(0);
+    expect(waived.stdout).toContain('1 finding waived');
+    expect((await main(['check', plain, '--config', rulesFile, '--today', '2027-07-01'])).code).toBe(1);
+
+    // With --repo, the rule file at the top of the repository is read without being named.
+    writeFileSync(join(repo, 'draftcanvas.json'), JSON.stringify({ version: 1, rules: [{ id: 'docs', type: 'must-have', of: { kind: 'service' }, require: 'description', severity: 'warning' }] }));
+    const fromRepo = JSON.parse((await main(['check', plain, '--repo', repo, '--json'])).stdout);
+    expect(fromRepo.rules).toBe('draftcanvas.json');
+    expect(fromRepo.counts.warning).toBe(2);
+    rmSync(join(repo, 'draftcanvas.json'));
+  });
+
+  it('refuses a rule file it cannot read exactly', async () => {
+    const bad = join(dir, 'bad-rules.json');
+    writeFileSync(bad, JSON.stringify({ version: 1, rules: [{ id: 'x', type: 'eval', code: 'process.exit()' }] }));
+    const result = await main(['check', plain, '--config', bad]);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain('is not a valid rule file');
+    writeFileSync(bad, '{ nope');
+    expect(await main(['check', plain, '--config', bad])).toMatchObject({ code: 2 });
+    expect(await main(['check', plain, '--config', join(dir, 'none.json')])).toMatchObject({ code: 2 });
+    expect(await main(['check', plain, '--today', 'tomorrow'])).toMatchObject({ code: 2 });
+  });
+
   it('gives the same bytes for the same input', async () => {
     const bad = diagram('same.draftcanvas', shop([{ path: 'src/gone.ts', basis: 'observed' }]));
     for (const argv of [['check', bad, '--repo', repo, '--json'], ['inspect', plain, '--json'], ['render', plain]]) {

@@ -18,6 +18,12 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   cites against the repository, and says which are gone, moved or no longer there. A Docker Compose
   file the diagram refers to is compared with it too.
 
+- **Rules of your own** — Declare what must hold in a `draftcanvas.json` (a client goes through
+  the gateway, one writer per data store, nothing outside a boundary reaches its database) and
+  `draftcanvas check` reports what breaks them. A waiver needs a reason and can expire.
+- **What a change would touch** — `draftcanvas impact` lists what a part reaches and is reached by,
+  what it shares and crosses, and what the outage walk says fails if it stops.
+
 #### Changed
 
 - **Comparing versions** — Changing what kind of boundary a group is now counts as a change of

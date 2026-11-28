@@ -86,6 +86,53 @@ Both are `potential-drift` and never fail a check: a Compose file is one setup, 
 architecture. A Compose file the diagram does not claim is ignored. The file is parsed, never run:
 no variable is expanded and no `include` or `extends` is followed.
 
+## Your own rules
+
+Put a `draftcanvas.json` at the top of the repository (or name one with `--config`) to check rules
+of your own:
+
+```json
+{
+  "version": 1,
+  "rules": [
+    { "id": "clients-use-the-gateway", "type": "must-go-through",
+      "from": { "kind": "actor" }, "to": { "kind": "api" }, "via": { "kind": "gateway" } },
+    { "id": "payments-owns-its-data", "type": "must-not-depend",
+      "from": { "boundary": "Orders" }, "to": { "boundary": "Payments", "kind": "database" },
+      "because": "ADR 12" },
+    { "id": "one-writer", "type": "no-shared-store", "severity": "warning" }
+  ],
+  "waivers": [
+    { "finding": "3f2a9c0e51b7d844", "reason": "Until the read model ships", "expires": "2027-06-30" }
+  ]
+}
+```
+
+| Rule | Holds when |
+| --- | --- |
+| `must-not-depend` | Nothing in `from` has a relation to anything in `to`; with `"transitive": true`, none reaches it at any distance |
+| `must-go-through` | No relation joins `from` and `to` directly: one end is always something in `via` |
+| `no-cycle` | The parts in `among` (all of them, if left out) form no loop |
+| `no-shared-store` | No data store in `store` (all, if left out) is written by more than one part |
+| `crossing-only-via` | Every relation across the named `boundary` has something in `via` at one end |
+| `must-have` | Every part in `of` has what `require` names: `technology`, `description`, `evidence` or `boundary` |
+
+A selector picks parts by `kind` (a shape type such as `service`, or a kind such as `gateway`,
+`api` or `cache`), `name` and `boundary` (`*` stands for anything), `technology`, and `scope`
+(`internal` or `external`). Every field given must match.
+
+- A broken rule is a `violation`, at the rule's `severity` (`error` unless it says otherwise).
+- A rule that matches nothing says so, so a misspelt name does not pass for ever.
+- Rules are data. There is no expression language and nothing in a rule file is run; a file with
+  an unknown field or rule type is refused.
+- A waiver sets one finding aside by its `id`, must give a `reason`, and may expire. After its last
+  day the finding is reported again, along with the waiver. A waiver for something no longer found
+  is reported too.
+
+Rules live beside the code, not in the diagram, so they are reviewed like code. In CI on a pull
+request, read the rule file from the base branch with `--config`: a file from the branch under
+review could waive what it introduces.
+
 ## What a change would touch
 
 ```bash

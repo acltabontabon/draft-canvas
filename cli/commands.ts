@@ -14,7 +14,7 @@
 
 import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { checkDiagram, builtinFindings, countBySeverity, impactOf, reaches, sortFindings, SEVERITIES, type CheckReport, type Finding, type Severity } from '../src/checks';
+import { checkDiagram, builtinFindings, countBySeverity, impactOf, parseConfig, reaches, sortFindings, SEVERITIES, type CheckConfig, type CheckReport, type Finding, type RepoReader, type Severity } from '../src/checks';
 import { viewOf } from '../src/depth/tree';
 import { LIMITS } from '../src/document/limits';
 import { CURRENT_VERSION, type DraftDocument } from '../src/document/types';
@@ -170,13 +170,53 @@ function inspect(args: Args, version: string): Outcome {
 
 // --- check -----------------------------------------------------------------------------------
 
+/** The rule file: the one `--config` names, else `draftcanvas.json` at the top of `--repo`, else none. */
+async function configFor(args: Args, repo: RepoReader | undefined): Promise<{ config?: CheckConfig; from?: string }> {
+  const named = text(args, 'config');
+  let source: string | undefined;
+  let from: string | undefined;
+  if (named) {
+    try {
+      if (statSync(named).size > 1024 * 1024) throw new UsageError(`${named} is too large to be a rule file.`);
+      source = readFileSync(named, 'utf8');
+    } catch (error) {
+      if (error instanceof UsageError) throw error;
+      throw new UsageError(`${named} could not be read.`);
+    }
+    from = named;
+  } else if (repo) {
+    const read = await repo.read('draftcanvas.json');
+    if (read.status === 'ok') {
+      source = read.text;
+      from = 'draftcanvas.json';
+    } else if (read.status !== 'missing') {
+      throw new UsageError('draftcanvas.json in the repository could not be read as a rule file.');
+    }
+  }
+  if (source === undefined) return {};
+  let raw: unknown;
+  try {
+    raw = JSON.parse(source);
+  } catch {
+    throw new UsageError(`${from} is not valid JSON.`);
+  }
+  const parsed = parseConfig(raw);
+  if (!parsed.ok) throw new UsageError(`${from} is not a valid rule file:\n${parsed.errors.slice(0, 20).map((line) => `  ${line}`).join('\n')}`);
+  return { config: parsed.config, from };
+}
+
 async function check(args: Args, version: string): Promise<Outcome> {
-  only(args, ['json', 'repo', 'fail-on']);
+  only(args, ['json', 'repo', 'fail-on', 'config', 'today']);
   const threshold = text(args, 'fail-on') ?? 'error';
   if (threshold !== 'never' && !(SEVERITIES as readonly string[]).includes(threshold)) throw new UsageError('--fail-on takes error, warning, info or never.');
   const { path, document, repairs } = load(args.positional[0]);
   const folder = text(args, 'repo');
-  const report = await checkDiagram(document, folder ? { repo: fileSystemReader(folder) } : {});
+  const repo = folder ? fileSystemReader(folder) : undefined;
+  const { config, from } = await configFor(args, repo);
+  // The day decides which waivers have expired. `--today` pins it, so a report can be reproduced.
+  const today = text(args, 'today') ?? new Date().toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) throw new UsageError('--today takes a date as YYYY-MM-DD.');
+  const report = await checkDiagram(document, { ...(repo ? { repo } : {}), ...(config ? { config } : {}), today });
   const findings = sortFindings([...repairFindings(repairs), ...report.findings]);
   const counts = countBySeverity(findings);
   const failed = threshold !== 'never' && reaches(findings, threshold as Severity);
@@ -185,7 +225,7 @@ async function check(args: Args, version: string): Promise<Outcome> {
   const code = broken ? EXIT.failed : failed ? EXIT.findings : EXIT.ok;
 
   if (args.flags.json) {
-    return out(JSON.stringify({ schema: 'draftcanvas.check/1', tool: { name: 'draftcanvas', version }, diagram: { path, title: document.metadata.title, format: CURRENT_VERSION }, checked: report.checked, counts, findings }, null, 2), code);
+    return out(JSON.stringify({ schema: 'draftcanvas.check/1', tool: { name: 'draftcanvas', version }, diagram: { path, title: document.metadata.title, format: CURRENT_VERSION }, ...(from ? { rules: from } : {}), checked: report.checked, counts, findings, waived: report.waived }, null, 2), code);
   }
   return out(checkText(document, path, { ...report, findings, counts }, !!folder), code);
 }
@@ -197,7 +237,8 @@ function checkText(document: DraftDocument, path: string, report: CheckReport, w
   const lines = [`${document.metadata.title} — ${path}`];
   lines.push(
     `${plural(checked.views, 'view')} · ${plural(checked.parts, 'part')} · ${plural(checked.relations, 'relation')}` +
-      (checked.evidence ? ` · ${plural(checked.evidence.cited, 'evidence entry', 'evidence entries')}, ${checked.evidence.intact} intact` : ''),
+      (checked.evidence ? ` · ${plural(checked.evidence.cited, 'evidence entry', 'evidence entries')}, ${checked.evidence.intact} intact` : '') +
+      (checked.rules !== undefined ? ` · ${plural(checked.rules, 'rule')}` : ''),
   );
   if (!withRepo && anyEvidence) lines.push('Evidence was not checked: name the repository with --repo.');
   lines.push('');
@@ -209,6 +250,7 @@ function checkText(document: DraftDocument, path: string, report: CheckReport, w
   if (report.findings.length) lines.push('');
   const { error, warning, info } = report.counts;
   lines.push(report.findings.length === 0 ? 'Nothing found.' : `${plural(error, 'error')}, ${plural(warning, 'warning')}, ${plural(info, 'note')}.`);
+  if (report.waived.length) lines.push(`${plural(report.waived.length, 'finding')} waived: ${report.waived.map((entry) => entry.id).join(', ')}.`);
   return lines.join('\n');
 }
 

@@ -227,6 +227,10 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - Checks reach a repository only through a `RepoReader` (`checks/evidence/reader.ts`) someone
   handed them. `src/checks/` touches no file system. Findings carry paths, names and line numbers,
   never file contents. A name found in a file means "anchor intact", never "relationship verified".
+- A declared rule (`checks/assertions.ts`, `draftcanvas.json`) is data from a fixed vocabulary:
+  no expression language, nothing evaluated, unknown fields refused. Rules and waivers never go in
+  the diagram, where a collaborator or an agent's proposal could relax them. A rule that selects
+  nothing reports that it checked nothing.
 - `cli/` is the Node side: no network, no child process, no environment read
   (`tests/privacy.test.ts`), and the only write is the `--output` file. Exit codes and the `schema`
   of each `--json` report are a public interface: add fields, never repurpose them.
