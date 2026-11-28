@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyWaivers, assertFindings, builtinFindings, checkAnchors, checkCompose, checkDiagram, composeServices, finding, fingerprint, impactOf, linesNaming, memoryReader, normalizeRepoPath, parseConfig, reaches, sortFindings, type FindingInput, type RepoReader, type Rule } from '../../src/checks';
+import { impactScope } from '../../src/checks/impact';
 import { createDocument, createEdge, createNode } from '../../src/document/factory';
 import type { DraftDocument, DraftEdge, DraftNode, SourceEvidence } from '../../src/document/types';
 import { modelOf } from '../../src/model';
@@ -376,5 +377,32 @@ describe('waivers', () => {
     expect(waived.findings).toEqual([]);
     expect(waived.waived).toMatchObject([{ rule: 'review/call-cycle', reason: 'two halves of one service' }]);
     expect(waived.checked.rules).toBe(0);
+  });
+});
+
+describe('impact in one view', () => {
+  const junction = (id: string, link?: string): DraftNode => ({ ...createNode({ id, type: 'ellipse', ...at }), ...(link ? { link } : {}) });
+  const inner = [junction('arrive', 'L'), createNode({ id: 'repo', type: 'component', text: 'Repository', ...at })];
+  const api: DraftNode = { ...service('api', 'API'), inside: { nodes: inner, edges: [calls('in', 'arrive', 'repo')], flows: [], viewport: { x: 0, y: 0, zoom: 1 } } };
+  const doc = file(
+    [service('web', 'Web'), junction('j'), service('orders', 'Orders'), service('stock', 'Stock'), service('other', 'Unrelated'), api, junction('leave', 'L')],
+    [calls('1', 'web', 'j'), calls('2', 'j', 'orders'), calls('3', 'orders', 'stock'), calls('4', 'orders', 'leave'), calls('5', 'other', 'api')],
+  );
+
+  it('lights what a part reaches and what reaches it, with the Junctions and connectors on the way', () => {
+    const scope = impactScope(doc, [], 'orders');
+    expect(new Set(scope.nodeIds)).toEqual(new Set(['orders', 'web', 'stock', 'j', 'leave']));
+    expect(new Set(scope.edgeIds)).toEqual(new Set(['1', '2', '3', '4']));
+    // "Repository" is reached through the linked Junction, in another view.
+    expect(scope.elsewhere).toBe(1);
+  });
+
+  it('shows the same relation from the other view, and nothing for an id the file does not have', () => {
+    const scope = impactScope(doc, ['api'], 'repo');
+    expect(new Set(scope.nodeIds)).toEqual(new Set(['repo', 'arrive']));
+    expect(scope.edgeIds).toEqual(['in']);
+    expect(scope.elsewhere).toBe(2);
+    expect(impactScope(doc, [], 'nope')).toEqual({ nodeIds: [], edgeIds: [], elsewhere: 0 });
+    expect(impactScope(doc, [], 'other')).toMatchObject({ elsewhere: 0 });
   });
 });

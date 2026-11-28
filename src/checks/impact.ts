@@ -10,7 +10,7 @@
  */
 
 import type { DraftDocument } from '../document/types';
-import { roomsOf } from '../depth/tree';
+import { roomsOf, viewOf, type DepthPath } from '../depth/tree';
 import { downstreamOf, upstreamOf } from '../model/graph';
 import { labelOf, modelOf, type ArchModel } from '../model/model';
 import { analyzeTraffic, outageOf, type OutageState } from '../traffic';
@@ -129,4 +129,41 @@ export function impactOf(file: DraftDocument, id: string, model: ArchModel = mod
     ...(outage ? { outage } : {}),
     basis: 'Read from the drawing: what is drawn as connected, not what was measured.',
   };
+}
+
+export interface ImpactScope {
+  /** Shapes of this view to keep lit: the part, what it reaches, what reaches it, and the Junctions on the way. */
+  nodeIds: string[];
+  /** Connectors of this view on those routes. */
+  edgeIds: string[];
+  /** Parts it reaches or is reached by that are drawn in other views. */
+  elsewhere: number;
+}
+
+/**
+ * What to light in the view at `path` to show what a change to `id` touches there: everything the
+ * arrows lead to from it and everything that leads to it, by any relation, through Junctions. What
+ * a linked Junction carries into another view is counted, since one view can't show it.
+ */
+export function impactScope(file: DraftDocument, path: DepthPath, id: string, model: ArchModel = modelOf(file)): ImpactScope {
+  const view = viewOf(file, path);
+  if (!view || (!model.entities.has(id) && !model.boundaries.has(id))) return { nodeIds: [], edgeIds: [], elsewhere: 0 };
+  const here = new Set(view.nodes.map((node) => node.id));
+  const lines = new Set(view.edges.map((edge) => edge.id));
+  const down = downstreamOf(model, id);
+  const up = upstreamOf(model, id);
+  const walked = new Set([...down.relations, ...up.relations]);
+  const nodeIds = new Set<string>(here.has(id) ? [id] : []);
+  const edgeIds = new Set<string>();
+  let elsewhere = 0;
+  for (const reached of new Set([...down.ids, ...up.ids])) {
+    if (here.has(reached)) nodeIds.add(reached);
+    else elsewhere += 1;
+  }
+  for (const relation of model.relations) {
+    if (!walked.has(relation.id)) continue;
+    for (const edge of relation.edges) if (lines.has(edge)) edgeIds.add(edge);
+    for (const junction of relation.via) if (here.has(junction)) nodeIds.add(junction);
+  }
+  return { nodeIds: [...nodeIds], edgeIds: [...edgeIds], elsewhere };
 }

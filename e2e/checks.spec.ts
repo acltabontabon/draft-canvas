@@ -97,6 +97,22 @@ test.describe('Checks', () => {
     await expect(panel(page)).toBeHidden();
   });
 
+  test('spotlights what a shape touches, by any relation, from the command palette', async ({ page }) => {
+    const doc = store([edge('e9', 'web', 'stock', 'calls')]);
+    doc.nodes.push(node('audit', 'service', 'Audit', 0, 240), node('mail', 'service', 'Mailer', 640, 240));
+    doc.edges.push(edge('e8', 'audit', 'mail', 'calls'));
+    await importDocument(page, doc, 'store.draftcanvas');
+    await page.locator('.react-flow__node[data-id="pricing"] .dc-node').click();
+    await page.keyboard.press('ControlOrMeta+k');
+    await page.keyboard.type('what it touches');
+    await page.keyboard.press('Enter');
+    // Pricing is in the loop with Orders and Stock, which Storefront reaches: four shapes, and the
+    // five connectors between them. Audit and Mailer have nothing to do with it.
+    await expect(page.getByText('Spotlight · 4 shapes, 5 connectors')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByText(/^Spotlight ·/)).toHaveCount(0);
+  });
+
   test('says nothing on a diagram with nothing to report', async ({ page }) => {
     const clean = store();
     clean.edges = clean.edges.filter((item) => item.id !== 'e4');
