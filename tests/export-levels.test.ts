@@ -3,7 +3,7 @@ import { createDocument, createEdge, createNode } from '../src/document/factory'
 import { normalizeStyle } from '../src/document/style';
 import type { DraftDocument, DraftNode } from '../src/document/types';
 import { collectLevels, renderEveryLevel, roomIdScope, zipEveryLevel } from '../src/export/levels';
-import { collectRooms, hasRooms, roomTitleFor } from '../src/export/rooms';
+import { collectRooms, hasRooms } from '../src/export/rooms';
 import { unzipFiles } from '../src/export/zip';
 import { BUILTIN_BACKDROPS } from '../src/render/style/backdrops';
 import { renderDocumentSvg } from '../src/render/svg/document';
@@ -40,12 +40,7 @@ describe('collectRooms', () => {
     const rooms = collectRooms(doc);
     expect(rooms.map((r) => r.path.length)).toEqual([0, 1, 2, 1]);
     expect(rooms[0]!.document).toBe(doc);
-    expect(rooms.map(roomTitleFor)).toEqual([
-      'Checkout',
-      'Checkout / Orders API',
-      'Checkout / Orders API / Handler',
-      'Checkout / Orders API',
-    ]);
+    expect(rooms.map((room) => room.owners.map((owner) => owner.text))).toEqual([[], ['Orders API'], ['Orders API', 'Handler'], ['Orders API']]);
     expect(rooms[2]!.document.nodes.map((n) => n.text)).toEqual(['Parser']);
     expect(rooms[2]!.document.metadata.title).toBe('Checkout');
   });

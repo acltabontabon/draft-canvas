@@ -194,7 +194,6 @@ ends it.
 
 - While presenting, click a marker to read it.
 - PNG and SVG exports show markers and a key; untick **Open point markers** to leave them out.
-  Sequence exports leave points out.
 - Deleting a shape or connector detaches it from a shared point. A copy gets its own point.
 
 ## Write rich text

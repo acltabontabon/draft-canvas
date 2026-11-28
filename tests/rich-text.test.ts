@@ -166,7 +166,7 @@ describe('Text element drawing', () => {
   });
 });
 
-describe('Plain words for names, search and other formats', () => {
+describe('Plain words for names and search', () => {
   it('drops the formatting and keeps every word', () => {
     expect(plainTextOfMarkdown('# Orders **API**\n- [x] `retry` with ==backoff==\n> [!NOTE]\n> see [docs](https://x)\n[hot]{.rose}')).toBe(
       'Orders API\nretry with backoff\n\nsee docs\nhot',

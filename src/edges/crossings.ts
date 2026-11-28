@@ -4,7 +4,7 @@
  * Purely a rendering concern. Nothing here becomes a node, an anchor, a junction or a relationship;
  * nothing is persisted; the document is not consulted for anything but geometry. A bridge is a
  * detour in the *drawn* path only — `route.d` stays canonical, which is what keeps hit testing,
- * labels, attachment chips, step badges and the sequence exports exactly as they were. See
+ * labels, attachment chips and step badges exactly as they were. See
  * `edges/bridge.ts` for the arc itself.
  *
  * Shaped like `edges/bundles.ts`'s `routingPlan`, and for the same reason: this is a whole-document

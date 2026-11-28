@@ -1,11 +1,11 @@
 /**
- * Human-readable, collision-safe Mermaid/PlantUML identifiers for sequence participants — e.g.
+ * Human-readable, collision-safe Mermaid identifiers for sequence participants — e.g.
  * `PaymentService`, `PaymentService2` on a second collision — rather than leaking the internal
- * `P1`/`P2` machine keys into generated source. See `SequenceParticipant.alias`.
+ * `P1`/`P2` machine keys into the text an agent reads. See `SequenceParticipant.alias`.
  */
 
-/** Mermaid/PlantUML keywords that would break parsing (or spec-legibility) if used as a bare,
- *  unquoted alias — checked case-insensitively. */
+/** Keywords that would break parsing (or spec-legibility) if used as a bare, unquoted alias —
+ *  checked case-insensitively. */
 const RESERVED_ALIASES = new Set([
   // Mermaid statement keywords a bare alias would be read as — `option` opens a diagram option,
   // `link`/`links`/`properties`/`details` attach metadata to a participant, `off` is a flag value,
@@ -47,8 +47,9 @@ const RESERVED_ALIASES = new Set([
   'right',
   'of',
   'as',
-  // PlantUML commands that start a line — a message line opening with one (`Title -> Api`) could
-  // be read as the command instead.
+  // Words that start a line as a command in other sequence notations. Kept although only Mermaid
+  // is written now: taking one out would change the identifier a participant of that name has
+  // always been read under.
   'title',
   'header',
   'footer',
@@ -78,7 +79,7 @@ function slugify(label: string): string {
 }
 
 /**
- * A readable, collision-safe Mermaid/PlantUML identifier for a participant — `PaymentService`,
+ * A readable, collision-safe Mermaid identifier for a participant — `PaymentService`,
  * `PaymentService2` on a second collision. Falls back to `fallback` (the participant's own stable
  * `id`, e.g. `P3`) when the label has no usable alphanumeric characters, the slug starts with a
  * digit, or it collides case-insensitively with a reserved word.

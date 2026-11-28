@@ -3,8 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 /**
  * Copy is the file export pointed at the system clipboard. These drive the real Export dialog and
  * the command palette in Chromium with the clipboard permissions granted, then read the clipboard
- * back: the SVG text has to start with `<svg`, the source has to be the source, and an editable SVG
- * has to carry the diagram inside it.
+ * back: the SVG text has to start with `<svg`, and an editable SVG has to carry the diagram inside it.
  */
 
 // Reading the clipboard back needs Chromium's permission grants; Firefox and WebKit refuse the
@@ -51,7 +50,7 @@ test.describe('Copy export', () => {
     await importDocument(page);
     const dialog = await openExport(page);
     await dialog.locator('[data-mode="image"]').click();
-    // The radios are visually hidden; the pill label is what takes the click (as `sequence-export.spec.ts` does).
+    // The radios are visually hidden; the pill label is what takes the click.
     await dialog.locator('[data-value="svg"]').click();
     await expect(dialog.getByRole('checkbox', { name: /Editable/ })).toBeChecked();
 
@@ -72,24 +71,7 @@ test.describe('Copy export', () => {
     expect(await clipboardText(page)).not.toContain('<metadata');
   });
 
-  test('Copy on the Source panel copies the architecture source the preview shows', async ({ page }) => {
-    await importDocument(page);
-    const dialog = await openExport(page);
-    await dialog.locator('[data-mode="sequence"]').click();
-    await dialog.locator('[data-value="architecture"]').click();
-    await dialog.locator('[data-value="mermaid-flowchart"]').click();
-    const preview = await dialog.getByTestId('export-source-preview').locator('pre').textContent();
-
-    await dialog.getByRole('button', { name: 'Copy', exact: true }).click();
-    await expect(page.getByText('Mermaid flowchart source copied.')).toBeVisible();
-    const text = await clipboardText(page);
-    expect(text).toContain('flowchart LR');
-    expect(text).toContain('OrdersDB[("Orders DB")]');
-    // The Windows clipboard hands text back with CRLF line endings; the source is the same.
-    expect(text.replace(/\r\n/g, '\n').trimEnd()).toBe(preview!.trimEnd());
-  });
-
-  test('"Copy as SVG" and "Copy source as…" from the command palette', async ({ page }) => {
+  test('"Copy as SVG" from the command palette, which offers no other text format', async ({ page }) => {
     await importDocument(page);
     await page.locator('.react-flow__pane').click({ position: { x: 20, y: 20 } });
     await page.keyboard.press('ControlOrMeta+k');
@@ -103,9 +85,6 @@ test.describe('Copy export', () => {
     await page.keyboard.press('ControlOrMeta+k');
     await expect(palette).toBeVisible();
     await page.keyboard.type('Copy source as');
-    await page.keyboard.press('Enter');
-    await palette.getByText('Structurizr DSL').click();
-    await expect(page.getByText('Structurizr DSL source copied.')).toBeVisible();
-    expect(await clipboardText(page)).toContain('workspace "Copy Me"');
+    await expect(palette.getByRole('option', { name: /Copy source as/ })).toHaveCount(0);
   });
 });

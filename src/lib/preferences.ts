@@ -49,6 +49,10 @@ export const RETIRED_PREFERENCE_KEYS: readonly string[] = [
   'hint.command-palette',
   // The palette's usage count for that mode's toggle command.
   'command-use.learn-mode',
+  // The exporters to other tools' text formats: the format last picked in the Export dialog, and
+  // the palette's usage count for "Copy source as…".
+  'sequence-export-format',
+  'command-use.copy-source',
 ];
 
 export function retirePreferences(keys: readonly string[] = RETIRED_PREFERENCE_KEYS): void {

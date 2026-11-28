@@ -15,9 +15,10 @@ import { ELEMENT_TYPES, GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIN
 /**
  * Bumped when the tools' contract changes incompatibly; additions keep it. 2: an update reaches a
  * diagram that isn't open (no NOT_ACTIVE), saved receipts carry file revisions, a duplicate title is
- * refused on create, flows keep their step ids, and `arrange` exists.
+ * refused on create, flows keep their step ids, and `arrange` exists. 4: read_diagram no longer
+ * writes the diagram as another tool's text; its `mermaid`, `plantuml` and `c4` formats are gone.
  */
-export const CONTRACT_VERSION = 3;
+export const CONTRACT_VERSION = 4;
 
 const STARTERS_OFF = 'No starters are downloaded: they come from the optional starters gallery, which the person turns on in Draft Canvas (Starters → Load starters). Compose the diagram from elements instead.';
 
@@ -118,7 +119,7 @@ export function capabilities(args: { topics?: unknown; starter?: unknown; tool?:
   }
   if (want('flows')) {
     out.flows = {
-      what: 'A named, ordered walk over existing relationships (each at most once per flow). It plays in presentation mode, shows in the Flows panel, and exports as a Mermaid/PlantUML sequence diagram.',
+      what: 'A named, ordered walk over existing relationships (each at most once per flow). It plays in presentation mode and shows in the Flows panel.',
       order: 'Only from an order the person or the code gives; never from layout or graph shape. When the order is unclear, draw the structure and ask.',
       several: 'Separate paths (normal processing, a retry, a compensation) are separate flows. One title per view: update an existing flow instead of adding a second one with its name.',
       default: 'There is no stored default or "main" flow. layout.primaryFlow only lays that flow out as the straight main path; presenting picks the selected flow, or the only one.',

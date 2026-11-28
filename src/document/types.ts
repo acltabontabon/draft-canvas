@@ -407,7 +407,7 @@ export interface DraftNode {
   description?: string;
   /**
    * What it is built with ("Spring Boot", "PostgreSQL 16") — displayed as a recognized technology
-   * logo or a generic technology mark. The full value is retained for details and source exports.
+   * logo or a generic technology mark. The full value is retained for details and for reads.
    * Architecture shapes only (`C4_TEXT_TYPES`). Setting a known product can set the kind as well —
    * Redis makes a Data Store a cache, Kafka a Queue a stream (`technologyKind.ts`) — but only a kind
    * still at its default or one an earlier technology set (`kindOrigin`); a picked kind stays.
@@ -514,7 +514,7 @@ export interface DraftNode {
    * is each member's own `text`, which a group rename writes on all of them.
    *
    * A link is not a connector. Nothing is routed, inferred or walked through it: flows, outage
-   * walks, semantics and sequence export read the drawn connectors only. Absent is a plain
+   * walks and semantics read the drawn connectors only. Absent is a plain
    * Junction, which is every Junction saved before v33; a group of one is a Junction still waiting
    * for its counterpart, never an error.
    */

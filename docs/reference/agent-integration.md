@@ -37,7 +37,7 @@ table as `tool`, with its arguments in `args`.
 | `{tool: "help", args: {tool: "update_diagram"}}` | The operation's common arguments; for `update_diagram`, every op and the fields `set` takes for each kind of target |
 | `{tool: "get_capabilities", args: {tool: "update_diagram"}}` | The operation's complete schema |
 
-- Every request is validated against the full contract (`contract: 3`).
+- Every request is validated against the full contract (`contract: 4`).
 - The sidecar refuses a malformed dispatcher call, naming the argument at fault: arguments beside
   `tool` instead of inside `args`, `args` as a string, or an unknown operation (listing the known
   ones).
@@ -161,9 +161,13 @@ is bound to the revision and read options; a change answers `CURSOR_STALE`.
 | `"draft"` (default) | The semantic view, with the options above. |
 | `"edit"` | An editing index: ids, types, labels and `view.inside` paths, relationships with both ends, 20 a page, plus patch syntax. Takes `query` (one name or up to 8) across every room, or `view`, and `cursor`; not `focus` or `include`. No review. |
 | `"outline"` | File title and revision, plus paths, owners, levels and counts for up to 100 inside views (`viewsTruncated` marks a longer outline). |
-| `"mermaid"` / `"plantuml"` / `"c4"` | Flows as sequence-diagram source, or the architecture as C4-PlantUML, as Export writes them. |
 
-`outline` and the source formats cover the file and ignore `view`, `focus`, `include` and `cursor`.
+`outline` covers the file and ignores `view`, `focus`, `include` and `cursor`.
+
+Contract 4 removed the `"mermaid"`, `"plantuml"` and `"c4"` formats, which wrote the diagram as
+another tool's text. Asking for one is refused as `INVALID_INPUT`, with a hint naming the formats
+above. A native sequence still reads as Mermaid text inside a `draft` read, and `render_diagram`
+gives a picture.
 
 **Search.** `read_diagram({diagramId, query})` matches ids, labels and Junctions' `link`
 (case-insensitive substring) in every room: shapes, free notes, groups, relationships and flows, not
@@ -560,8 +564,8 @@ bold, italic, colour).
 
 `set.attach` converts between attachment and free card, keeping the id.
 
-**Flows** are named, ordered walks over existing relationships (the Flows panel, presentation and
-sequence export use them). There is no stored "main" flow: agents build flows only from an order
+**Flows** are named, ordered walks over existing relationships (the Flows panel and presentation
+use them). There is no stored "main" flow: agents build flows only from an order
 the person or code gives.
 
 - A step is a relationship id, `{relationship, caption?, highlight?}`, or
@@ -769,7 +773,7 @@ Threat model: another local program, or a web page, trying to drive the bridge.
   one gateway, is refused or tangled. Split it into views.
 - Starting a presentation.
 - Reordering attachments.
-- Writing export files: agents can render a view or read source formats; the person exports.
+- Writing export files: agents can render a view; the person exports.
 - Linux (not a desktop target) and launching the app (a stopped app answers `APP_UNAVAILABLE`).
 - Fetching a PR or repository, or editing code. Draft Canvas only changes diagrams.
 

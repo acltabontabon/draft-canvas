@@ -125,8 +125,8 @@ is sparse on purpose: a pairing with no entry (Queue → Queue, Actor → Databa
 A caption reads *source, verb, target*. When the arrow starts at the verb's object, the caption
 turns passive (`relationLabel` in `src/document/edgeSemantics.ts`): Database → Service reads "read
 by", Queue → Worker "consumed by". Captions are display only: `semantic` is never rewritten, and a
-typed label always wins. Sequence export sends a passive connector from its far end with the active
-caption (`Worker ->> Queue: consumes from`).
+typed label always wins. A flow drawn as a sequence sends a passive connector from its far end with
+the active caption (Worker to Queue, "consumes from").
 
 ## Two independent vocabularies
 
@@ -145,9 +145,9 @@ at once.
 
 Inference looks through a Junction, including chained Junctions, to what feeds it:
 `Service → Junction → Database` still infers `readsWrites`. A side with no single category resolves
-to `junction`, with the unrestricted vocabulary. Sequence export flattens `A → Junction → B` into one
-message (`resolveJunctionEndpoint`); the Junction is a participant only when its side is ambiguous
-or dangling.
+to `junction`, with the unrestricted vocabulary. A flow drawn as a sequence flattens
+`A → Junction → B` into one message (`resolveJunctionEndpoint`); the Junction is a participant only
+when its side is ambiguous or dangling.
 
 A link between Junctions (`DraftNode.link`) is not a connector and is never looked through: nothing
 is inferred across it, no flow steps over it, an outage walk stops at each Junction, and sequence

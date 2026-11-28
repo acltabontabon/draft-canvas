@@ -9,7 +9,6 @@ import { bendsOf, drawnRoute } from '../../src/agent/route';
 import { walkGraphs } from '../../src/depth/tree';
 import { viewOf } from '../../src/depth/tree';
 import { deserializeDocument } from '../../src/export/project';
-import { sequenceSourceFor } from '../../src/export/sequence';
 import type { DraftDocument } from '../../src/document/types';
 import { GALLERY, type GalleryCase } from '../fixtures/agent/gallery';
 import { legibilityOf } from '../../src/agent/legibility';
@@ -199,15 +198,11 @@ describe('layout gallery', { timeout: 45_000 }, () => {
     expect(checkQuality(doc.nodes, doc.edges, measureContext(), touched).errors).toEqual([]);
   });
 
-  it('14: the starter keeps its own flows, and they export as sequence diagrams', () => {
+  it('14: the starter keeps its own flows', () => {
     const entry = GALLERY.find((g) => g.id === '14-starter-flow')!;
     const { doc } = galleryDocument(entry);
     expect(doc.flows.length).toBeGreaterThan(0);
     expect(doc.nodes.find((n) => n.id === 'orders')).toMatchObject({ text: 'Order Service', technology: 'Spring Boot' });
-    const mermaid = sequenceSourceFor(doc, 'mermaid');
-    expect(mermaid).toContain('sequenceDiagram');
-    expect(mermaid).toContain('Order Service');
-    expect(sequenceSourceFor(doc, 'plantuml')).toContain('@startuml');
   });
 
   it('19: the loan-application reference case comes out peer-uniform and readable — the regression it was built for', () => {

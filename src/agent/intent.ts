@@ -1,7 +1,7 @@
 import { roomsOf } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
 import { CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
-import { isArchitecture, isBoundary } from '../export/source/shared';
+import { isArchitecture, isBoundary } from '../document/architectureShapes';
 import { AgentError } from './errors';
 import { viewPathOf } from './read';
 import { ELEMENT_TYPE_NAMES } from './vocabulary';

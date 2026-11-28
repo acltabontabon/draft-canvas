@@ -1,6 +1,6 @@
 import { roomsOf } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
-import { isArchitecture, isBoundary } from '../export/source/shared';
+import { isArchitecture, isBoundary } from '../document/architectureShapes';
 import { AgentError } from './errors';
 import { viewPathOf } from './read';
 

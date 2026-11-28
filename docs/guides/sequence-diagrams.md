@@ -154,11 +154,8 @@ caption names the condition or branch of the current message.
 ## Export and import
 
 - PNG and SVG images show sequences as drawn, with message numbers and connectors between sequences.
-- **Share → Export… → Other formats → Sequences** writes each sequence and each flow as **Mermaid**
-  or **PlantUML**. A Mermaid file holds one diagram, so a canvas with several exports as Markdown
-  (`.md`), one Mermaid block per diagram. PlantUML keeps them all in one `.puml`.
-- Mermaid has no reference frame, so a **Reference** exports as a note. A draw.io export shows a
-  sequence as a labelled box.
+- A sequence is saved in the `.draftcanvas` file, which is how to hand one on for editing. Draft
+  Canvas does not export Mermaid or PlantUML text.
 - Paste or import a Mermaid `sequenceDiagram` to get an editable sequence; anything not drawn is
   listed. See the [Mermaid import reference](../reference/mermaid-import.md#sequence-diagrams).
 - [Your coding agent](connect-an-ai-agent.md) can add, read and change sequences.
@@ -168,8 +165,7 @@ caption names the condition or branch of the current message.
 - A sequence is one shape on the canvas: move it, put it in a boundary, connect to it, copy it, or
   attach notes and [open points](shapes-and-connectors.md#open-points).
 - Long text wraps and the sequence makes room. The canvas and images cut a message at 8 lines, a
-  condition at 6, a note at 16 and the title at 3, ending with "…". The diagram and the Mermaid and
-  PlantUML exports keep the whole text.
+  condition at 6, a note at 16 and the title at 3, ending with "…". The diagram keeps the whole text.
 - When [collaborating live](collaborating.md), if two people change the same sequence at once, the
   later change wins.
 - A single message can be duplicated but not copied to the clipboard.

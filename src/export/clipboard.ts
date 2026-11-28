@@ -10,7 +10,6 @@ import type { DraftDocument } from '../document/types';
 import { downloadBlob, downloadText } from './download';
 import { renderPngBlob, renderSvgText, type ImageExportOptions, type PngExportOptions } from './image';
 import { fileNameFor } from './project';
-import { SOURCE_FORMAT_INFO, sourceFileNameFor, sourceTextFor, type SourceFormat } from './source';
 
 export type CopyResult = { copied: true } | { copied: false; downloaded: true };
 
@@ -76,14 +75,6 @@ export async function copySvg(document: DraftDocument, options: ImageExportOptio
   const svg = await renderSvgText(document, options);
   if (await writeText(svg)) return COPIED;
   await downloadText(svg, fileNameFor(document.metadata.title, '.svg'), 'image/svg+xml');
-  return DOWNLOADED;
-}
-
-/** The source text in `format`, exactly what `exportSourceFile` would write. */
-export async function copySource(document: DraftDocument, format: SourceFormat): Promise<CopyResult> {
-  const text = sourceTextFor(document, format);
-  if (await writeText(text)) return COPIED;
-  await downloadText(text, sourceFileNameFor(document, format), SOURCE_FORMAT_INFO[format].mime);
   return DOWNLOADED;
 }
 

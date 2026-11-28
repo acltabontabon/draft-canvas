@@ -208,8 +208,26 @@ describe('ExportDialog — mode picker', () => {
     await switchMode(user, /Save an editable file/);
     expect(screen.getByRole('button', { name: 'Export file' })).toBeInTheDocument();
 
-    await switchMode(user, /Other formats/);
-    expect(screen.getByRole('button', { name: 'Export Mermaid' })).toBeInTheDocument();
+    await switchMode(user, /Save an image/);
+    expect(screen.getByRole('button', { name: 'Export PNG' })).toBeInTheDocument();
+  });
+
+  it('offers a link, the editable file, an image and a README picture, and no other format', () => {
+    useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    renderDialog();
+    const modes = within(screen.getByRole('radiogroup', { name: 'What to export' })).getAllByRole('radio');
+    expect(modes.map((mode) => mode.closest('label')!.dataset.mode)).toEqual(['share', 'document', 'image', 'docs']);
+    expect(screen.queryByRole('radio', { name: /Other formats/ })).not.toBeInTheDocument();
+  });
+
+  it('opens on Image when the remembered mode is the retired Other formats', () => {
+    // 'sequence' was the mode that wrote Mermaid, PlantUML and the rest; a device that last used
+    // it must not open on an empty dialog.
+    prefs.set('export-mode', 'sequence');
+    useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    renderDialog();
+    expect(screen.getByRole('radio', { name: /Save an image/ })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Export PNG' })).toBeEnabled();
   });
 });
 
@@ -234,108 +252,6 @@ describe('ExportDialog — Document panel', () => {
     await user.click(screen.getByRole('button', { name: 'Export securely…' }));
 
     expect(screen.getByRole('dialog', { name: 'Export securely' })).toBeInTheDocument();
-  });
-});
-
-describe('ExportDialog — Source (Sequence) panel', () => {
-  it('is disabled with teaching copy when the diagram has no playable Flows', async () => {
-    const user = userEvent.setup();
-    useEditorStore.setState({ document: withoutFlows(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
-    renderDialog();
-    await switchMode(user, /Other formats/);
-
-    expect(screen.getByText('Add a Flow or a sequence to export its sequence diagram.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Export (Mermaid|PlantUML)/ })).toBeDisabled();
-  });
-
-  it('is enabled once the diagram has a playable Flow', async () => {
-    const user = userEvent.setup();
-    useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
-    renderDialog();
-    await switchMode(user, /Other formats/);
-
-    expect(screen.queryByText('Add a Flow or a sequence to export its sequence diagram.')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Export Mermaid' })).toBeEnabled();
-  });
-
-  it('switches the CTA for PlantUML', async () => {
-    const user = userEvent.setup();
-    useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
-    renderDialog();
-    await switchMode(user, /Other formats/);
-    await user.click(screen.getByRole('radio', { name: 'PlantUML' }));
-
-    expect(screen.getByRole('button', { name: 'Export PlantUML' })).toBeInTheDocument();
-  });
-
-  it('shows the generated text itself, read-only, with Copy beside the export — never a rendered diagram', async () => {
-    const user = userEvent.setup();
-    useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
-    renderDialog();
-    await switchMode(user, /Other formats/);
-
-    const dialog = screen.getByRole('dialog');
-    const preview = within(dialog).getByTestId('export-source-preview');
-    expect(preview.querySelector('pre')!.textContent).toContain('sequenceDiagram');
-    expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: 'Copy' })).toBeEnabled();
-    // The artifact is the file tile, never a rendered diagram.
-    expect(dialog.querySelector('.dc-export-file')).not.toBeNull();
-    expect(dialog.querySelector('.dc-export-stage img')).toBeNull();
-  });
-
-  it('offers the architecture formats without needing a Flow, and remembers the choice', async () => {
-    const user = userEvent.setup();
-    useEditorStore.setState({ document: withoutFlows(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
-    const { unmount } = renderDialog();
-    await switchMode(user, /Other formats/);
-    expect(screen.getByRole('button', { name: 'Export Mermaid' })).toBeDisabled();
-
-    await user.click(screen.getByRole('radio', { name: 'Architecture' }));
-    expect(screen.getByRole('radio', { name: 'Mermaid flowchart' })).toBeChecked();
-    expect(screen.getByRole('button', { name: 'Export Mermaid flowchart' })).toBeEnabled();
-    expect(screen.getByTestId('export-source-preview').textContent).toContain('flowchart LR');
-    expect(screen.getByTitle('my-diagram.mmd')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('radio', { name: 'draw.io' }));
-    expect(screen.getByTitle('my-diagram.drawio')).toBeInTheDocument();
-    expect(screen.getByTestId('export-source-preview').textContent).toContain('<mxfile');
-    await user.click(screen.getByRole('radio', { name: 'Structurizr DSL' }));
-    expect(screen.getByTitle('my-diagram.dsl')).toBeInTheDocument();
-    await user.click(screen.getByRole('radio', { name: 'C4-PlantUML' }));
-    expect(screen.getByTitle('my-diagram.puml')).toBeInTheDocument();
-    expect(prefs.get('sequence-export-format')).toBe('c4-plantuml');
-
-    unmount();
-    renderDialog();
-    expect(screen.getByRole('radio', { name: 'C4-PlantUML' })).toBeChecked();
-  });
-
-  it('caps the preview at 200 lines and says how many more there are', async () => {
-    const user = userEvent.setup();
-    const nodes = Array.from({ length: 220 }, (_, i) => createNode({ type: 'service', x: i * 10, y: 0, text: `Service ${i}` }));
-    useEditorStore.setState({ document: { ...createDocument('Big'), nodes }, selection: { nodes: [], edges: [] }, selectedFlowId: null });
-    prefs.set('sequence-export-format', 'mermaid-flowchart');
-    renderDialog();
-    await switchMode(user, /Other formats/);
-    const preview = screen.getByTestId('export-source-preview');
-    expect(preview.querySelector('pre')!.textContent!.split('\n')).toHaveLength(200);
-    expect(preview.textContent).toMatch(/… \d+ more lines/);
-  });
-
-  it('copies the source text and says so', async () => {
-    const user = userEvent.setup();
-    const writeText = vi.fn<(text: string) => Promise<void>>(async () => {});
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-    useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
-    renderDialog();
-    await switchMode(user, /Other formats/);
-    await user.click(screen.getByRole('button', { name: 'Copy' }));
-    expect(writeText).toHaveBeenCalledOnce();
-    expect(writeText.mock.calls[0]![0]).toContain('sequenceDiagram');
-    expect(useUiStore.getState().toasts.some((toast) => toast.message === 'Mermaid source copied.')).toBe(true);
-    // Copying keeps the dialog open: it is often the first of several.
-    expect(useUiStore.getState().exportOpen).toBe(true);
   });
 });
 
@@ -381,11 +297,6 @@ describe('ExportDialog — output artifact', () => {
     expect(screen.getByTitle('my-diagram.draftcanvas')).toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: 'Encrypted' }));
     expect(screen.getByTitle('my-diagram.dcenc')).toBeInTheDocument();
-
-    await switchMode(user, /Other formats/);
-    expect(screen.getByTitle('my-diagram.mmd')).toBeInTheDocument();
-    await user.click(screen.getByRole('radio', { name: 'PlantUML' }));
-    expect(screen.getByTitle('my-diagram.puml')).toBeInTheDocument();
   });
 
   it('renders a live thumbnail for Image, reporting the real 2× PNG size', () => {
@@ -450,14 +361,14 @@ describe('ExportDialog — persistence', () => {
     const user = userEvent.setup();
     useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
     const { unmount } = renderDialog();
-    await switchMode(user, /Other formats/);
-    await user.click(screen.getByRole('radio', { name: 'PlantUML' }));
+    await switchMode(user, /Save an editable file/);
+    await user.click(screen.getByRole('radio', { name: 'Encrypted' }));
     unmount();
 
     renderDialog();
-    expect(screen.getByRole('radio', { name: /Other formats/ })).toBeChecked();
-    expect(screen.getByRole('radio', { name: 'PlantUML' })).toBeChecked();
-    expect(screen.getByRole('button', { name: 'Export PlantUML' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Save an editable file/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Encrypted' })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Export securely…' })).toBeInTheDocument();
   });
 });
 
@@ -494,21 +405,16 @@ describe('ExportDialog — keyboard navigation', () => {
     const user = userEvent.setup();
     useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
     renderDialog();
-    await switchMode(user, /Other formats/);
+    await switchMode(user, /Save an editable file/);
 
-    screen.getByRole('radio', { name: 'Mermaid' }).focus();
-    expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'Mermaid' }));
+    screen.getByRole('radio', { name: 'Editable' }).focus();
+    expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'Editable' }));
 
-    // Format, then the preview (scrollable, so it takes focus), then the footer's privacy lock,
-    // then Copy, then the CTA.
-    await user.tab();
-    expect(document.activeElement).toBe(screen.getByLabelText('Mermaid source'));
+    // Format, then the footer's privacy lock, then the CTA.
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: /^Made on your device/ }));
     await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Copy' }));
-    await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Export Mermaid' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Export file' }));
   });
 });
 
@@ -598,7 +504,7 @@ describe('ExportDialog — every level', () => {
     expect(screen.getByTitle('my-diagram.svg')).toBeInTheDocument();
   });
 
-  it('counts Flows across rooms for the Source export', async () => {
+  it('counts Flows across rooms for what a share link carries', async () => {
     const user = userEvent.setup();
     const doc = withRoom();
     const inner = doc.nodes[0]!.inside!;
@@ -607,33 +513,11 @@ describe('ExportDialog — every level', () => {
     const flow = createFlow({ title: 'Inside' });
     flow.steps = [{ id: 'fs9', edgeId: edge.id }];
     const withInnerFlow = { ...doc, nodes: [{ ...doc.nodes[0]!, inside: { ...inner, nodes: [...inner.nodes, other], edges: [edge], flows: [flow] } }] };
-    useEditorStore.setState({ document: withInnerFlow, selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    // A link carries the file, so the count is the file's: from the top, whatever room was open before.
+    useEditorStore.setState({ document: withInnerFlow, path: [], outer: null, liveViewport: null, selection: { nodes: [], edges: [] }, selectedFlowId: null });
     renderDialog();
-    await switchMode(user, /Other formats/);
+    await switchMode(user, /Share a link/);
 
-    expect(screen.getByRole('button', { name: 'Export Mermaid' })).toBeEnabled();
-    expect(screen.getByText('1 Flow · plain text')).toBeInTheDocument();
-  });
-
-  it('calls the Source export Markdown when several sequence diagrams go out as Markdown blocks', async () => {
-    const user = userEvent.setup();
-    const sequence = (text: string, x: number) => ({
-      ...createNode({ type: 'sequence', x, y: 0, text }),
-      sequence: {
-        participants: [
-          { id: 'p_a', name: 'Web', type: 'service' as const },
-          { id: 'p_b', name: 'API', type: 'service' as const },
-        ],
-        items: [{ id: 'm_1', t: 'message' as const, from: 'p_a', to: 'p_b', kind: 'sync' as const, label: 'call' }],
-      },
-    });
-    const doc = { ...createDocument('Two stories'), nodes: [sequence('One', 0), sequence('Two', 900)] };
-    useEditorStore.setState({ document: doc, selection: { nodes: [], edges: [] }, selectedFlowId: null });
-    renderDialog();
-    await switchMode(user, /Other formats/);
-
-    expect(screen.getByTitle('two-stories.md')).toBeInTheDocument();
-    expect(screen.getByText('MD')).toBeInTheDocument();
-    expect(screen.getByText('2 sequences · Markdown')).toBeInTheDocument();
+    expect(screen.getByText('View only · 2 levels · 1 Flow')).toBeInTheDocument();
   });
 });

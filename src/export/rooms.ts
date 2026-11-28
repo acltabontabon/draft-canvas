@@ -1,6 +1,6 @@
 /**
- * Every room of a document, for the exports that read the whole tree rather than the room on
- * screen: the one-image-per-level ZIP (`levels.ts`) and the sequence source (`sequence.ts`).
+ * Every room of a document, for what reads the whole tree rather than the room on screen: the
+ * one-image-per-level ZIP (`levels.ts`), the docs images and what a share link says it carries.
  *
  * The walk starts at whatever document it is handed — the file at the top, or the room being edited
  * when the dialog exports "inside this shape" — and descends through `depth/tree.ts`'s `viewOf`, so
@@ -8,7 +8,7 @@
  * which is the order the Depth map lists them in.
  */
 
-import { displayNameFor } from '../document/factory';
+import { flowIsPlayable } from '../document/flow';
 import type { DraftDocument, DraftNode } from '../document/types';
 import { hasInside, ROOT_PATH, viewOf, type DepthPath } from '../depth/tree';
 
@@ -42,10 +42,7 @@ export function hasRooms(document: DraftDocument): boolean {
   return document.nodes.some(hasInside);
 }
 
-/** "Checkout / Orders API / Handler" — the document's title, then each owner on the way in. */
-export function roomTitleFor(room: ExportRoom): string {
-  const title = room.document.metadata.title.trim() || 'Canvas';
-  return [title, ...room.owners.map((owner) => displayNameFor(owner))]
-    .map((part) => part.replace(/\r\n?|\n/g, ' ').trim())
-    .join(' / ');
+/** How many Flows have something to play, across every room: a Flow belongs to the room it was drawn in. */
+export function countPlayableFlows(document: DraftDocument): number {
+  return collectRooms(document).reduce((sum, room) => sum + room.document.flows.filter((flow) => flowIsPlayable(room.document, flow)).length, 0);
 }

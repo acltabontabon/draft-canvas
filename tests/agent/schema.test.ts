@@ -233,8 +233,8 @@ describe('MCP tool definitions', () => {
     expect(conforms(root, nested({ id: 'd', type: 'service', label: 'D', inside: { nodes: [] } }), root)).toBe(false);
   });
 
-  it('offer read_diagram as source text, and render_diagram as a picture, with the formats the app has', () => {
-    expect(tool('read_diagram').inputSchema.properties.format.enum).toEqual(['draft', 'edit', 'outline', 'mermaid', 'plantuml', 'c4']);
+  it('offer read_diagram as structured reads, and render_diagram as a picture, with the formats the app has', () => {
+    expect(tool('read_diagram').inputSchema.properties.format.enum).toEqual(['draft', 'edit', 'outline']);
     const render = tool('render_diagram').inputSchema;
     expect(render.properties.format.enum).toEqual(['png', 'svg']);
     expect(render.properties.scale.enum).toEqual([1, 2, 3]);

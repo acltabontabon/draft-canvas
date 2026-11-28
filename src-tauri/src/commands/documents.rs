@@ -294,7 +294,7 @@ struct ExportMeta {
     filters: Vec<FileFilter>,
 }
 
-/// Saves an export (a PNG, an SVG, Mermaid text) wherever the person chooses. The save dialog is the
+/// Saves an export (a PNG, an SVG, a ZIP of every level) wherever the person chooses. The save dialog is the
 /// permission: the page names only a suggested file name, never a place.
 #[tauri::command]
 pub async fn export_file(app: AppHandle, request: Request<'_>) -> Result<bool, AppError> {

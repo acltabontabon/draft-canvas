@@ -13,7 +13,7 @@
  *   disagree (two people renaming at once, a file edited by hand) are still one group, each drawn
  *   with its own words until the next rename.
  * - **A link is not a connector.** Nothing here adds an edge or is read by routing, flows, outage
- *   walks, semantics or sequence export.
+ *   walks or semantics.
  * - **A group of one is not an error.** It is a Junction waiting for its counterpart, or the one
  *   left when the other was deleted; putting the other back joins them again.
  *

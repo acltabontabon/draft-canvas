@@ -96,6 +96,7 @@ order, between participants that stand for its shapes. The flow itself is unchan
 
 ## Export a flow
 
-**Share → Export… → Other formats → Sequences** (`⌘⇧E`) turns each flow and each sequence into a
-**Mermaid** or **PlantUML** sequence diagram, nested levels included. With a flow selected, an image
-export numbers its connectors. See [Saving and sharing](saving-and-sharing.md#export-a-file).
+With a flow selected, an image export (**Share → Export…**, `⌘⇧E`) numbers its connectors. For a
+sequence diagram of a flow, [draw it as a sequence](#draw-a-flow-as-a-sequence) and export that as a
+PNG or SVG. The `.draftcanvas` file carries every flow. See
+[Saving and sharing](saving-and-sharing.md#export-a-file).

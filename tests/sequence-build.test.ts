@@ -161,7 +161,7 @@ describe('buildSequenceModel — basic interaction kinds', () => {
 describe('buildSequenceModel — a message is sent by whoever acts', () => {
   const idOf = (model: SequenceModel, label: string) => model.participants.find((p) => p.label === label)!.id;
 
-  it('Database → Service "reads" (captioned "read by") exports as the service reading from the database', () => {
+  it('Database → Service "reads" (captioned "read by") reads as the service reading from the database', () => {
     const db = createNode({ type: 'database', x: 0, y: 0, text: 'Orders DB' });
     const api = createNode({ type: 'service', x: 200, y: 0, text: 'Order API' });
     const edge = createEdge({ source: db.id, target: api.id, semantic: 'reads' });
@@ -177,7 +177,7 @@ describe('buildSequenceModel — a message is sent by whoever acts', () => {
     expect(messagesOf(model)[0]!.sourceEdgeIds).toEqual([edge.id]);
   });
 
-  it('Queue → Worker "consumes" exports as the worker consuming from the queue, still asynchronous', () => {
+  it('Queue → Worker "consumes" reads as the worker consuming from the queue, still asynchronous', () => {
     const queue = createNode({ type: 'queue', x: 0, y: 0, text: 'Jobs' });
     const worker = createNode({ type: 'service', serviceKind: 'worker', x: 200, y: 0, text: 'Job Worker' });
     const edge = createEdge({ source: queue.id, target: worker.id, semantic: 'consumes' });

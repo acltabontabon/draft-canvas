@@ -78,8 +78,7 @@ Recognition runs on your device, with no AI model or network.
 ## Saving, exporting and sharing
 
 - Sketches are saved with the diagram.
-- PNG and SVG exports draw them, except a selection-only export. Mermaid, PlantUML and other text
-  exports leave them out.
+- PNG and SVG exports draw them, except a selection-only export.
 - In a live session, collaborators see each stroke once it is finished.
 - Older versions of Draft Canvas refuse to open a file with sketches rather than open it without
   them.
