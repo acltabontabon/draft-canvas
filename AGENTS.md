@@ -223,7 +223,10 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 
 - What a diagram describes is read through `model/` (`modelOf`): parts, boundaries, relations with
   Junctions seen through, every room. It is derived and never stored; do not add a persisted copy,
-  and do not work the same things out again elsewhere. It never follows a Junction's `link`.
+  and do not work the same things out again elsewhere. It is the one reader that follows a
+  Junction's `link`: a connector that ends at a linked Junction carries on from its counterparts,
+  in any room, as one relation marked `linked`. Checks, impact, rules and the architecture diff
+  get that from the model and never read `link` themselves.
 - `document/fieldClasses.ts` is the one table of what each field means, checked against the types:
   a new `DraftNode`, `DraftEdge` or `Attachment` field does not compile until it is classed there.
   A list of "the fields that carry meaning" anywhere else reads `ARCHITECTURE_NODE_FIELDS`.
@@ -249,8 +252,10 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   a table of groups or key anything on the label: two groups may read "A". The label is each
   member's `text`; only `renameJunctionGroup` writes it on all of them.
 - A link is not a connector. Routing, flows, Arrange, Tidy up, semantics, outage walks, sequence
-  export and image export must not read it. The ring a linked Junction wears is canvas chrome in
-  `styles/junctions.css`, never a shape in `nodes/describe.ts`.
+  export and image export must not read it. The architecture model (`model/`) is the one
+  exception, and reads it for analysis only: nothing it finds is drawn, routed or stored. The ring
+  a linked Junction wears is canvas chrome in `styles/junctions.css`, never a shape in
+  `nodes/describe.ts`.
 - `src/junctions/` imports `document/` and `depth/` only. Validation reads `link` on its own, never
   against other Junctions: a shared session checks one node at a time, and a group of one is valid.
 - Every way to travel (the Go key, the peek card, menus, search, a click while presenting) goes

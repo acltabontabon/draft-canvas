@@ -73,6 +73,45 @@ describe('the architecture model', () => {
     });
   });
 
+  it('follows a linked Junction to its counterpart: two halves, one relation', () => {
+    const model = modelOf(
+      file(
+        [service('bff', 'Mobile BFF'), junction('out', { link: 'A' }), junction('in', { link: 'A' }), service('profiles', 'Profiles API'), boundary('core', 'Core'), service('inside', 'Inside', { parentId: 'core' })],
+        [edge('half1', 'bff', 'out', { semantic: 'http' }), edge('half2', 'in', 'profiles'), edge('half3', 'in', 'inside')],
+      ),
+    );
+    expect(model.relations.map((relation) => [relation.id, relation.from, relation.to, relation.semantic, relation.linked, relation.split])).toEqual([
+      ['half1>profiles', 'bff', 'profiles', 'http', true, true],
+      ['half1>inside', 'bff', 'inside', 'http', true, true],
+    ]);
+    expect(model.relations[0]).toMatchObject({ edges: ['half1', 'half2'], via: ['out', 'in'] });
+    expect(model.relations[1]!.crosses).toEqual(['core']);
+    expect(model.unread).toEqual([]);
+  });
+
+  it('follows a link into another view, and keeps what is drawn here too', () => {
+    const inner = [junction('arrive', { link: 'L' }), createNode({ id: 'repo', type: 'component', text: 'Repository', ...at }), boundary('data', 'Data'), createNode({ id: 'cache', type: 'component', text: 'Cache', parentId: 'data', ...at })];
+    const owner: DraftNode = { ...service('api', 'API'), inside: { nodes: inner, edges: [edge('in1', 'arrive', 'repo', { semantic: 'uses' }), edge('in2', 'arrive', 'cache')], flows: [], viewport: { x: 0, y: 0, zoom: 1 } } };
+    const model = modelOf(file([service('web', 'Web'), junction('leave', { link: 'L' }), service('audit', 'Audit'), owner], [edge('out', 'web', 'leave'), edge('local', 'leave', 'audit')]));
+    expect(model.relations.map((relation) => [relation.id, relation.to, relation.linked ?? false, relation.toRoom])).toEqual([
+      ['out>audit', 'audit', false, undefined],
+      ['out>repo', 'repo', true, ['api']],
+      ['out>cache', 'cache', true, ['api']],
+    ]);
+    // Every boundary around the far end is crossed: the near end is not in that view at all.
+    expect(model.relations[2]!.crosses).toEqual(['data']);
+    expect(model.rooms[0]!.relations).toEqual(['out>audit', 'out>repo', 'out>cache']);
+    expect(model.unread).toEqual([]);
+  });
+
+  it('leaves half a relation unread while its counterpart leads nowhere, and survives links in a ring', () => {
+    const waiting = modelOf(file([service('a', 'A'), junction('j1', { link: 'X' }), junction('j2', { link: 'X' })], [edge('e', 'a', 'j1')]));
+    expect(waiting.relations).toEqual([]);
+    expect(waiting.unread).toEqual([{ edge: 'e', room: [], reason: 'continued' }]);
+    const ring = modelOf(file([service('a', 'A'), junction('j1', { link: 'X' }), junction('j2', { link: 'X' }), junction('j3', { link: 'Y' }), junction('j4', { link: 'Y' })], [edge('e', 'a', 'j1'), edge('f', 'j2', 'j3'), edge('g', 'j4', 'j1')]));
+    expect(ring.relations).toEqual([]);
+  });
+
   it('survives a ring of Junctions', () => {
     const model = modelOf(file([service('a', 'A'), junction('j1'), junction('j2')], [edge('e1', 'a', 'j1'), edge('e2', 'j1', 'j2'), edge('e3', 'j2', 'j1')]));
     expect(model.relations).toEqual([]);

@@ -23,8 +23,9 @@ draftcanvas inspect orders.draftcanvas
 around it and what connects to what, in every view. `--json` gives the same as data.
 
 A Junction is not a part. `A → Junction → B` is read as one relation from A to B, and a relation a
-Junction divides says so. A connector that ends at a linked Junction ("continues at A") is left
-as it is drawn: the link is a way to travel, not a relationship.
+Junction divides says so. A connector that ends at a linked Junction ("continues at A") carries on
+from the Junction's counterpart, in the same view or another, so the two halves are one relation.
+One whose counterpart is not drawn yet is left out, and is not an error.
 
 ## Checking it
 
