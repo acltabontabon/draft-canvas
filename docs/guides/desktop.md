@@ -67,14 +67,12 @@ name, Draft Canvas asks first: **Keep both** numbers the moved one, and nothing 
 The first time you close the window, Draft Canvas keeps running in the menu bar (macOS) or system
 tray (Windows) and asks whether to keep doing that. Change it in **Settings → General**.
 
-## Nodi
+## Your coding agent
 
-Nodi asks your own Claude Code or Codex about the open diagram: explain it, find its risks, or
-propose a change you review on the canvas. Click it at the right end of the status bar, or press
-`⌘J`. See [Ask Nodi, on the canvas](connect-an-ai-agent.md#ask-nodi-on-the-canvas), and
-[Connect an AI agent](connect-an-ai-agent.md) for other coding agents.
-
-![Nodi up on the canvas, saying hello.](../media/guides/nodi-rest.png)
+Draft Canvas has no assistant of its own. Your own coding agent (Claude Code, Codex, Cursor and
+others) reads and changes diagrams through the app, in the folders you allow, and you review what it
+proposes on the canvas. Set it up in **Settings → AI agents**: see
+[Connect an AI agent](connect-an-ai-agent.md).
 
 ## Settings
 
@@ -115,7 +113,6 @@ Uninstalling keeps your diagrams and recovery data.
 | `⌘F` on Home | Find a diagram |
 | `⌘W` / `⌘Q` | Close window / quit |
 | `⌘,` | Settings |
-| `⌘J` | Nodi: open or put back to rest |
 
 On Windows, use `Ctrl`. Editor keys: [keyboard shortcuts](keyboard-and-commands.md).
 

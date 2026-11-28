@@ -14,6 +14,7 @@ import { DeleteDialog, RenameDialog } from './DiagramDialogs';
 import { DocumentPreview } from './DocumentPreview';
 import { ProjectNameDialog } from './ProjectSidebar';
 import type { LibraryView } from './libraryFilter';
+import { useFocusAfterDelete } from './useFocusAfterDelete';
 import './home-shelf.css';
 
 type HomeView = 'drafts' | 'recent' | 'projects';
@@ -76,6 +77,10 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  const focusAfterDelete = useFocusAfterDelete(session.library, (index) => {
+    const tiles = rowRef.current?.querySelectorAll<HTMLButtonElement>('.dc-home-draft') ?? [];
+    return tiles[Math.min(index, tiles.length - 1)] ?? sheetRef.current;
+  });
   const focusRow = () => rowRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
   const onTabKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
@@ -178,15 +183,10 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
         onSubmit={(title) => { void session.renameDocument(renaming.id, title); setRenaming(null); }} />}
       {deleting && <DeleteDialog entry={deleting} onClose={() => setDeleting(null)}
         onConfirm={() => {
-          const index = recent.findIndex((entry) => entry.id === deleting.id);
-          setDeleting(null);
           // The trash button the dialog would return focus to is gone with its card, so land on
           // the card that took its place, or on Quick Draft when the shelf is now empty.
-          void session.deleteDocument(deleting.id).then(() => requestAnimationFrame(() => {
-            const tiles = rowRef.current?.querySelectorAll<HTMLButtonElement>('.dc-home-draft') ?? [];
-            const next = tiles[Math.min(index, tiles.length - 1)] ?? sheetRef.current;
-            if (next && document.activeElement === document.body) next.focus();
-          }));
+          focusAfterDelete(deleting.id, recent.findIndex((entry) => entry.id === deleting.id), session.deleteDocument(deleting.id));
+          setDeleting(null);
         }} />}
     </div>
   );

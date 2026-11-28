@@ -4,7 +4,6 @@ import { Icon } from '../../../ui/common/Icon';
 import { SegmentedControl } from '../../../ui/common/SegmentedControl';
 import type { AgentClient, AgentClientSetup, AgentSettings as AgentState, AgentSkillSetup, AgentSkillTarget } from '../../api';
 import { useDesktopController, useDesktopState } from '../../useDesktop';
-import { setNodiShown, useNodiShown } from '../../nodiShown';
 import {
   agentOptions,
   type AgentChoice,
@@ -12,6 +11,7 @@ import {
   clientLine,
   codexConfigToml,
   connectionSummary,
+  connectStart,
   connectTitle,
   cursorDeeplink,
   firstAgent,
@@ -28,8 +28,9 @@ import { ChoiceRow, CopyField, Disclosure, SettingRow, SettingsPage, SettingsSec
 type Platform = 'macos' | 'windows' | 'linux' | null;
 
 /**
- * Settings → AI agents, in the order someone sets it up: turn access on, choose the folders, connect
- * an agent — and, set apart, ending the connections that are open. Off until someone turns it on; a
+ * Settings → AI agents. First, whether an agent is connected and the one-click way to connect one;
+ * then the page in the order someone sets it up: turn access on, choose the folders, set up an
+ * agent — and, set apart, ending the connections that are open. Off until someone turns it on; a
  * folder is reachable only once its box (or a folder containing it) is ticked. The connection secret
  * never reaches this page — only the shell holds it — so "Disconnect agents" asks the shell to replace
  * it, which ends every open connection (a configured agent reads the new one on its next request:
@@ -41,20 +42,23 @@ export function AgentSettings() {
   useEffect(() => {
     void controller.refreshAgent();
   }, [controller]);
-  const nodi = useNodiShown();
+  // What each agent's configuration says, asked once for the page: the block at the top and the steps
+  // further down show the same answer, and a setup done in one is done in the other.
+  const [setups, setSetups] = useState<AgentClientSetup[]>([]);
+  const sidecarPath = agent?.sidecarPath;
+  useEffect(() => {
+    if (!sidecarPath) return;
+    let live = true;
+    void controller.agentClients().then((found) => live && setSetups(found));
+    return () => {
+      live = false;
+    };
+  }, [controller, sidecarPath]);
+  const connected = (setup: AgentClientSetup) => setSetups((all) => [...all.filter((s) => s.client !== setup.client), setup]);
 
   return (
     <SettingsPage title="AI agents">
-      <SettingsSection title="Nodi">
-        <ChoiceRow
-          type="checkbox"
-          toggle
-          label="Show Nodi on the canvas"
-          description="Your own Claude Code or Codex, in the canvas corner: ask about the diagram without leaving it. Off hides it everywhere."
-          checked={nodi}
-          onChange={(event) => setNodiShown(event.target.checked)}
-        />
-      </SettingsSection>
+      <ConnectYourAgent agent={agent} setups={setups} onConnected={connected} />
       <SettingsSection title="Access" busy={!agent}>
         <ChoiceRow
           type="checkbox"
@@ -70,12 +74,39 @@ export function AgentSettings() {
       {agent && (
         <>
           <Folders agent={agent} />
-          <CodeFolders agent={agent} />
-          <Connect agent={agent} platform={platform} />
+          <Connect agent={agent} platform={platform} setups={setups} onConnected={connected} />
           <Manage agent={agent} />
         </>
       )}
     </SettingsPage>
+  );
+}
+
+/**
+ * Connect your agent: Draft Canvas has no assistant of its own, so the page opens on the person's own
+ * agent — whether one is connected right now and, while none is, the one-click setup for the first
+ * agent found on this computer. Every other agent, the skill and the manual setup are in the steps
+ * below (`Connect`).
+ */
+function ConnectYourAgent({ agent, setups, onConnected }: { agent: AgentState | null; setups: AgentClientSetup[]; onConnected: (setup: AgentClientSetup) => void }) {
+  const start = agent ? connectStart(agent, setups) : null;
+  return (
+    <SettingsSection
+      title="Connect your agent"
+      description="Draft Canvas works with the coding agent you already use, such as Claude Code or Codex. It reaches your diagrams through this app, in the folders you allow."
+      busy={!agent}
+    >
+      {agent && start && (
+        <>
+          <p className="dc-prefs-live" data-tone={start.live.tone} role="status">
+            <span className="dc-prefs-dot" aria-hidden="true" />
+            {start.live.text}
+          </p>
+          {start.setup && <OneClickButton setup={start.setup} blocked={!!agent.sidecarWarning} onConnected={onConnected} />}
+          {start.hint && <p className="dc-prefs-description">{start.hint}</p>}
+        </>
+      )}
+    </SettingsSection>
   );
 }
 
@@ -141,51 +172,16 @@ function Folders({ agent }: { agent: AgentState }) {
   );
 }
 
-/** The project folders Nodi may always read, as the person allowed them when it asked in its chat:
- *  only shown once there are some, each one taken back with one click. "Just for now" ends when the
- *  app quits, and isn't listed. */
-function CodeFolders({ agent }: { agent: AgentState }) {
-  const controller = useDesktopController();
-  const folders = agent.codeFolders ?? [];
-  if (folders.length === 0) return null;
-  return (
-    <SettingsSection title="Code Nodi may read" group list description="Read-only. Nodi asks before reading any other folder, and secrets are never read.">
-      {folders.map((folder) => (
-        <SettingRow
-          key={folder.path}
-          label={folder.name}
-          description={folder.displayPath}
-          control={
-            <Button variant="quiet" onClick={() => void controller.configureAgent({ forgetCode: folder.path })}>
-              Stop
-            </Button>
-          }
-        />
-      ))}
-    </SettingsSection>
-  );
-}
-
 /**
  * Connecting an agent, one agent at a time and the same three steps for each: point it at the
  * connector, add the skill, then try it. A step's number becomes a tick once it is done, and the one
  * solid button on show is the step to take next.
  */
-function Connect({ agent, platform }: { agent: AgentState; platform: Platform }) {
+function Connect({ agent, platform, setups, onConnected }: { agent: AgentState; platform: Platform; setups: AgentClientSetup[]; onConnected: (setup: AgentClientSetup) => void }) {
   const controller = useDesktopController();
   const [picked, setPicked] = useState<AgentChoice | null>(null);
-  const [setups, setSetups] = useState<AgentClientSetup[]>([]);
   const sidecarPath = agent.sidecarPath;
-  useEffect(() => {
-    if (!sidecarPath) return;
-    let live = true;
-    void controller.agentClients().then((found) => live && setSetups(found));
-    return () => {
-      live = false;
-    };
-  }, [controller, sidecarPath]);
   const setupOf = (which: AgentClient) => setups.find((setup) => setup.client === which);
-  const connected = (setup: AgentClientSetup) => setSetups((all) => [...all.filter((s) => s.client !== setup.client), setup]);
   const [skills, setSkills] = useState<AgentSkillSetup[]>([]);
   useEffect(() => {
     if (!sidecarPath) return;
@@ -201,7 +197,7 @@ function Connect({ agent, platform }: { agent: AgentState; platform: Platform })
   // Opens on an agent that is already set up; once the person picks one, it stays picked.
   const client = picked ?? firstAgent(setups);
   const setup = client === 'cursor' || client === 'other' ? undefined : setupOf(client);
-  const oneClick = { setup, blocked: !!agent.sidecarWarning, onConnected: connected };
+  const oneClick = { setup, blocked: !!agent.sidecarWarning, onConnected };
   // Cursor's link is a button too, though nothing here can tell whether it has been used.
   const connectPending = client === 'cursor' || !!(setup?.automatic && clientLine(setup)?.action);
   const skill = skillOf(skillTargetOf(client));
@@ -209,7 +205,7 @@ function Connect({ agent, platform }: { agent: AgentState; platform: Platform })
   const trial = tryLine(client, agent);
 
   return (
-    <SettingsSection title="Connect an agent" description="Draft Canvas needs to be running while the agent works.">
+    <SettingsSection title="Set up an agent" description="Draft Canvas needs to be running while the agent works.">
       {!sidecarPath ? (
         <p className="dc-prefs-empty">This build of Draft Canvas doesn’t include the agent connector.</p>
       ) : (
@@ -347,35 +343,41 @@ function OneClick({
   onConnected: (setup: AgentClientSetup) => void;
   children: ReactNode;
 }) {
+  if (!setup || !clientLine(setup) || (!setup.automatic && setup.state !== 'ready')) return <>{children}</>;
+  return (
+    <>
+      <OneClickButton setup={setup} blocked={blocked} onConnected={onConnected} />
+      <Disclosure summary="Set it up by hand instead">{children}</Disclosure>
+    </>
+  );
+}
+
+/** The one-click setup itself: its button and what it would do, or where the setup already is. */
+function OneClickButton({ setup, blocked, onConnected }: { setup: AgentClientSetup; blocked: boolean; onConnected: (setup: AgentClientSetup) => void }) {
   const controller = useDesktopController();
   const [busy, setBusy] = useState(false);
   const line = clientLine(setup);
-  if (!setup || !line || (!setup.automatic && setup.state !== 'ready')) return <>{children}</>;
+  if (!line) return null;
   const connect = async () => {
     setBusy(true);
     const after = await controller.connectAgentClient(setup.client);
     setBusy(false);
     if (after) onConnected(after);
   };
-  return (
-    <>
-      {line.action ? (
-        <div className="dc-prefs-inline">
-          <Button variant="solid" disabled={busy || blocked} onClick={() => void connect()}>
-            {busy ? 'Setting up…' : line.action}
-          </Button>
-          <span className="dc-prefs-description" data-tone={line.tone ?? undefined}>
-            {line.text}
-          </span>
-        </div>
-      ) : (
-        // The step's tick says it is done; this says where.
-        <p className="dc-prefs-description" role="status">
-          {line.text}
-        </p>
-      )}
-      <Disclosure summary="Set it up by hand instead">{children}</Disclosure>
-    </>
+  return line.action ? (
+    <div className="dc-prefs-inline">
+      <Button variant="solid" disabled={busy || blocked} onClick={() => void connect()}>
+        {busy ? 'Setting up…' : line.action}
+      </Button>
+      <span className="dc-prefs-description" data-tone={line.tone ?? undefined}>
+        {line.text}
+      </span>
+    </div>
+  ) : (
+    // The step's tick says it is done; this says where.
+    <p className="dc-prefs-description" role="status">
+      {line.text}
+    </p>
   );
 }
 

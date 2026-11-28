@@ -908,7 +908,7 @@ export const TOOLS = FULL_TOOLS.map(({ outputSchema: _output, ...tool }) => ({
 
 /** Small default MCP entry points. The full operation catalog is fetched only when needed.
  * diagram_tool is conservatively marked mutating: the broker still checks the dispatched operation's
- * permission, review-only run policy, ledger and commit gate, never the wrapper name. */
+ * permission, ledger and commit gate, never the wrapper name. */
 export const ENTRY_TOOLS = [
   {
     name: 'diagram_tool',
@@ -917,85 +917,5 @@ export const ENTRY_TOOLS = [
     description: 'Draft Canvas diagrams, one operation per call. tool:"help", args:{} lists operations; tool:"help", args:{tool:"NAME"} gives the arguments of NAME. Then tool:"NAME", args:{...}; read_diagram gives the ids and revision update_diagram needs. Exact-label rename, no read: tool:"rename_element", args:{diagramId,requestId:UUID,from,to,view?}.',
     inputSchema: { type: 'object', properties: { tool: { type: 'string', description: 'Operation name, or "help".' }, args: { type: 'object' } }, required: ['tool', 'args'], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
-  },
-] as const;
-
-/** Companion turns plan changes; only the host executes their final response. */
-export const PLANNING_ENTRY_TOOLS = ENTRY_TOOLS.map(tool => ({
-  ...tool,
-  description: 'Read-only planning. Simple edits use final tool=edit, without tool calls. For complex work: help args={} lists operations; args={tool:NAME} gives arguments. read_diagram format:edit returns compact context/patch syntax; query finds names across rooms. Never call mutations.',
-}));
-
-/**
- * Tools only a companion run (Nodi) is offered, served by the app itself rather than the page: an
- * agent the person connected has files of its own, and never sees these. A run that may not read
- * the project gets `ask_to_read_code`, which asks the person in the app; one that may gets the
- * three readers, confined by the app to the one folder the person allowed (`src-tauri/src/agent/
- * code.rs`). Generated into `src-tauri/mcp/run-tools.json` by `npm run agent:schemas`.
- */
-export const RUN_TOOLS = [
-  {
-    name: 'read_conversation',
-    description: 'Earlier chat and actual outcomes for this diagram/agent, newest first. Optional query searches; offset pages. Missing/omitted context requires clarification. Past plans are not proof of a change.',
-    inputSchema: { type: 'object', properties: { query: { type: 'string', minLength: 1, maxLength: 200 }, offset: { type: 'integer', minimum: 0 } }, additionalProperties: false },
-    annotations: { readOnlyHint: true, openWorldHint: false },
-  },
-  {
-    name: 'ask_to_read_code',
-    title: 'Ask to read the project',
-    description: 'You cannot read the project’s code. When an answer needs it (how something is implemented, whether the diagram matches the code), call this once with why, then end your turn in one short sentence: Draft Canvas asks the person, and their answer comes with their next message.',
-    inputSchema: {
-      type: 'object',
-      properties: { reason: { type: 'string', maxLength: 200, description: 'What you would look for, in a few words.' } },
-      required: ['reason'],
-      additionalProperties: false,
-    },
-    annotations: { title: 'Ask to read the project', readOnlyHint: true, openWorldHint: false },
-  },
-  {
-    name: 'list_code',
-    title: 'List project files',
-    description: 'Files and folders in the project folder the person allowed, read-only, relative to it. Generated and dependency folders and secrets are left out.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        path: { type: 'string', description: 'A folder inside the project, relative, with forward slashes. Default: the project itself.' },
-        depth: { type: 'integer', minimum: 1, maximum: 4 },
-      },
-      additionalProperties: false,
-    },
-    annotations: { title: 'List project files', readOnlyHint: true, openWorldHint: false },
-  },
-  {
-    name: 'search_code',
-    title: 'Search project files',
-    description: 'Lines in the project that contain query (literal, ignoring case), at most 60.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', minLength: 1, maxLength: 200 },
-        path: { type: 'string', description: 'Only under this folder or file.' },
-        glob: { type: 'string', description: 'Only files matching it, e.g. "*.ts" or "src/**/*.rs".' },
-      },
-      required: ['query'],
-      additionalProperties: false,
-    },
-    annotations: { title: 'Search project files', readOnlyHint: true, openWorldHint: false },
-  },
-  {
-    name: 'read_code',
-    title: 'Read a project file',
-    description: 'A text file in the project, numbered, up to 400 lines a call; ask for the next range with startLine when it is cut short.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        path: { type: 'string' },
-        startLine: { type: 'integer', minimum: 1 },
-        endLine: { type: 'integer', minimum: 1 },
-      },
-      required: ['path'],
-      additionalProperties: false,
-    },
-    annotations: { title: 'Read a project file', readOnlyHint: true, openWorldHint: false },
   },
 ] as const;

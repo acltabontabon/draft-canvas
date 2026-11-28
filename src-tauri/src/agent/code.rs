@@ -1,5 +1,9 @@
-//! Read-only access to the one code folder a person granted to a companion run. All callers share
-//! these checks so a tool's arguments, a symlink, or a different spelling cannot widen that grant.
+//! Read-only access to the one code folder a person granted. All callers share these checks so a
+//! tool's arguments, a symlink, or a different spelling cannot widen that grant.
+//!
+//! Nothing calls this module in this build. It is kept, with its tests, because its folder scope,
+//! `.gitignore` and secret-file rules are about to be reused for evidence checks.
+#![allow(dead_code)]
 
 use super::broker::{ToolError, ToolResult};
 use serde_json::{json, Value};
@@ -1091,7 +1095,7 @@ mod tests {
     }
 
     /// Lines using `?`, a class or an escape were skipped, so Visual Studio's `[Bb]in/` and Python's
-    /// `*.py[cod]` hid nothing from Nodi.
+    /// `*.py[cod]` hid nothing from a reader.
     #[test]
     fn gitignore_classes_and_single_characters_are_respected() {
         let dir = TempDir::new().unwrap();

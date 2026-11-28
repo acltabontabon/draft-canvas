@@ -16,7 +16,7 @@ are generated from it (`scripts/changelog.mjs`).
 - Minor and major releases get a launch-style page; a patch opts in with `<!-- launch -->` on its own
   line in a platform section.
 - A launch page can include screenshots listed in `docs/media/releases/vX.Y.Z/screenshots.json`: an
-  array of `{ "file": "nodi.png", "alt": "What it shows", "platform": "desktop" }`, where platform is
+  array of `{ "file": "review-panel.png", "alt": "What it shows", "platform": "desktop" }`, where platform is
   `shared`, `desktop` or `web` and `file` is a lowercase kebab-case PNG in the same directory. The
   generator validates the images. Without a manifest there is no gallery.
 

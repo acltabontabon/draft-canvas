@@ -45,8 +45,8 @@ table as `tool`, with its arguments in `args`.
   and idempotency against the resolved operation.
 - `--full-tools` advertises each operation as its own tool with read/write annotations, for clients
   that need them or tool allowlists. Operation names work directly without it too.
-- Schemas live in `src/agent/schema.ts`; `npm run agent:schemas` regenerates `tools.json`,
-  `entry-tools.json`, `planning-entry-tools.json` and `run-tools.json` in `src-tauri/mcp/`.
+- Schemas live in `src/agent/schema.ts`; `npm run agent:schemas` regenerates `tools.json` and
+  `entry-tools.json` in `src-tauri/mcp/`.
 
 | Tool | Kind | Purpose |
 | --- | --- | --- |
@@ -117,7 +117,6 @@ problems. Messages can name diagram items but never carry stack traces.
 | Retries | `REQUEST_ID_MISMATCH`, `OUTCOME_UNKNOWN` (the change might have landed: check the diagram before another edit) |
 | Scope | `NOT_ENABLED`, `OUT_OF_SCOPE` (a folder agents may not use, or an op outside `scope`), `SCOPE_TARGET_MISSING`, `UNAUTHORIZED` |
 | Proposals | `PROPOSAL_CLOSED`, `PROPOSAL_CHANGED` |
-| Nodi runs | `RUN_LIMIT`, `PROPOSAL_ONLY`, `DEFERRED_EDIT`, `RUN_ENDED`, `NOT_ALLOWED`; reading code: `OUTSIDE_FOLDER`, `EXCLUDED_PATH`, `SECRET_FILE`, `BINARY_FILE`, `UNREADABLE_PATH` |
 | Connection | `APP_UNAVAILABLE` (Draft Canvas is not running), `APP_STARTING`, `APP_UNRESPONSIVE`, `CONNECTION_LOST`, `VERSION_MISMATCH`, `TIMEOUT`, `CANCELLED` |
 | Other | `INTERNAL` |
 
@@ -655,81 +654,6 @@ or exported.
 - The person can keep editing; that turns the commit into `REVISION_CONFLICT`.
 - **Cancel** before the commit answers `CANCELLED`. After it, the line says *Applying…*; use Undo.
 - With a `progressToken`, each stage goes to the agent as an MCP progress notification.
-
-## Nodi, the desktop companion
-
-Nodi (`src/desktop/ui/Companion.tsx`, `src-tauri/src/companion/`) runs the person's own agent CLI in
-the background, one turn at a time. What the person sees is in
-[Connect an AI agent](../guides/connect-an-ai-agent.md#ask-nodi-on-the-canvas).
-
-| Agent | Command (prompt on stdin) | Kept to Draft Canvas by |
-| --- | --- | --- |
-| Claude Code 2.1.295+ | `claude -p --output-format stream-json`, `--resume` for later turns | `--tools ""`, `--strict-mcp-config` with only Draft Canvas, `--allowedTools mcp__draft-canvas__*`, hooks off |
-| Codex 0.163.0+ | `codex exec --json`, `codex exec resume <thread>` for later turns | `--ignore-user-config`, tool-providing features off, read-only sandbox, approvals off, only the run's Draft Canvas server configured |
-
-- Codex starts only once `codex features list` can be read; an unreadable listing refuses the run.
-  The listed features that bring their own tools are off (browser, computer use, image generation,
-  sub-agents, plugins, apps, skill search, `unified_exec`), as is web search; skill instructions are
-  omitted, multi-agent tools removed, and planning mode and the structured-question tool disabled
-  (`src-tauri/src/companion/codex.rs`).
-- Codex keeps only the person's `CODEX_HOME`, for authentication and sessions: custom models,
-  providers and credential-store settings do not carry into Nodi.
-- Claude Code keeps its own session transcripts. The person's own plugins still run inside the
-  agent; that is documented, not prevented.
-- The brief (`BRIEF`) is the agent's whole system prompt, replacing its coding one
-  (`--system-prompt`; Codex's `model_instructions_file`). Each turn starts with a
-  `<draft-canvas-context>` block; no diagram snapshot is attached.
-- A run is killed as a whole process tree (a process group on Unix, a Job Object on Windows) on
-  Stop, when the app exits, and past its output limit, which also fails the run and closes its tool
-  access.
-
-**Tools.** A run can use `get_capabilities`, `read_diagram`, `read_attachment`,
-`get_implementation_context`, `preview_diagram`, `update_diagram`, `submit_proposal`,
-`get_proposal`, `list_proposals` and the run-only tools below, but not `render_diagram` or
-`read_selection`. The run-only tools (`RUN_TOOLS` in `src/agent/schema.ts`, generated into
-`run-tools.json`) are never offered to a connected agent (`UNKNOWN_TOOL`).
-
-| Run-only tool | Offered | Returns |
-| --- | --- | --- |
-| `read_conversation({query?, offset?})` | Always | Earlier chat and outcomes for this diagram and agent, newest first |
-| `ask_to_read_code({reason})` | Without code access | An answer from the app itself ("end your turn"); Nodi then asks the person in chat |
-| `list_code({path?, depth?})` | With code access | Files and folders in the allowed folder; `depth` 1–4 |
-| `search_code({query, path?, glob?})` | With code access | Lines containing `query` (literal, ignoring case), at most 60 |
-| `read_code({path, startLine?, endLine?})` | With code access | A text file, numbered, up to 400 lines a call |
-
-**Run policy** (`agent/runs.rs`):
-
-- **One diagram.** `list_diagrams`, `create_diagram` and any other diagram id are `RUN_LIMIT`.
-- **The host makes the edit.** During the turn the agent may read, ask for help and preview; a
-  mutation, also through a legacy tool name, is `DEFERRED_EDIT`. After a successful turn and a clean
-  process exit, the host runs the turn's one structured decision (a chat answer, an exact-label
-  rename, an ordinary update or a proposal) through the normal broker, pinned to the diagram id,
-  request id and submitted selection scope. No model confirms it afterwards.
-- **Review mode.** Unless Nodi is set to **Apply changes directly**, `update_diagram` is
-  `PROPOSAL_ONLY` and the change is submitted as a proposal tagged with its `run` (a rename with a
-  bounded generated summary).
-- **Replies come from the receipt:** saved, unchanged, applied-but-unsaved, save-failed or awaiting
-  review. A malformed decision, failed or cancelled run, denied edit or unknown receipt never
-  produces a success message; errors are not retried automatically.
-- **Stop.** Stopping the run or turning agent access off ends it, and calls not yet committed fail
-  with `CANCELLED`. The agent's terminal event closes the same authority at once, even before its
-  process exits; a Stop during process startup applies when the process appears. A connection
-  naming an ended run is `RUN_ENDED`.
-- **Code only when allowed** (`DRAFT_CANVAS_CODE=1`). Otherwise the run gets `ask_to_read_code` and
-  a code read is `NOT_ALLOWED`. **Always for this folder** is kept in settings (`codeFolders`);
-  **Just for now** lasts until the app quits.
-
-**Code access** (`agent/code.rs`) is answered from one folder: the one chosen for the diagram, else
-the repository it is saved in, else its own folder.
-
-- Canonical paths inside it only, and no symlinks out (`OUTSIDE_FOLDER`).
-- No `.git`, dependency or build folders, and nothing the root `.gitignore` ignores
-  (`EXCLUDED_PATH`). Patterns follow Git's syntax (`*`, `**`, `?`, `[…]` classes with ranges, `!`
-  or `^` negation and POSIX names such as `[:digit:]`, `\` escapes), ignoring case on Windows and
-  macOS as Git does there. A `!pattern` line is skipped, so it can only hide more than Git would,
-  never less.
-- No secrets (`.env`, keys, credentials, Terraform state, kubeconfig, registry logins:
-  `SECRET_FILE`), no binaries (`BINARY_FILE`), bounded results.
 
 ## Security
 

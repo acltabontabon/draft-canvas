@@ -6,12 +6,12 @@ import { releaseBody, releaseScreenshots } from '../scripts/release-notes.mjs';
 
 const directories: string[] = [];
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCK0AAAAASUVORK5CYII=', 'base64');
-const screenshot = (file = 'nodi.png', platform = 'desktop', alt = 'Nodi explains the architecture.') => ({ file, platform, alt });
+const screenshot = (file = 'review.png', platform = 'desktop', alt = 'The review panel beside the canvas.') => ({ file, platform, alt });
 const changelog = [
   '# Changelog', '', '## [Unreleased]', '', '## [1.16.0] - 2026-10-24', '',
   'Draw and think together.', '', '### Shared', '', '#### Added', '',
   '- **Collaboration** — draw together live. <!-- highlight -->', '',
-  '### Desktop', '', '#### Added', '', '- **Nodi** — ask your agent. <!-- highlight -->',
+  '### Desktop', '', '#### Added', '', '- **Review panel** — check an agent’s change. <!-- highlight -->',
 ].join('\n');
 
 function fixture(manifest?: unknown) {
@@ -19,7 +19,7 @@ function fixture(manifest?: unknown) {
   directories.push(mediaDirectory);
   const versionDirectory = join(mediaDirectory, 'v1.16.0');
   mkdirSync(versionDirectory);
-  for (const file of ['nodi.png', 'collaboration.png', 'web.png']) writeFileSync(join(versionDirectory, file), png);
+  for (const file of ['review.png', 'collaboration.png', 'web.png']) writeFileSync(join(versionDirectory, file), png);
   const manifestPath = join(versionDirectory, 'screenshots.json');
   if (manifest !== undefined) writeFileSync(manifestPath, JSON.stringify(manifest));
   return { mediaDirectory, versionDirectory, manifestPath };
@@ -39,41 +39,41 @@ describe('versioned release screenshot galleries', () => {
   it('pins the images and README to the tag and places the gallery between highlights and full notes', () => {
     const { mediaDirectory } = fixture([screenshot(), screenshot('collaboration.png', 'shared')]);
     const body = releaseBody('v1.16.0', changelog, { mediaDirectory });
-    expect(body).toContain('https://raw.githubusercontent.com/acltabontabon/draft-canvas/v1.16.0/docs/media/releases/v1.16.0/nodi.png');
+    expect(body).toContain('https://raw.githubusercontent.com/acltabontabon/draft-canvas/v1.16.0/docs/media/releases/v1.16.0/review.png');
     expect(body).toContain('https://github.com/acltabontabon/draft-canvas/blob/v1.16.0/README.md');
     expect(body.indexOf('### In the app')).toBeGreaterThan(body.indexOf('### Key highlights'));
     expect(body.indexOf('### In the app')).toBeLessThan(body.indexOf('<summary>Everything added'));
-    expect(body.match(/releases\/v1\.16\.0\/nodi\.png/g)).toHaveLength(1);
+    expect(body.match(/releases\/v1\.16\.0\/review\.png/g)).toHaveLength(1);
   });
 
   it('keeps shared images in both platform previews and filters platform-specific images', () => {
     const { mediaDirectory } = fixture([screenshot(), screenshot('collaboration.png', 'shared'), screenshot('web.png', 'web')]);
     const desktop = releaseBody('v1.16.0', changelog, { mediaDirectory, platform: 'desktop' });
     const web = releaseBody('v1.16.0', changelog, { mediaDirectory, platform: 'web' });
-    expect(desktop).toContain('/nodi.png');
+    expect(desktop).toContain('/review.png');
     expect(desktop).toContain('/collaboration.png');
     expect(desktop).not.toContain('/web.png');
-    expect(web).not.toContain('/nodi.png');
+    expect(web).not.toContain('/review.png');
     expect(web).toContain('/collaboration.png');
     expect(web).toContain('/web.png');
     expect(releaseScreenshots('v1.16.0', 'all', mediaDirectory)).toContain('/web.png');
   });
 
   it('escapes image descriptions without allowing Markdown or HTML to break the release body', () => {
-    const { mediaDirectory } = fixture([screenshot('nodi.png', 'desktop', 'A [choice] <label> & an answer.')]);
+    const { mediaDirectory } = fixture([screenshot('review.png', 'desktop', 'A [choice] <label> & an answer.')]);
     expect(releaseScreenshots('v1.16.0', 'all', mediaDirectory)).toContain('![A \\[choice\\] &lt;label&gt; &amp; an answer.](');
   });
 
-  it.each(['../nodi.png', '/nodi.png', 'folder/nodi.png', 'folder\\nodi.png', 'https://example.com/nodi.png', 'nodi.svg', 'nodi.PNG', '.nodi.png'])('rejects unsafe or unsupported filenames: %s', (file) => {
+  it.each(['../review.png', '/review.png', 'folder/review.png', 'folder\\review.png', 'https://example.com/review.png', 'review.svg', 'review.PNG', '.review.png'])('rejects unsafe or unsupported filenames: %s', (file) => {
     const { mediaDirectory } = fixture([screenshot(file)]);
     expect(() => releaseScreenshots('v1.16.0', 'all', mediaDirectory)).toThrow(/lowercase PNG filename/);
   });
 
   it.each([
-    { file: 'nodi.png', alt: 'Nodi', platform: 'other' },
-    { file: 'nodi.png', alt: '', platform: 'desktop' },
-    { file: 'nodi.png', alt: 'Nodi\nAnother line', platform: 'desktop' },
-    { file: 'nodi.png', alt: 'Nodi', platform: 'desktop', url: 'https://example.com' },
+    { file: 'review.png', alt: 'Review', platform: 'other' },
+    { file: 'review.png', alt: '', platform: 'desktop' },
+    { file: 'review.png', alt: 'Review\nAnother line', platform: 'desktop' },
+    { file: 'review.png', alt: 'Review', platform: 'desktop', url: 'https://example.com' },
     null,
     [],
   ])('rejects malformed entries instead of silently publishing incomplete notes: %j', (entry) => {
@@ -97,7 +97,7 @@ describe('versioned release screenshot galleries', () => {
     const { mediaDirectory, manifestPath, versionDirectory } = fixture([screenshot(), screenshot()]);
     expect(() => releaseScreenshots('v1.16.0', 'all', mediaDirectory)).toThrow(/duplicate image/);
     writeFileSync(manifestPath, JSON.stringify([screenshot()]));
-    writeFileSync(join(versionDirectory, 'nodi.png'), 'This is not a PNG.');
+    writeFileSync(join(versionDirectory, 'review.png'), 'This is not a PNG.');
     expect(() => releaseScreenshots('v1.16.0', 'all', mediaDirectory)).toThrow(/must be a PNG image/);
   });
 
