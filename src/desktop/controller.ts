@@ -11,8 +11,6 @@ import type { AgentEditorReply, AgentEditorRequest } from '../host/agentBridge';
 import type { CommandMessage, LoadMessage, ToHostMessage } from '../host/embeddedHost';
 import type { AgentHost } from './agent';
 import { agentActivity } from './agentActivity';
-import { companion } from './companion';
-import { forgetTurnSnapshot } from './turnSnapshot';
 import { dispatchCollabLanEvent, lanRelayOf } from './collabLan';
 import type { LanRelay } from '../collab/lan';
 import { confirmWrite, takeWrite, type AgentWrite } from './agentWrites';
@@ -27,15 +25,11 @@ import {
   DesktopError,
   type AgentClient,
   type AgentClientSetup,
-  type AgentInfo,
   type AgentSkillSetup,
   type AgentSkillTarget,
   type AgentPatch,
   type Proposal,
   type ProposalAction,
-  type AgentKind,
-  type CodeFolder,
-  type CodeGrant,
   type DesktopApi,
   type DocsPublished,
   type DocsStatus,
@@ -48,7 +42,6 @@ import {
   type ProjectFile,
   type ProjectInfo,
   type ProjectScan,
-  type PromptRequest,
   type MovedFile,
   type RecoveryEntry,
   type RenamedFile,
@@ -82,20 +75,6 @@ interface Clock {
   setTimeout(run: () => void, ms: number): unknown;
   clearTimeout(handle: unknown): void;
   now(): number;
-}
-
-type CompanionEvent = Extract<HostEvent, { type: 'companion' }>;
-const MAX_COMPANION_RECOVERY_EVENTS = 4096;
-const MAX_COMPANION_RECOVERY_BYTES = 4 * 1024 * 1024;
-const MAX_COMPANION_RECOVERY_RUNS = 128;
-/** How long a Stop the shell didn't recognise waits for a terminal event before ending the turn here. */
-const COMPANION_CANCEL_GRACE_MS = 1500;
-
-interface CompanionRecovery {
-  events: CompanionEvent[];
-  bytes: number;
-  runs: Set<string>;
-  overflow: boolean;
 }
 
 export interface ControllerDeps {
@@ -326,9 +305,6 @@ export class DesktopController {
   private rescanWhenShown = false;
   /** Anything that swaps the open document runs in turn: two requests at once (a menu pick and a tray click) mustn't interleave. */
   private turn: Promise<unknown> = Promise.resolve();
-  /** Live updates can arrive before the shell's recovery snapshot returns. */
-  private companionRecovery: CompanionRecovery | null = { events: [], bytes: 0, runs: new Set(), overflow: false };
-  private readonly companionSequences = new Map<string, number>();
 
   constructor(deps: ControllerDeps) {
     this.api = deps.api;
@@ -364,11 +340,11 @@ export class DesktopController {
       projects: boot.projects.map((info) => ({ info, status: 'unscanned', files: [], truncatedDirs: [] })),
     });
     const update = this.refreshUpdate();
-    // Where agent access stands, from the start: Nodi reads it, and asked only by Settings it stayed
-    // unknown after a restart, so Nodi said to turn on access that was already on.
+    // Where agent access stands, from the start: asked only by Settings it stayed unknown after a
+    // restart, and whatever read it said to turn on access that was already on.
     const agent = this.refreshAgent();
     // Each refresh reports its own failure, so Home still learns that listing is over.
-    await Promise.all([this.refreshRecents(), this.refreshRecovery(), this.restoreCompanion()]);
+    await Promise.all([this.refreshRecents(), this.refreshRecovery()]);
     this.store.update({ listed: true });
     await Promise.all([update, agent]);
   }
@@ -400,23 +376,7 @@ export class DesktopController {
         return this.onAgentFileWritten(event);
       case 'agent-changed':
         for (const listener of this.proposalListeners) listener();
-        void this.refreshCompanionProposals();
         return void this.refreshAgent();
-      case 'companion':
-        if (this.companionRecovery) {
-          const pending = this.companionRecovery;
-          if (pending.runs.size < MAX_COMPANION_RECOVERY_RUNS) pending.runs.add(event.run);
-          if (pending.overflow) return;
-          pending.bytes += JSON.stringify(event).length * 2;
-          if (pending.events.length >= MAX_COMPANION_RECOVERY_EVENTS || pending.bytes > MAX_COMPANION_RECOVERY_BYTES) {
-            pending.overflow = true;
-            pending.events = [];
-            pending.bytes = 0;
-          } else pending.events.push(event);
-          return;
-        }
-        this.applyCompanionEvent(event);
-        return;
       case 'collab-lan-open':
       case 'collab-lan-message':
       case 'collab-lan-close':
@@ -542,12 +502,11 @@ export class DesktopController {
 
   /**
    * Why opening another diagram over the one open would interrupt the person: they are typing in a
-   * field (a label, the title, Nodi's message), and replacing the canvas would close it under them,
+   * field (a label, the title), and replacing the canvas would close it under them,
    * with what they typed into it. Not part of `quietOpenRefusal`: that settles whether an agent's
    * change may be made at all, and someone typing only holds back the open, never the change to the
-   * file. Typing, as for an agent's change (`busyReason`), not a field merely holding focus: Nodi's
-   * composer takes focus when Nodi opens and keeps it after Send, and every open an agent asked for
-   * while Nodi was open was refused.
+   * file. Typing, as for an agent's change (`busyReason`), not a field merely holding focus: a
+   * composer that took focus and kept it after Send had every open an agent asked for refused.
    */
   private typingRefusal(): string | null {
     if (this.session.kind === 'none' || !typingInField()) return null;
@@ -1809,7 +1768,7 @@ export class DesktopController {
   explorerCreateFolder(session: string, handle: Handle, name: string) { return this.api.explorerCreateFolder(session, handle, name); }
   explorerPeek(session: string, handle: Handle) { return this.api.explorerPeek(session, handle); }
   explorerClose(session: string) { return this.api.explorerClose(session); }
-  /** The same project picker from Home, the menu and Nodi's setup steps. */
+  /** The same project picker from Home and the menu. */
   addProject(): void {
     this.store.getSnapshot().explorerSave?.cancel();
     this.store.update({ explorerMode: 'project' });
@@ -1954,8 +1913,8 @@ export class DesktopController {
     });
   }
 
-  /** Where agent access stands: asked at start, by Settings → AI agents and by Nodi when it opens,
-   *  and on the shell's `agent-changed`. */
+  /** Where agent access stands: asked at start, by Settings → AI agents, and on the shell's
+   *  `agent-changed`. */
   async refreshAgent(): Promise<void> {
     try {
       this.store.update({ agent: await this.api.agentStatus() });
@@ -2071,228 +2030,11 @@ export class DesktopController {
   }
 
   /** Every surface that lists proposals hears of a resolution, wherever it was made: the shell doesn't
-   *  announce one, and a list resolved elsewhere (Nodi's chip, say) would otherwise keep showing it
-   *  as waiting. */
+   *  announce one, and a list resolved elsewhere would otherwise keep showing it as waiting. */
   async resolveProposal(id: string, status: 'accepted' | 'rejected' | 'dismissed'): Promise<ProposalAction> {
     const action = await this.api.agentProposalResolve(id, status);
     for (const listener of this.proposalListeners) listener();
     return action;
-  }
-
-  // ─── The agent companion (`ui/Companion.tsx`) ────────────────────────────────────────────────
-  // A turn's progress arrives as `companion` events and is folded into `companion.ts`; these only
-  // ask the shell to start, stop or forget.
-
-  /** Which agents the companion can run. Asked when it opens: finding one can start a login shell. */
-  async companionAgents(): Promise<AgentInfo[]> {
-    try {
-      return await this.api.companionAgents();
-    } catch (error) {
-      logDiagnostic(error, { operation: 'desktop-companion-agents' });
-      return [];
-    }
-  }
-
-  /** Sends one prompt. `about` is how the card names what it was about. A refusal (access off, a
-   *  folder agents can't use) ends the turn with the shell's own words. */
-  async companionSend(request: PromptRequest, about: string | null): Promise<void> {
-    companion.begin(request.diagramId, request.runId, request.text, about, request.agent);
-    try {
-      await this.api.companionSend(request);
-    } catch (error) {
-      logDiagnostic(error, { operation: 'desktop-companion-send' });
-      // The view was cached before native startup. A failed send may never have reached the
-      // agent's old session, so its retry must carry the view again.
-      forgetTurnSnapshot(request.diagramId);
-      companion.fail(request.runId, describe(error));
-    }
-  }
-
-  /** The open diagram's view as a companion turn carries it (`agent.ts`'s `turnSnapshot`). */
-  async companionSnapshot(diagramId: string, room: readonly string[]): Promise<string | null> {
-    this.agentModule ??= import('./agent');
-    const { turnSnapshot } = await this.agentModule;
-    return turnSnapshot(this.agentHost, diagramId, room);
-  }
-
-  async companionCancel(runId: string): Promise<void> {
-    // Stop can land before the agent reads its prompt, including during CLI discovery.
-    for (const conversation of companion.snapshot().values()) {
-      if (conversation.turns.some((turn) => turn.runId === runId)) {
-        forgetTurnSnapshot(conversation.diagramId);
-        break;
-      }
-    }
-    let known = true;
-    try {
-      known = await this.api.companionCancel(runId);
-    } catch (error) {
-      logDiagnostic(error, { operation: 'desktop-companion-cancel' });
-    }
-    // The shell no longer has the run, so no `stopped` is coming for a turn that is still open —
-    // it stayed "working" for good, with Send blocked and Stop doing nothing. A run that had just
-    // ended also answers false, its terminal event already on the way: give that one a moment to
-    // land so its summary and usage aren't covered by a local stop.
-    if (!known) {
-      setTimeout(() => {
-        const diagramId = companion.diagramOf(runId);
-        if (diagramId && companion.running(diagramId)?.runId === runId) {
-          companion.apply(runId, { type: 'stopped', reason: { kind: 'cancelled' }, summary: null, costMicroUsd: null, usage: null });
-        }
-      }, COMPANION_CANCEL_GRACE_MS);
-    }
-  }
-
-  /** A new conversation on `diagramId`: the card empties and the agent starts afresh next time. */
-  async companionForget(diagramId: string, agent?: AgentKind): Promise<void> {
-    companion.clear(diagramId, agent);
-    try {
-      await this.api.companionForget(diagramId, agent);
-    } catch (error) {
-      logDiagnostic(error, { operation: 'desktop-companion-forget' });
-    }
-  }
-
-  /** The project folder Nodi would read for this diagram, and whether it may; null when the shell
-   *  can't say (the diagram's folder isn't one agents may use). */
-  async companionCode(diagramId: string): Promise<CodeFolder | null> {
-    try {
-      return await this.api.companionCode(diagramId);
-    } catch (error) {
-      logDiagnostic(error, { operation: 'desktop-companion-code' });
-      return null;
-    }
-  }
-
-  /** The person's answer to Nodi asking to read the project. Null when it didn't take. */
-  async companionAllowCode(diagramId: string, grant: CodeGrant): Promise<CodeFolder | null> {
-    try {
-      const folder = await this.api.companionAllowCode(diagramId, grant);
-      void this.refreshAgent();
-      return folder;
-    } catch (error) {
-      logDiagnostic(error, { operation: 'desktop-companion-allow-code' });
-      return null;
-    }
-  }
-
-  /** Another folder for the diagram's code, from the system's own dialog; null when cancelled. */
-  async companionChooseCode(diagramId: string): Promise<CodeFolder | null> {
-    try {
-      return await this.api.companionChooseCode(diagramId);
-    } catch (error) {
-      logDiagnostic(error, { operation: 'desktop-companion-choose-code' });
-      return null;
-    }
-  }
-
-  /** The shell line that carries the diagram's conversation on in the agent's own terminal UI. */
-  async companionContinue(diagramId: string, agent: AgentKind): Promise<string | null> {
-    try {
-      return await this.api.companionContinue(diagramId, agent);
-    } catch (error) {
-      logDiagnostic(error, { operation: 'desktop-companion-continue' });
-      return null;
-    }
-  }
-
-  /** Active and recently finished runs a reloaded page recovers. */
-  private async restoreCompanion(): Promise<void> {
-    const pending = this.companionRecovery;
-    try {
-      const snapshots = await this.api.companionRuns();
-      // Existing turns were begun by this page while recovery was pending. Their buffered events
-      // have not been applied yet, so only newly restored turns may skip the snapshot's prefix.
-      for (const snapshot of snapshots) {
-        if (companion.diagramOf(snapshot.runId) === undefined && snapshot.sequence !== undefined) this.rememberCompanionSequence(snapshot.runId, snapshot.sequence);
-      }
-      companion.restore(snapshots);
-      if (pending?.overflow) {
-        for (const snapshot of snapshots) pending.runs.add(snapshot.runId);
-      }
-    } catch (error) {
-      logDiagnostic(error, { operation: 'desktop-companion-runs' });
-    } finally {
-      this.companionRecovery = null;
-      if (pending?.overflow) {
-        const message = 'Nodi sent too much while this window was recovering. Start a new turn.';
-        for (const run of pending.runs) {
-          const diagramId = companion.diagramOf(run);
-          if (diagramId) forgetTurnSnapshot(diagramId);
-          companion.fail(run, message);
-          void this.companionCancel(run);
-        }
-        this.ui.notify(message);
-      } else {
-        const byRun = new Map<string, CompanionEvent[]>();
-        for (const event of pending?.events ?? []) {
-          const events = byRun.get(event.run);
-          if (events) events.push(event);
-          else byRun.set(event.run, [event]);
-        }
-        for (const events of byRun.values()) {
-          // Cancellation can emit from a different native thread after the next sequence was
-          // recorded. Recovery has the whole batch, so put it back in the recorded order.
-          if (events.every((event) => event.sequence !== undefined)) events.sort((a, b) => a.sequence! - b.sequence!);
-          for (const event of events) this.applyCompanionEvent(event);
-        }
-      }
-    }
-  }
-
-  private rememberCompanionSequence(run: string, sequence: number): void {
-    this.companionSequences.delete(run);
-    this.companionSequences.set(run, sequence);
-    if (this.companionSequences.size > 4096) this.companionSequences.delete(this.companionSequences.keys().next().value!);
-  }
-
-  private applyCompanionEvent(event: CompanionEvent): void {
-    if (event.sequence !== undefined) {
-      if (event.sequence <= (this.companionSequences.get(event.run) ?? 0)) return;
-      this.rememberCompanionSequence(event.run, event.sequence);
-    }
-    const diagramId = companion.diagramOf(event.run);
-    companion.apply(event.run, event.event);
-    if (event.event.type === 'stopped') {
-      if (event.event.reason.kind !== 'end-turn' && diagramId) forgetTurnSnapshot(diagramId);
-      void this.refreshCompanionProposals();
-    }
-  }
-
-  /** Which of the companion's turns have a proposal waiting for review: looked up when a run stops,
-   *  when the shell says agent state changed (a proposal submitted or resolved), and when the review
-   *  panel closes. */
-  private companionProposalSeq = 0;
-  /** The newest lookup whose answer each run has taken; runs are few and short-lived. */
-  private readonly companionProposalAnswered = new Map<string, number>();
-
-  async refreshCompanionProposals(): Promise<void> {
-    // Lookups overlap and can answer out of order: an older list must not put back a proposal state
-    // a newer one has already applied. Not queued — one lookup that never answered held every later one.
-    const seq = ++this.companionProposalSeq;
-    const watched = new Map<string, string[]>();
-    for (const conversation of companion.snapshot().values()) {
-      const last = conversation.turns.at(-1);
-      if (last && last.outcome === null && (last.stop === null || last.proposalId !== null || last.steps.some((s) => s.tool === 'submit_proposal'))) {
-        watched.set(conversation.diagramId, [...(watched.get(conversation.diagramId) ?? []), last.runId]);
-      }
-    }
-    for (const [diagramId, runIds] of watched) {
-      // A lookup that failed says nothing about these runs. Taken for "no proposal", it took down the
-      // chip of a turn still waiting for review, and kept an older lookup's answer from putting it back.
-      const proposals = await this.lookUpProposals(diagramId);
-      if (!proposals) continue;
-      for (const runId of runIds) {
-        if (seq < (this.companionProposalAnswered.get(runId) ?? 0)) continue;
-        this.companionProposalAnswered.set(runId, seq);
-        const own = proposals.filter((p) => p.run === runId);
-        const waiting = own.find((p) => p.status === 'pending' || p.status === 'accepting');
-        const decided = own.find((p) => p.status === 'accepted' || p.status === 'rejected' || p.status === 'dismissed');
-        if (waiting) companion.setProposal(runId, waiting.proposalId);
-        else if (decided) companion.resolve(runId, decided.status === 'accepted' ? 'accepted' : 'rejected');
-        else companion.setProposal(runId, null);
-      }
-    }
   }
 
   /** Settings, at its AI agents page. */

@@ -453,7 +453,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const compensating = Boolean(edge?.compensationFor);
   const isPortal = Boolean(edge?.portal);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
-  const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
   const traced = useUiStore((state) => state.traceIds?.has(id) ?? false);
   // The drawn line, for `RouteMorph` below. Declared here, before this component's early returns.
   const lineRef = useRef<SVGPathElement>(null);
@@ -887,7 +886,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-splice-target={spliceTarget ? 'true' : undefined}
       data-lens-member={lensMember ? 'true' : undefined}
       data-jump-flash={jumpFlash ? 'true' : undefined}
-      data-pointed={pointed ? 'true' : undefined}
       data-traced={traced ? 'true' : undefined}
       data-portal={portal ? 'true' : undefined}
       data-arriving={arriving ? 'true' : undefined}

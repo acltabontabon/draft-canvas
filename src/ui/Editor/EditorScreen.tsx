@@ -96,7 +96,6 @@ import { PanelBoundary } from '../common/PanelBoundary';
 import { retryableLazy } from '../common/retryableLazy';
 import { motionMs } from '../../lib/motion';
 import { returnHome } from '../../host/hostInfo';
-import { companionAllowed } from './companionGate';
 import { PRODUCT } from '../../product';
 
 // Export (its panels, previews, and exporters) is a sizeable slice of the editor that most sessions
@@ -106,8 +105,6 @@ const ExportDialogChunk = retryableLazy(() => import('./ExportDialog').then((mod
 // Proposal review is desktop-only (an AI agent's own feature); `__DESKTOP__` drops it from the web
 // build entirely, the same way `App.tsx` gates every other desktop-only chunk.
 const ProposalPanelChunk = __DESKTOP__ ? retryableLazy(() => import('../../desktop/ui/ProposalPanel').then((module) => ({ default: module.ProposalPanel }))) : null;
-// The agent companion, likewise desktop-only: it runs the person's own coding agent.
-const CompanionChunk = __DESKTOP__ ? retryableLazy(() => import('../../desktop/ui/Companion').then((module) => ({ default: module.Companion }))) : null;
 
 /**
  * What a ⌘C/⌘X keydown just copied, for the browser's copy event that follows it to write — see
@@ -823,11 +820,6 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           )}
           {!presenting && !tracing && <OpenPointsPanel buildCommandContext={buildCommandContext} />}
           {!presenting && !tracing && <ChecksPanel buildCommandContext={buildCommandContext} />}
-          {CompanionChunk && !tracing && !readOnly && !collabGuest && companionAllowed(presenting) && (
-            <Suspense fallback={null}>
-              <CompanionChunk.Component buildCommandContext={buildCommandContext} />
-            </Suspense>
-          )}
           <FlowBar playback={playback} follower={collabFollowing && mode !== 'present'} />
           <FocusIndicator />
           <LayoutBusyBar />
@@ -1275,11 +1267,6 @@ export function useKeyboard({
             // browser extension can claim a bare ⌘E before this page receives it.
             event.preventDefault();
             setExportOpen(true);
-            return;
-          case 'j':
-            if (!CompanionChunk || !companionAllowed(presenting)) return;
-            event.preventDefault();
-            useUiStore.getState().setCompanionOpen(!useUiStore.getState().companionOpen);
             return;
           case 'k':
             // The command palette. Only opens from here — while it's open its own

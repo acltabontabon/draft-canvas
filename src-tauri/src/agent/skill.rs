@@ -732,9 +732,14 @@ mod tests {
             "35",
             "d20ef8732e53d452b6115c264b676287f507d6444532a4956c933e294897a5ef",
         ),
+        // The 2.x line starts at 100, so it never meets a version the 1.x line publishes later.
+        (
+            "100",
+            "ffaf9f8a56c9b6d19e706528ce3f6cd1715ccd81eebe73fe3218879d53af2af0",
+        ),
         (
             "101",
-            "628ff04a5a57687f577b16ec0f96ad33a0c2132d4cd65f1b02eee940dffe2d19",
+            "711108f5f1de68ed2c23d013a49ad805ea27bb59594c6605d8528ae20fac3383",
         ),
     ];
 

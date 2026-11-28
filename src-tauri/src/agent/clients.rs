@@ -157,7 +157,7 @@ fn unavailable(message: impl Into<String>) -> AppError {
 // --- Codex -------------------------------------------------------------------------------------
 
 /// Codex's own folder: `CODEX_HOME`, else `~/.codex`.
-pub(crate) fn codex_home() -> Option<PathBuf> {
+fn codex_home() -> Option<PathBuf> {
     env_dir("CODEX_HOME").or_else(|| home().map(|h| h.join(".codex")))
 }
 
@@ -437,7 +437,7 @@ fn find_cli(program: &str, names: &[&str], known: Vec<PathBuf>) -> Option<PathBu
         .or_else(|| login_shell_find(program))
 }
 
-pub(crate) fn find_claude() -> Option<PathBuf> {
+fn find_claude() -> Option<PathBuf> {
     let exe = if cfg!(windows) {
         "claude.exe"
     } else {
@@ -454,27 +454,8 @@ pub(crate) fn find_claude() -> Option<PathBuf> {
     find_cli("claude", &[exe], known)
 }
 
-/// The Codex CLI: its standalone installer's folder, Homebrew, or an npm global (`codex.cmd` on
-/// Windows), wherever the person's shell finds it.
-pub(crate) fn find_codex() -> Option<PathBuf> {
-    let names: &[&str] = if cfg!(windows) {
-        &["codex.exe", "codex.cmd"]
-    } else {
-        &["codex"]
-    };
-    let known = home()
-        .map(|home| {
-            vec![
-                home.join(".local/bin").join(names[0]),
-                home.join(".codex/bin").join(names[0]),
-            ]
-        })
-        .unwrap_or_default();
-    find_cli("codex", names, known)
-}
-
 /// This process's PATH with `dir` first, or `None` when there is no folder to add.
-pub(crate) fn path_with(dir: Option<&Path>) -> Option<std::ffi::OsString> {
+fn path_with(dir: Option<&Path>) -> Option<std::ffi::OsString> {
     let dir = dir.filter(|d| !d.as_os_str().is_empty())?;
     let inherited = std::env::var_os("PATH").unwrap_or_default();
     std::env::join_paths(
@@ -513,7 +494,7 @@ pub(crate) struct Output {
 
 /// Runs `command` without a console window. The deadline covers both exit and pipe EOF: an
 /// exited CLI may have left a child holding its pipes. Output and the reader queue are bounded too.
-pub(crate) fn run(mut command: Command, limit: Duration) -> std::io::Result<Output> {
+fn run(mut command: Command, limit: Duration) -> std::io::Result<Output> {
     use std::sync::mpsc::{self, RecvTimeoutError};
     const MAX_OUTPUT: usize = 1024 * 1024;
     #[cfg(unix)]
@@ -1278,9 +1259,28 @@ mod tests {
         codex_entry(&text.parse().unwrap())
     }
 
+    /// A shell command: `sh -c` on Unix, `cmd /C` on Windows. Windows gets its line as it is: the
+    /// standard library's quoting escapes inner quotes with backslashes, which cmd doesn't read, so
+    /// `type "C:\…\big.txt"` failed to start.
+    #[cfg(windows)]
+    fn shell(_unix: &str, windows: &str) -> Command {
+        use std::os::windows::process::CommandExt;
+        let mut command = Command::new("cmd");
+        command.arg("/C").raw_arg(windows);
+        command
+    }
+
+    /// A shell command: `sh -c` on Unix, `cmd /C` on Windows.
+    #[cfg(not(windows))]
+    fn shell(unix: &str, _windows: &str) -> Command {
+        let mut command = Command::new("sh");
+        command.args(["-c", unix]);
+        command
+    }
+
     #[test]
     fn cli_probes_bound_output_and_keep_nonzero_exit_status() {
-        let mut command = crate::companion::runner::tests::shell(
+        let mut command = shell(
             "echo hello; echo denied >&2; exit 3",
             "(echo hello& echo denied 1>&2& exit /b 3)",
         );
@@ -1293,7 +1293,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let big = dir.path().join("big.txt");
         std::fs::write(&big, vec![b'x'; 2 * 1024 * 1024]).unwrap();
-        command = crate::companion::runner::tests::shell(
+        command = shell(
             &format!("cat '{}'", big.display()),
             &format!("type \"{}\"", big.display()),
         );
@@ -1308,7 +1308,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn cli_probe_jobs_end_on_timeout_and_on_parent_exit_with_inherited_pipes() {
-        let command = crate::companion::runner::tests::shell("", "ping -n 30 127.0.0.1 >nul");
+        let command = shell("", "ping -n 30 127.0.0.1 >nul");
         let started = Instant::now();
         assert_eq!(
             run(command, Duration::from_millis(200))
@@ -1318,10 +1318,7 @@ mod tests {
             std::io::ErrorKind::TimedOut
         );
         assert!(started.elapsed() < Duration::from_secs(10));
-        let command = crate::companion::runner::tests::shell(
-            "",
-            r#"start "" /b ping -n 30 127.0.0.1 & exit /b 0"#,
-        );
+        let command = shell("", r#"start "" /b ping -n 30 127.0.0.1 & exit /b 0"#);
         let started = Instant::now();
         let output = run(command, Duration::from_secs(15)).unwrap();
         assert!(output.success);
@@ -1331,7 +1328,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn cli_probe_timeout_includes_pipes_inherited_by_children() {
-        let command = crate::companion::runner::tests::shell("sleep 30 & exit 0", "");
+        let command = shell("sleep 30 & exit 0", "");
         let started = Instant::now();
         assert_eq!(
             run(command, Duration::from_millis(200))

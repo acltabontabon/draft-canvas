@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ENTRY_TOOLS, FULL_TOOLS, PLANNING_ENTRY_TOOLS, RUN_TOOLS, TOOLS } from '../../src/agent/schema';
+import { ENTRY_TOOLS, FULL_TOOLS, TOOLS } from '../../src/agent/schema';
 
 const toolsJson = () => readFileSync(join(process.cwd(), 'src-tauri/mcp/tools.json'), 'utf8');
 
@@ -68,29 +68,16 @@ function refsIn(schema: unknown, out: string[] = []): string[] {
 describe('MCP tool definitions', () => {
   it('are the ones the sidecar compiles in', () => {
     expect(readFileSync(join(process.cwd(), 'src-tauri/mcp/entry-tools.json'), 'utf8')).toBe(`${JSON.stringify(ENTRY_TOOLS, null, 2)}\n`);
-    expect(readFileSync(join(process.cwd(), 'src-tauri/mcp/planning-entry-tools.json'), 'utf8')).toBe(`${JSON.stringify(PLANNING_ENTRY_TOOLS, null, 2)}\n`);
     expect(toolsJson()).toBe(`${JSON.stringify(TOOLS, null, 2)}\n`);
-    const runTools = readFileSync(join(process.cwd(), 'src-tauri/mcp/run-tools.json'), 'utf8');
-    expect(runTools).toBe(`${JSON.stringify(RUN_TOOLS, null, 2)}\n`);
   });
 
   it('keeps the connected tool catalog within its compact JSON size budget', () => {
     // The one tool most agents are shown: enough to say how help, a read and an update are called.
     expect(Buffer.byteLength(JSON.stringify(ENTRY_TOOLS))).toBeLessThanOrEqual(700);
-    expect(Buffer.byteLength(JSON.stringify(PLANNING_ENTRY_TOOLS))).toBeLessThanOrEqual(1_200);
     // The checked-in file is indented; tools/list serializes compact JSON for clients.
     // Includes what `set` takes for each kind of target, once, on update_diagram.
     // 16,500 until diagram_history (Canvas Evolution, about 740 bytes): the catalog was already at 16,496.
     expect(Buffer.byteLength(JSON.stringify(TOOLS))).toBeLessThanOrEqual(17_300);
-  });
-
-  it('keep the companion’s own tools apart from the published ones', () => {
-    const published = new Set<string>(TOOLS.map((t) => t.name));
-    expect(RUN_TOOLS.map((t) => t.name)).toEqual(['read_conversation', 'ask_to_read_code', 'list_code', 'search_code', 'read_code']);
-    for (const run of RUN_TOOLS) {
-      expect(published.has(run.name), run.name).toBe(false);
-      expect(run.annotations.readOnlyHint, run.name).toBe(true);
-    }
   });
 
   it('name the documented tools, each with an object input schema and annotations', () => {

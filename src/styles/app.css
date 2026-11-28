@@ -2147,6 +2147,12 @@ kbd {
   border-radius: var(--dc-radius-pill);
 }
 
+/* Arrange's bar holds more than Tidy up's (a direction, a flow to follow, the spacing, what to show),
+   so its groups sit a little closer and it keeps its words on a 1200px canvas. */
+.dc-arrange-bar {
+  gap: 13px;
+}
+
 /* Arrange's bar is Tidy up's, with the reading direction to choose between the name and the
    actions: the choice and what it means sit together, as one group. */
 .dc-arrange-bar-direction {

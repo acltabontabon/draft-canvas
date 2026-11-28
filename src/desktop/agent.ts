@@ -360,42 +360,6 @@ async function read(host: AgentHost, args: Record<string, unknown>, context: Age
   return withCollaborators(readDiagram(file, args, revision, diagramId), snapshot);
 }
 
-/** Past this, a turn's snapshot is left out and the agent reads (and pages) the view itself. */
-export const SNAPSHOT_MAX = 40_000;
-
-/**
- * What read_diagram would answer for the open diagram's view `room`, as the text a companion turn
- * carries: given up front, the agent's first call is its answer, not a read, and every call of a
- * turn resends everything so far. Read through the same path a tool call takes, so the revision in
- * it is one this host handed out and a change built on it is checked as one built on a read. Null
- * when it is too big to send whole, or can't be read.
- */
-export async function turnSnapshot(host: AgentHost, diagramId: string, room: readonly string[]): Promise<string | null> {
-  try {
-    const snapshot = await fileFor(host, { diagramId, open: true });
-    const args = room.length ? { view: { inside: [...room] } } : {};
-    const result = withCollaborators(readDiagram(snapshot.file, args, snapshot.revision, diagramId), snapshot);
-    const semanticText = JSON.stringify(result);
-    if (semanticText.length > SNAPSHOT_MAX) return null;
-    const view = room.length ? viewOf(snapshot.file, room) : snapshot.file;
-    const byId = new Map(view?.nodes.map((node) => [node.id, node]));
-    // A semantic read cannot distinguish a row from a fork. Small box tuples let a fresh session
-    // adjust spacing without replacing the arrangement. Use the same file/revision and room lens;
-    // avoid computing or sending connector paths, or making a second read just for coordinates.
-    for (const field of ['elements', 'groups', 'notes']) {
-      if (!Array.isArray(result[field])) continue;
-      result[field] = result[field].map((item: Record<string, unknown>) => {
-        const node = byId.get(String(item.id));
-        return node ? { ...item, box: [node.x, node.y, node.width, node.height].map(Math.round) } : item;
-      });
-    }
-    const text = JSON.stringify(result);
-    // Coordinates should never turn a view that already fits into another agent read round trip.
-    return text.length <= SNAPSHOT_MAX ? text : semanticText;
-  } catch {
-    return null;
-  }
-}
 
 /** Mark only content actually handed out, including attachment ids whose edits belong to their host. */
 function withCollaborators(result: Record<string, unknown>, snapshot: ReadSnapshot): Record<string, unknown> {
@@ -765,7 +729,6 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
     title: snapshot.file.metadata.title,
     target: 'open',
     path,
-    ...(event.context.run ? { run: event.context.run } : {}),
     ...(startView ? { base: { nodes: startView.nodes, edges: startView.edges } } : {}),
   });
   let result = await candidateOrUpdate(event, snapshot.file, path, [handOut(host, snapshot), snapshot.revision], api);
@@ -878,7 +841,7 @@ async function updateFile(api: DesktopApi, host: AgentHost, event: Request, expe
   const path = args.previewId !== undefined && args.view === undefined
     ? readPreview(args.previewId, context.diagramId ?? '', context.session ?? '', current).path
     : viewPathOf(parsed.document, args.view);
-  agentActivity.begin({ id: event.id, tool: 'update_diagram', title: parsed.document.metadata.title, target: 'file', path, ...(context.run ? { run: context.run } : {}) });
+  agentActivity.begin({ id: event.id, tool: 'update_diagram', title: parsed.document.metadata.title, target: 'file', path });
   const result = await candidateOrUpdate(event, parsed.document, path, current, api);
   if (result.kind !== 'update') throw new AgentError('INTERNAL', 'The edit could not be worked out.');
   if (result.problems.length) throw layoutConstrained(result);

@@ -99,7 +99,7 @@ export async function bootDesktop(): Promise<void> {
     registerDesktopHost(null);
     setFileSaver(null);
     useUiStore.getState().notify(
-      'Draft Canvas couldn’t start its desktop features, so files, projects and Nodi aren’t available in this window, and diagrams are kept in its own storage. Restart Draft Canvas to try again.',
+      'Draft Canvas couldn’t start its desktop features, so files, projects and agent access aren’t available in this window, and diagrams are kept in its own storage. Restart Draft Canvas to try again.',
       'error',
     );
   }

@@ -221,8 +221,10 @@ export interface ArrangePreview {
   crossings?: { before: number; after: Partial<Record<ArrangeDirection, number>> };
   /** The flow this arrangement lays out in one line, when one was chosen. */
   followed?: string;
-  /** Asked for by a layout skill of Nodi's: Apply plays the rearrangement (`canvas/arrangeMotion.ts`)
-   *  instead of cutting to it. */
+  /** The spacing this arrangement was asked for, when one was chosen; absent for the standard one. */
+  spacing?: 'compact' | 'spacious';
+  /** Asked for with a preset (a direction, a spacing, a flow to follow): Apply plays the
+   *  rearrangement (`canvas/arrangeMotion.ts`) instead of cutting to it. */
   motion?: boolean;
 }
 
@@ -263,9 +265,6 @@ export interface ProposalPreview {
   edges: readonly DraftEdge[];
   /** The review panel's "Show on canvas" toggle — ghost data stays cached while this is off. */
   visible: boolean;
-  /** Which surface is reviewing it (`useProposalReview`): only that one clears it. The review panel
-   *  when unset. */
-  owner?: 'panel' | 'companion';
 }
 
 export interface ContinuationOffer extends MaterializedContinuation {
@@ -600,8 +599,6 @@ export interface UiStore {
    *  which proposal it's showing — `null` shows the list for the current diagram. */
   proposalPanelOpen: boolean;
   proposalPanelId: string | null;
-  /** Whether the agent companion (`desktop/ui/Companion.tsx`, desktop only) is open, or resting. */
-  companionOpen: boolean;
   /**
    * A flow id the panel should open in rename mode, with its title selected — set by every
    * "new flow" entry point so naming is part of creating, not a separate errand. One-shot, like
@@ -690,12 +687,6 @@ export interface UiStore {
   /** Where following Junctions has led, for Back and Forward (`junctions/trail.ts`). Session-local:
    *  never saved, undone or shared, and it never touches the document. */
   junctionTrail: Trail;
-  /**
-   * The parts Nodi's reply points at while the person hovers that point, ringed on the canvas like a
-   * jump until they look away. Transient: never saved, undone or exported. A set, so each node's and
-   * edge's selector is one lookup.
-   */
-  pointedIds: ReadonlySet<string> | null;
   /**
    * The shapes and connectors lit while Shift rests the pointer on a shape: everything its data comes
    * from and everything it feeds (`canvas/useHoverTrace.ts`). Transient: never saved, undone or
@@ -882,7 +873,6 @@ export interface UiStore {
   requestFlowRename: (flowId: string | null) => void;
   /** Opens the proposal panel (optionally straight to one proposal), or closes it. */
   setProposalPanelOpen: (open: boolean, proposalId?: string | null) => void;
-  setCompanionOpen: (open: boolean) => void;
   setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;
   setOutagePointer: (pointer: { ids: readonly string[]; reaches: boolean } | null) => void;
   requestEdit: (id: string | null) => void;
@@ -918,7 +908,6 @@ export interface UiStore {
   openCommandPaletteAt: (query: string) => void;
   requestExportSelection: (requested: boolean) => void;
   setJumpFlashId: (id: string | null) => void;
-  setPointedIds: (ids: ReadonlySet<string> | null) => void;
   setJunctionPeek: (peek: JunctionPeekState | null) => void;
   setJunctionPlacing: (placing: { sourceId: string } | null) => void;
   setJunctionPeerLink: (link: string | null) => void;
@@ -1100,7 +1089,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   restyleBeat: null,
   proposalPanelOpen: false,
   proposalPanelId: null,
-  companionOpen: false,
   flowRenameRequestId: null,
   interactionActive: false,
   outagePointer: null,
@@ -1121,7 +1109,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   junctionPlacing: null,
   junctionPeerLink: null,
   junctionTrail: EMPTY_TRAIL,
-  pointedIds: null,
   traceIds: null,
   makeRoom: null,
   legendShown: initialLegendShown(),
@@ -1263,7 +1250,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setStylePanelTab: (stylePanelTab) => set({ stylePanelTab }),
   beatRestyle: () => set((state) => ({ restyleBeat: state.restyleBeat === 'a' ? 'b' : 'a' })),
   setProposalPanelOpen: (proposalPanelOpen, proposalId = null) => set({ proposalPanelOpen, proposalPanelId: proposalPanelOpen ? proposalId : null }),
-  setCompanionOpen: (companionOpen) => set({ companionOpen }),
   requestFlowRename: (flowRenameRequestId) => set({ flowRenameRequestId }),
   setInteractionActive: (interactionActive, movingNodeIds) =>
     set((state) => {
@@ -1344,7 +1330,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   requestExportSelection: (exportSelectionRequested) => set({ exportSelectionRequested }),
   setJumpFlashId: (jumpFlashId) =>
     set((state) => (state.jumpFlashId === jumpFlashId ? state : { jumpFlashId })),
-  setPointedIds: (pointedIds) => set((state) => (state.pointedIds === pointedIds ? state : { pointedIds })),
   setJunctionPeek: (junctionPeek) =>
     set((state) => (state.junctionPeek?.id === junctionPeek?.id && state.junctionPeek?.by === junctionPeek?.by ? state : { junctionPeek })),
   setJunctionPlacing: (junctionPlacing) =>

@@ -179,7 +179,7 @@ it('leaves the field being typed in alone when an agent asks to show a diagram i
 it('shows a diagram an agent changed when a field only holds focus, nobody typing in it', async () => {
   const app = await connect();
   await app.open('payments');
-  // Nodi's composer, empty, keeping focus after Send, with the last key long ago.
+  // A composer, empty, keeping focus after Send, with the last key long ago.
   const composer = document.createElement('input');
   document.body.append(composer);
   composer.focus();

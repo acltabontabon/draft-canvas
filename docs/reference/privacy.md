@@ -114,17 +114,8 @@ The desktop app logs coding-agent requests in `agent/ledger.jsonl` (request IDs,
 receipts and paths) so a retried request is never applied twice. Finished entries are kept for up to
 7 days (at most 2,000), unfinished ones for up to 30 days.
 
-Nodi (desktop) runs your own Claude Code or Codex on your machine, signed in as you:
-
-- What you type and what the agent reads go to that agent's provider, as with any prompt; Draft
-  Canvas sends nothing itself. The conversation on screen is kept in memory.
-- The agent keeps its own session files (`~/.claude/projects`, `~/.codex/sessions`). Draft Canvas
-  records which session belongs to which diagram in `companion/sessions.json` in the app's data
-  folder, plus a short request and outcome history per diagram (see
-  [Connect an AI agent](../guides/connect-an-ai-agent.md#what-nodi-can-reach)).
-- A run's working folder holds only its connector configuration and is removed when the run ends.
-- Nodi reads no code unless you allow it in the chat, and then only one project folder, read-only
-  and without secret files.
+Draft Canvas runs no agent of its own and sends nothing itself: what your agent reads goes to that
+agent's provider, as with any prompt you give it.
 
 Agents can read summaries of the open diagram's history and preview a restore or merge. They read a
 past revision in full only if you turn on **Let agents read past revisions in full** in
