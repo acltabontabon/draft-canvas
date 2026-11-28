@@ -1,5 +1,6 @@
 import { baseCategory, categoryOf } from '../document/connectorSemantics';
 import type { DraftEdge } from '../document/types';
+import { stronglyConnected as componentsOf, type Component } from '../model/scc';
 import { isBaselineClass } from './classify';
 import { trafficGroupOf } from './eligibility';
 import { buildTrafficGraph, compareText, type GraphResult } from './graph';
@@ -25,10 +26,7 @@ import {
  * nothing more, because how many times a loop repeats is exactly what a diagram doesn't say.
  */
 
-export interface Component {
-  members: string[];
-  loop: boolean;
-}
+export type { Component };
 
 const WORKLOAD_ORDER: WorkloadKind[] = ['request', 'message', 'data'];
 
@@ -43,68 +41,14 @@ function workloadOf(interaction: TrafficInteraction): WorkloadKind | undefined {
   return undefined;
 }
 
-/** Iterative Tarjan over baseline interactions, so a deep chain can't exhaust the call stack.
- *  Components come sources first; the outage walk (`outage.ts`) reads its loops with it too. */
+/** Loops among baseline interactions, components sources first (`model/scc.ts`). The outage walk
+ *  (`outage.ts`) reads its loops with it too. */
 export function stronglyConnected(ids: readonly string[], outgoing: ReadonlyMap<string, readonly TrafficInteraction[]>): { components: Component[]; componentOf: Map<string, number> } {
   const adjacency = new Map<string, string[]>();
   for (const id of ids) {
-    const targets = [...new Set((outgoing.get(id) ?? []).map((interaction) => interaction.to))].sort(compareText);
-    adjacency.set(id, targets);
+    adjacency.set(id, [...new Set((outgoing.get(id) ?? []).map((interaction) => interaction.to))].sort(compareText));
   }
-  const index = new Map<string, number>();
-  const low = new Map<string, number>();
-  const stack: string[] = [];
-  const onStack = new Set<string>();
-  const components: Component[] = [];
-  let next = 0;
-
-  for (const root of ids) {
-    if (index.has(root)) continue;
-    const frames: { node: string; edge: number }[] = [{ node: root, edge: 0 }];
-    index.set(root, next);
-    low.set(root, next);
-    next += 1;
-    stack.push(root);
-    onStack.add(root);
-    while (frames.length > 0) {
-      const frame = frames[frames.length - 1]!;
-      const neighbours = adjacency.get(frame.node) ?? [];
-      if (frame.edge < neighbours.length) {
-        const neighbour = neighbours[frame.edge++]!;
-        if (!adjacency.has(neighbour)) continue;
-        if (!index.has(neighbour)) {
-          index.set(neighbour, next);
-          low.set(neighbour, next);
-          next += 1;
-          stack.push(neighbour);
-          onStack.add(neighbour);
-          frames.push({ node: neighbour, edge: 0 });
-        } else if (onStack.has(neighbour)) {
-          low.set(frame.node, Math.min(low.get(frame.node)!, index.get(neighbour)!));
-        }
-        continue;
-      }
-      frames.pop();
-      const parent = frames[frames.length - 1];
-      if (parent) low.set(parent.node, Math.min(low.get(parent.node)!, low.get(frame.node)!));
-      if (low.get(frame.node) !== index.get(frame.node)) continue;
-      const members: string[] = [];
-      let member: string;
-      do {
-        member = stack.pop()!;
-        onStack.delete(member);
-        members.push(member);
-      } while (member !== frame.node);
-      members.sort(compareText);
-      const selfLoop = members.length === 1 && adjacency.get(members[0]!)!.includes(members[0]!);
-      components.push({ members, loop: members.length > 1 || selfLoop });
-    }
-  }
-  // Tarjan emits components in reverse topological order; reversing gives sources first.
-  components.reverse();
-  const componentOf = new Map<string, number>();
-  components.forEach((component, position) => component.members.forEach((id) => componentOf.set(id, position)));
-  return { components, componentOf };
+  return componentsOf(ids, adjacency);
 }
 
 function nodeResult(id: string, graph: GraphResult): TrafficNode {
