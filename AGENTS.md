@@ -243,6 +243,12 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - `cli/` is the Node side: no network, no child process, no environment read
   (`tests/privacy.test.ts`), and the only write is the `--output` file. Exit codes and the `schema`
   of each `--json` report are a public interface: add fields, never repurpose them.
+- The CLI ships as a release asset, `Draft-Canvas_<version>_cli.mjs`, built by the `cli` job of
+  `desktop-release.yml` and named like the installers so it gets their checksum and attestation.
+  It is not published to a package registry. `action.yml` passes every input and event value to
+  `scripts/architecture-review-action.mjs` through the environment, never inside a `run:` line,
+  and that script calls programs by argument list, never through a shell
+  (`tests/architecture-review-action.test.ts`).
 - `agent/review.ts` re-exports `checks/review.ts`. What `read_diagram` returns must not change
   when a check is added: new checks go in `checks/rules.ts`.
 

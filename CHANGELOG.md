@@ -30,6 +30,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Architecture review for pull requests** — `draftcanvas review --base main` writes what each
   diagram changes about the architecture since the base revision, and the findings that came with
   it, as Markdown for a job summary.
+- **A GitHub Action, and a download** — Each release attaches the command-line tool as one file,
+  with a checksum and a build attestation. `uses: acltabontabon/draft-canvas@<release>` reviews a
+  pull request with it and writes the report to the job summary.
 - **What a change would touch** — `draftcanvas impact` lists what a part reaches and is reached by,
   what it shares and crosses, and what the outage walk says fails if it stops.
 

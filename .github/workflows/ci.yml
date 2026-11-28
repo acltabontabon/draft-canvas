@@ -130,6 +130,13 @@ jobs:
         working-directory: www
       # Builds the editor, the site, and the assembled dist-web/ the deploy publishes.
       - run: npm run build:web
+      # The headless CLI is one bundled file a release attaches. Built and run here so a break in
+      # the bundle shows on the pull request, not at release time.
+      - name: Build and try the headless CLI
+        run: |
+          npm run cli:build
+          node dist-cli/draftcanvas.mjs --version
+          node dist-cli/draftcanvas.mjs check tests/fixtures/starters/starters/architectures/bff/bff.draftcanvas
       - run: npm run licenses:check
       - name: Record the source and preserve the built artifact
         env:
