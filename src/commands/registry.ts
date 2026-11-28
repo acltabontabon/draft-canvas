@@ -1733,6 +1733,19 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
             keywords: ['upstream', 'downstream', 'where does this come from', 'impact', 'data flow', 'trace'],
             run: (inner: CommandContext) => inner.editor.showLineage(node.id),
           },
+          // Everything the arrows lead to from it and everything that leads to it, by any relation:
+          // lineage follows data alone.
+          {
+            id: 'show-impact',
+            title: 'Show what it touches',
+            group: 'selection' as const,
+            hint: 'What it reaches and what reaches it',
+            keywords: ['impact', 'blast radius', 'depends', 'dependencies', 'upstream', 'downstream', 'reach', 'consumers', 'what breaks'],
+            run: (inner: CommandContext) => {
+              const elsewhere = inner.editor.showImpact(node.id);
+              if (elsewhere > 0) inner.ui.notify(`It also touches ${count(elsewhere, 'part')} drawn in other views.`);
+            },
+          },
         ]
       : []),
     {

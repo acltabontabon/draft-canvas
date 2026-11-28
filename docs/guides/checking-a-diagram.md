@@ -15,6 +15,11 @@ it, or choose **Check this diagram** from the command palette (`⌘K`), to open 
 - A finding is something to look at, not a verdict. Change the diagram and the list follows; a
   diagram with nothing to report shows no count at all.
 
+To see what a change to one shape would touch, select it and choose **Show what it touches** from
+the command palette. Everything it reaches and everything that reaches it stays lit, by any
+relation and through Junctions, until you press `Esc`. **Show lineage** does the same for data
+alone. Parts it touches in other views are counted in a note, since one view cannot show them.
+
 The list reads the drawing alone. It is never saved with the diagram, shared, exported or undone.
 Evidence and your own rules are checked from the command line, where there is a repository to
 hold them against.

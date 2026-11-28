@@ -13,6 +13,8 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Checks** — The status bar counts what the drawing itself says is unfinished or tangled: a
   queue nothing consumes, services that call each other in a loop, connectors that lead nowhere.
   Open the list to go to each one, in any view. <!-- highlight -->
+- **Show what it touches** — Select a shape and choose it in `⌘K` to light everything it reaches
+  and everything that reaches it, by any relation.
 - **Check a diagram from the command line** — `draftcanvas` reads a diagram with the editor's own
   code and reports what it finds: `inspect`, `check`, `impact`, `diff`, `review` and `render`. It never
   changes a diagram and has no network code. See

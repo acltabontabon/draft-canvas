@@ -149,6 +149,7 @@ import { inferRelationshipThroughJunctions, reinferIfEligible } from '../documen
 import { plainShortcut } from '../lib/platform';
 import { technologyKindPatch } from '../document/technologyKind';
 import { lineageOf } from '../document/dataFlow';
+import { impactScope } from '../checks/impact';
 import { makeRoom as makeRoomOp, type RoomPush } from '../document/makeRoom';
 import { fixedIds } from '../document/held';
 import { replicasField, splitReplicaCount } from '../document/replicas';
@@ -585,6 +586,9 @@ export interface EditorStore {
   setEdgesPortal: (ids: readonly string[], portal: boolean) => boolean;
   /** Spotlights everything `nodeId`'s data comes from and everything it feeds (`lineageOf`). */
   showLineage: (nodeId: string) => void;
+  /** Lights what a change to this shape touches in the view: what it reaches and what reaches it,
+   *  by any relation. Returns how many more it touches in other views. A view like the spotlight. */
+  showImpact: (nodeId: string) => number;
   setEdgeCondition: (id: string, condition: string) => void;
   /** Free-text response chip, e.g. "200 Customer" — display only, see `DraftEdge.response`. */
   setEdgeResponse: (id: string, response: string) => void;
@@ -2714,6 +2718,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   showLineage(nodeId) {
     const { nodeIds, edgeIds } = lineageOf(get().document, nodeId);
     get().enterFocus(nodeIds, edgeIds);
+  },
+
+  showImpact(nodeId) {
+    const state = get();
+    const { nodeIds, edgeIds, elsewhere } = impactScope(fileOf(state), state.path, nodeId);
+    if (nodeIds.length > 0) state.enterFocus(nodeIds, edgeIds);
+    return elsewhere;
   },
 
   setEdgeCondition(id, condition) {
