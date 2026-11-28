@@ -152,9 +152,15 @@ drawing says nothing, so does `impact`.
 draftcanvas diff before.draftcanvas after.draftcanvas
 ```
 
-`diff` lists what changed between two versions in the diagram's own terms (parts added, connectors
-changed, shapes moved between views), matched by id as [history](history.md#compare-two-versions) does, and the
-findings the change introduced or resolved.
+`diff` reports three things:
+
+- **What changed in the file**, element by element, matched by id as
+  [history](history.md#compare-two-versions) does. Moves and restyles are included.
+- **What changed in the architecture**, as statements: a part added or removed, a relation that
+  became asynchronous, a data store that gained a user, a relation that now crosses a boundary. A
+  diagram that was only rearranged says so. A diagram drawn again with new ids is still read as
+  the same parts when their names and places make that unambiguous.
+- **Findings** the change introduced or resolved.
 
 ## A picture
 

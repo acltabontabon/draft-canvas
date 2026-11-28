@@ -22,7 +22,7 @@ import { realRepairs } from '../src/document/validate';
 import { describe } from '../src/evolution/summary';
 import { isEmptyDiff, semanticDiff } from '../src/evolution/diff';
 import { deserializeDocument } from '../src/export/project';
-import { labelOf, modelOf, type ArchModel } from '../src/model';
+import { architectureChanges, labelOf, modelOf, type ArchModel } from '../src/model';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { fileSystemReader, RepoError } from './repo';
 
@@ -262,6 +262,7 @@ function diff(args: Args, version: string): Outcome {
   const after = load(args.positional[1], 'the later diagram');
   const changes = semanticDiff(before.document, after.document);
   const description = describe(changes);
+  const architecture = architectureChanges(modelOf(before.document), modelOf(after.document));
   const was = new Map(builtinFindings(before.document).map((entry) => [entry.id, entry]));
   const now = new Map(builtinFindings(after.document).map((entry) => [entry.id, entry]));
   const introduced = sortFindings([...now.values()].filter((entry) => !was.has(entry.id)));
@@ -276,6 +277,7 @@ function diff(args: Args, version: string): Outcome {
           before: { path: before.path, title: before.document.metadata.title },
           after: { path: after.path, title: after.document.metadata.title },
           summary: isEmptyDiff(changes) ? 'No changes.' : description.summary,
+          architecture,
           categories: changes.categories,
           elements: changes.elements,
           file: changes.file,
@@ -288,6 +290,11 @@ function diff(args: Args, version: string): Outcome {
   }
   // An unchanged diagram has a summary too (it is worded for a history entry); say the plain thing.
   const lines = isEmptyDiff(changes) ? ['No changes.'] : [description.summary, ...description.body.map((line) => `  ${line}`)];
+  if (!isEmptyDiff(changes)) {
+    lines.push('', 'Architecture');
+    if (architecture.length) lines.push(...architecture.map((change) => `  ${change.text}`));
+    else lines.push('  No change to the architecture: layout, style or annotation only.');
+  }
   if (introduced.length) lines.push('', 'New findings', ...introduced.map((entry) => `  ${entry.severity.padEnd(7)} ${entry.message}`));
   if (resolved.length) lines.push('', 'No longer found', ...resolved.map((entry) => `  ${entry.message}`));
   return out(lines.join('\n'));

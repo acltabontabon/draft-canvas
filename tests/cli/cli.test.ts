@@ -152,6 +152,11 @@ describe('draftcanvas', () => {
     expect(json.schema).toBe('draftcanvas.diff/1');
     expect(json.elements.filter((change: { change: string }) => change.change === 'added').map((change: { id: string }) => change.id).sort()).toEqual(['billing', 'e3', 'e4']);
     expect(json.findings.resolved).toEqual([]);
+    expect(json.architecture.map((change: { kind: string }) => change.kind)).toEqual(['part-added', 'relation-added', 'relation-added']);
+    expect(text.stdout).toContain('"Billing" now has a relation to "Orders" (writes). "Orders" now has 2 users.');
+    // A move alone is a change to the file and none to the architecture.
+    const shifted = diagram('shifted.draftcanvas', { ...before, nodes: before.nodes.map((node) => ({ ...node, y: 400 })) });
+    expect((await main(['diff', plain, shifted])).stdout).toContain('No change to the architecture: layout, style or annotation only.');
     expect((await main(['diff', plain, plain])).stdout).toBe('No changes.\n');
     expect((await main(['diff', plain])).code).toBe(2);
   });
