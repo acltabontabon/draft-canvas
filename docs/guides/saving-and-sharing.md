@@ -37,16 +37,17 @@ Open **Share → Export…** (`⌘⇧E`).
 | **Save an editable file → Encrypted** | A passphrase-protected `.dcenc` file |
 | **Save an image** | PNG or SVG |
 | **Use in a README** | An SVG for a Markdown page, linked to its `.draftcanvas`; see [Diagrams in your docs](diagrams-in-docs.md) |
-| **Other formats → Sequences** | Mermaid or PlantUML sequence diagrams of your flows and [sequences](sequence-diagrams.md) |
-| **Other formats → Architecture** | Mermaid flowchart, C4-PlantUML, Structurizr DSL or draw.io |
 
 ![Export with Save an editable file selected.](../media/guides/export-document.png)
 
 - Files include every level.
 - An encrypted file needs a passphrase of at least 8 characters. Send it separately; it can't be
   recovered. `.dcenc` files open in the web app only.
-- **Copy** puts an image or source on the clipboard; `⌘K` has **Copy as image**, **Copy as SVG** and
-  **Copy source as…**. If the clipboard refuses, the file downloads instead.
+- **Copy** puts an image on the clipboard; `⌘K` has **Copy as image** and **Copy as SVG**. If the
+  clipboard refuses, the file downloads instead.
+- Draft Canvas does not write other tools' formats (Mermaid, PlantUML, C4-PlantUML, Structurizr DSL
+  or draw.io). Send the `.draftcanvas` file when someone needs the architecture, and a PNG or SVG
+  when they need a picture.
 
 Image options:
 

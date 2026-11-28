@@ -52,11 +52,6 @@ import { readSelectionContext } from '../agent/selection';
 import { viewOf } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
 import { deserializeDocument } from '../export/project';
-import { countPlayableFlows, playableCount, sequenceSourceFor, type SequenceFormat } from '../export/sequence';
-import { c4PlantUmlSource } from '../export/source/c4plantuml';
-import { aliasTable, collectRooms, edgesBetween, isArchitecture, isBoundary } from '../export/source/shared';
-import { buildSequenceModel } from '../sequence';
-import type { SequenceElement } from '../sequence/types';
 import type { AgentEditorReply, AgentEditorRequest } from '../host/agentBridge';
 import { fittedScale, rasterizeSvg } from '../render/png/rasterize';
 import { renderDocumentSvg } from '../render/svg/document';
@@ -196,9 +191,25 @@ async function requestedStarter(args: Record<string, unknown>): Promise<AgentSta
   return id ? (await downloadedStarters(id))[0] : undefined;
 }
 
+/**
+ * Read formats contract 4 took out: the diagram written as another tool's text. An agent that
+ * learned an older contract still asks for one, so the refusal says what to read instead.
+ */
+const REMOVED_READ_FORMATS: readonly unknown[] = ['mermaid', 'plantuml', 'c4'];
+const REMOVED_READ_FORMAT_HINT =
+  'This read format was removed. Use "draft" for the architecture (elements, relationships, flows, and each native sequence as Mermaid text), "edit" for ids and patch syntax, or "outline" for the views. render_diagram gives a picture.';
+
 async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<unknown> {
   const { args, context } = event;
-  validateToolInput(event.tool, event.tool !== 'create_diagram' && context.diagramId ? { diagramId: context.diagramId, ...args } : args, { deferUpdateSet: true });
+  try {
+    validateToolInput(event.tool, event.tool !== 'create_diagram' && context.diagramId ? { diagramId: context.diagramId, ...args } : args, { deferUpdateSet: true });
+  } catch (error) {
+    // The ordinary refusal, with the formats that remain in its hint.
+    if (event.tool === 'read_diagram' && error instanceof AgentError && REMOVED_READ_FORMATS.includes(args.format)) {
+      throw new AgentError(error.code, error.message, { hint: REMOVED_READ_FORMAT_HINT, details: error.details });
+    }
+    throw error;
+  }
   switch (event.tool) {
     case 'get_capabilities': {
       const wantsStarters = args.tool === undefined && (typeof args.starter === 'string' || !Array.isArray(args.topics) || args.topics.includes('starters'));
@@ -345,20 +356,8 @@ async function read(host: AgentHost, args: Record<string, unknown>, context: Age
   const { file, revision } = snapshot;
   if (format === 'edit') return withCollaborators(readEdit(file, args, revision, diagramId), snapshot);
   if (args.query !== undefined) return withCollaborators(readLookup(file, args, revision, diagramId), snapshot);
-  if (format === 'draft') return withCollaborators(readDiagram(file, args, revision, diagramId), snapshot);
   if (format === 'outline') return withCollaborators(readOutline(file, revision, diagramId), snapshot);
-  // The architecture itself as C4-PlantUML — the same text the Source export writes.
-  if (format === 'c4') return withCollaborators({ diagramId, title: file.metadata.title, revision, format, source: c4PlantUmlSource(file) }, snapshot);
-  // The flows as sequence-diagram source — the same text the app's own export writes, every view
-  // included, so an agent never has to walk the rooms itself.
-  return withCollaborators({
-    diagramId,
-    title: file.metadata.title,
-    revision,
-    format,
-    flows: countPlayableFlows(file),
-    source: sequenceSourceFor(file, format as SequenceFormat),
-  }, snapshot);
+  return withCollaborators(readDiagram(file, args, revision, diagramId), snapshot);
 }
 
 
@@ -378,63 +377,30 @@ function withCollaborators(result: Record<string, unknown>, snapshot: ReadSnapsh
     for (const attachment of (item.attachments ?? []) as { id: string }[]) show('attachment', attachment.id, `${kind}:${item.id}`);
   };
   if (typeof result.title === 'string') show('title', result.diagramId, 'title');
-  if (typeof result.source === 'string') {
-    // Source exports cover every room and replace node ids with aliases. Use their own models so
-    // an annotation names the identifier the agent sees, including disambiguated duplicate labels.
-    const rooms = collectRooms(snapshot.file);
-    if (result.format === 'c4') {
-      const aliases = aliasTable(rooms);
-      for (const room of rooms) {
-        const nodes = room.document.nodes.filter((node) => isArchitecture(node) || isBoundary(node));
-        for (const node of nodes) show('node', aliases.get(node.id), `node:${node.id}`);
-        for (const edge of edgesBetween(room.document, new Set(nodes.filter(isArchitecture).map((node) => node.id)))) show('edge', edge.id);
-      }
-    } else {
-      for (const room of rooms) {
-        // With more than one room, each playable one is headed by its owners' names (`Room:`).
-        if (rooms.length > 1 && playableCount(room.document) > 0) for (const owner of room.owners) show('node', owner.id);
-        const model = buildSequenceModel(room.document);
-        for (const participant of model.participants) show('node', participant.alias, `node:${participant.sourceNodeId}`);
-        const visit = (elements: SequenceElement[]) => {
-          for (const element of elements) {
-            show('flow', element.sourceFlowId);
-            if (element.kind === 'group') visit(element.children);
-            else if (element.kind === 'message') for (const id of element.sourceEdgeIds) show('edge', id);
-            else {
-              if (element.sourceNodeId) show('node', element.sourceNodeId);
-              if (element.sourceEdgeId) show('edge', element.sourceEdgeId);
-            }
-          }
-        };
-        visit(model.elements);
-      }
-    }
-  } else {
-    for (const item of items('matches')) {
-      show(item.type === 'relationship' ? 'edge' : item.type === 'flow' ? 'flow' : 'node', item.id);
-      for (const end of ['from', 'to']) show('node', (item[end] as { id?: string } | undefined)?.id);
-    }
-    const view = result.view as { path: string[]; owner?: { id: string } } | undefined;
-    const edges = new Set(view && viewOf(snapshot.file, view.path)?.edges.map((edge) => edge.id));
-    for (const name of ['elements', 'groups', 'boundaries', 'outsideEndpoints']) for (const item of items(name)) showItem('node', item);
-    for (const item of items('relationships')) showItem('edge', item);
-    for (const item of items('openPoints')) show('point', item.id);
-    for (const item of items('flows')) {
-      show('flow', item.id);
-      for (const step of (item.steps ?? []) as Record<string, unknown>[]) {
-        if (typeof step.label === 'string') show('edge', step.edgeId);
-      }
-    }
-    for (const name of ['notes', 'snippets']) {
-      for (const item of items(name)) {
-        if (item.provenance === 'attached') show('attachment', item.id, `${edges.has(String(item.about)) ? 'edge' : 'node'}:${item.about}`);
-        else showItem('node', item);
-      }
-    }
-    for (const item of items('evidence')) show(edges.has(String(item.id)) ? 'edge' : 'node', item.id);
-    show('node', view?.owner?.id);
-    for (const item of items('views')) show('node', (item.owner as { id: string }).id);
+  for (const item of items('matches')) {
+    show(item.type === 'relationship' ? 'edge' : item.type === 'flow' ? 'flow' : 'node', item.id);
+    for (const end of ['from', 'to']) show('node', (item[end] as { id?: string } | undefined)?.id);
   }
+  const view = result.view as { path: string[]; owner?: { id: string } } | undefined;
+  const edges = new Set(view && viewOf(snapshot.file, view.path)?.edges.map((edge) => edge.id));
+  for (const name of ['elements', 'groups', 'boundaries', 'outsideEndpoints']) for (const item of items(name)) showItem('node', item);
+  for (const item of items('relationships')) showItem('edge', item);
+  for (const item of items('openPoints')) show('point', item.id);
+  for (const item of items('flows')) {
+    show('flow', item.id);
+    for (const step of (item.steps ?? []) as Record<string, unknown>[]) {
+      if (typeof step.label === 'string') show('edge', step.edgeId);
+    }
+  }
+  for (const name of ['notes', 'snippets']) {
+    for (const item of items(name)) {
+      if (item.provenance === 'attached') show('attachment', item.id, `${edges.has(String(item.about)) ? 'edge' : 'node'}:${item.about}`);
+      else showItem('node', item);
+    }
+  }
+  for (const item of items('evidence')) show(edges.has(String(item.id)) ? 'edge' : 'node', item.id);
+  show('node', view?.owner?.id);
+  for (const item of items('views')) show('node', (item.owner as { id: string }).id);
   const elements = snapshot.collaboratorTouches.flatMap(({ key, by }) => [...(shown.get(key)?.values() ?? [])].map((item) => ({ ...item, by })));
   return elements.length ? {
     ...result,

@@ -1,30 +1,10 @@
 /**
- * SequenceModel → Mermaid `sequenceDiagram` text. A pure, independent consumer of the model —
- * never derived from (or shared implementation with) `plantuml.ts`.
+ * How text is written safely into Mermaid `sequenceDiagram` source: the keyword a participant is
+ * declared with, and the escaping names, messages and notes need. `native/mermaid.ts`, which writes a
+ * native sequence as the text an agent reads and edits, is its one consumer.
  */
-import type { NoteKind } from '../document/types';
-import type { InteractionKind, ParticipantKind, SequenceElement, SequenceModel } from './types';
-import { isCodeNote, noteLines } from './wrap';
-
-/** Mermaid's dedicated arrow forms for each message shape: `->>` (solid, filled arrowhead) for a
- *  synchronous call, `-->>` (dashed, filled arrowhead) for a reply, `-)` (solid, open arrowhead —
- *  Mermaid's own fire-and-forget convention) for an asynchronous message. */
-const ARROW: Record<InteractionKind, string> = {
-  sync: '->>',
-  response: '-->>',
-  async: '-)',
-};
-
-/**
- * Mermaid's sequence-diagram grammar has no neutral "just a labeled span" fragment keyword — only
- * `loop`/`alt`/`opt`/`par`/`critical`/`break`/`rect`/`box`, each carrying its own conditional/
- * loop/parallel meaning. `rect` is the closest valid, renderable substitute for a Flow's own
- * group. The fill is one fixed, theme-neutral constant — never per-flow, never accent-derived —
- * so it can never be mistaken for styling intent and stays legible in a dark-mode viewer.
- */
-const GROUP_FILL = 'rgb(240, 240, 240)';
-
-const INDENT = '    ';
+import type { ParticipantKind } from './types';
+import { noteLines } from './wrap';
 
 export function mermaidKeyword(kind: ParticipantKind): 'actor' | 'participant' {
   return kind === 'actor' ? 'actor' : 'participant';
@@ -66,14 +46,9 @@ export function messageText(label: string): string {
   return escapeMermaidText(label.replace(/\r\n?|\n/g, ' ').trim());
 }
 
-/** A Flow's message, which always has words: `label.ts` falls back to a caption, so this never shows. */
-export function sanitizeMessageLabel(label: string): string {
-  return messageText(label) || 'Message';
-}
-
 /**
- * A note's text, collapsed to Mermaid's single line — this format has no real multi-line block
- * form, unlike PlantUML's `note over ... end note`. Prose is wrapped first (`noteLines`, on
+ * A note's text, collapsed to Mermaid's single line — the format has no multi-line block form.
+ * Prose is wrapped first (`noteLines`, on
  * the raw text, so entity escaping below can't skew the measured width; code keeps its lines), `&`/`<`/`>` (and the
  * statement-breaking `#`/`;`) are then written as Mermaid entity codes (so literal code containing
  * `<div>`, `&&` or `retry();` can't be misread by the parser or its HTML-ish note renderer — plain
@@ -88,82 +63,7 @@ export function noteText(text: string, code = false): string {
     .join('<br/>');
 }
 
-/** A Flow's note, which `build.ts` only makes from words; a sequence's note may be left blank (`noteText`). */
+/** A note that must say something: a reference Mermaid cannot write, kept as a note; a sequence's own note may be left blank (`noteText`). */
 export function sanitizeNoteText(text: string, code = false): string {
   return noteText(text, code) || 'Note';
-}
-
-/** Portable, CSS-free prefixes — the source itself must carry the distinction, since a `.mmd`/
- *  `.puml` file has no access to Draft Canvas's own note-kind colors. A plain Note gets none. */
-const NOTE_PREFIX: Partial<Record<NoteKind, string>> = {
-  question: 'Question: ',
-  warning: 'Warning: ',
-  decision: 'Decision: ',
-};
-
-function noteLine(
-  participantIds: readonly string[],
-  text: string,
-  noteKind: NoteKind | undefined,
-  aliasOf: (id: string) => string,
-  code: boolean,
-): string {
-  const anchor = participantIds.map(aliasOf).join(',');
-  const prefix = noteKind ? (NOTE_PREFIX[noteKind] ?? '') : '';
-  return `Note over ${anchor}: ${prefix}${sanitizeNoteText(text, code)}`;
-}
-
-/** The participant(s) a synthesized group-title Note anchors to: the first message's or note's
- *  own participant id(s), found by walking the group's children in order. `build.ts` never emits
- *  an empty group, and every message/note it does emit carries participant ids, so this always
- *  resolves for real output — the empty-array fallback only matters for a hand-built model in a
- *  test. */
-function titleAnchor(children: SequenceElement[]): readonly string[] {
-  for (const child of children) {
-    if (child.kind === 'message') return child.from === child.to ? [child.from] : [child.from, child.to];
-    if (child.kind === 'note') return child.participantIds;
-  }
-  return [];
-}
-
-function renderElement(element: SequenceElement, depth: number, aliasOf: (id: string) => string): string[] {
-  const pad = INDENT.repeat(depth);
-  switch (element.kind) {
-    case 'message':
-      return [
-        `${pad}${aliasOf(element.from)}${ARROW[element.interaction]}${aliasOf(element.to)}: ${sanitizeMessageLabel(element.label)}`,
-      ];
-    case 'note':
-      return [`${pad}${noteLine(element.participantIds, element.text, element.noteKind, aliasOf, isCodeNote(element))}`];
-    case 'group': {
-      const anchor = titleAnchor(element.children).map(aliasOf).join(',');
-      const lines = [`${pad}rect ${GROUP_FILL}`];
-      if (anchor) lines.push(`${INDENT.repeat(depth + 1)}Note over ${anchor}: ${sanitizeNoteText(element.label)}`);
-      for (const child of element.children) lines.push(...renderElement(child, depth + 1, aliasOf));
-      lines.push(`${pad}end`);
-      return lines;
-    }
-  }
-}
-
-export function toMermaid(model: SequenceModel): string {
-  const aliasById = new Map(model.participants.map((p) => [p.id, p.alias]));
-  const aliasOf = (id: string) => aliasById.get(id) ?? id;
-
-  const lines: string[] = [];
-  const title = model.title.trim();
-  // A comment, but a directive (`%%{ … }%%`) is lifted out of the text before comments are
-  // dropped, so the title is escaped exactly like a label.
-  if (title) lines.push(`%% Generated by Draft Canvas from "${escapeMermaidText(title.replace(/\r\n?|\n/g, ' '))}"`);
-  lines.push('sequenceDiagram');
-  for (const participant of model.participants) {
-    lines.push(
-      `${INDENT}${mermaidKeyword(participant.kind)} ${participant.alias} as ${sanitizeParticipantName(participant.label)}`,
-    );
-  }
-  if (model.elements.length > 0) {
-    lines.push('');
-    for (const element of model.elements) lines.push(...renderElement(element, 1, aliasOf));
-  }
-  return `${lines.join('\n')}\n`;
 }

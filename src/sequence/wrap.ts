@@ -1,7 +1,7 @@
 /**
- * Note text is wrapped before it reaches either emitter, because neither target format does it for
- * us: PlantUML and Mermaid both render a note as exactly the lines they are given, so one long
- * sentence becomes one very wide box that stretches the whole diagram sideways.
+ * Note text is wrapped before it is written as Mermaid, because Mermaid does not do it for us: it
+ * renders a note as exactly the lines it is given, so one long sentence becomes one very wide box
+ * that stretches the whole diagram sideways.
  *
  * Author-written line breaks are intent and are always kept; wrapping only ever adds breaks inside
  * a line that is too long on its own. Code is never wrapped at all (`noteLines`).
@@ -48,10 +48,4 @@ export function wrapNoteLines(text: string, width: number = NOTE_WRAP_WIDTH): st
  */
 export function noteLines(text: string, code: boolean): string[] {
   return code ? text.split(/\r\n?|\n/).map((line) => line.trimEnd()) : wrapNoteLines(text);
-}
-
-/** A Code annotation, as `build.ts` emits one: it always sets `language` — even when the code has
- *  none — and a prose note never does. */
-export function isCodeNote(note: object): boolean {
-  return 'language' in note;
 }

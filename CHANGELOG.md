@@ -20,7 +20,6 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Arrange your way** — The Arrange preview has **Spacing** (Snug, Standard or Roomy) and always
   offers both reading directions. `⌘K` has **Arrange left to right**, **Arrange top down**,
   **Arrange with more room** and **Arrange snug**.
-
 - **Linked Junctions count** — A connector drawn in two halves that meet at a linked Junction is
   read as one relation by checks, impact, rules and the architecture diff, in one view or across
   views.
@@ -40,6 +39,16 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 - **Comparing versions** — Changing what kind of boundary a group is now counts as a change of
   meaning, not of style.
+
+#### Removed
+
+- **Export to other tools' formats** — Draft Canvas no longer writes Mermaid sequence diagrams,
+  Mermaid flowcharts, PlantUML, C4-PlantUML, Structurizr DSL or draw.io, and **Other formats** and
+  **Copy source as…** are gone. The `.draftcanvas` file is the open format for an architecture;
+  pictures export as PNG and SVG. Importing Mermaid still works.
+- **Agents** — `read_diagram` no longer returns the diagram as Mermaid, PlantUML or C4-PlantUML
+  text: its `mermaid`, `plantuml` and `c4` formats are refused, with a hint naming the formats that
+  remain. The tool contract is now 4. Sequences are still sent and read as Mermaid text.
 
 ### Desktop
 

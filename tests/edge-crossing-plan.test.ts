@@ -220,7 +220,7 @@ describe('an exported image', () => {
     expect(pathData).not.toContain('C');
   });
 
-  it('leaves the connector path a screen reader and a sequence export see untouched', () => {
+  it('leaves the connector path a screen reader reads untouched', () => {
     const { nodes, edges } = squareCrossing();
     const nodeMap = new Map(nodes.map((node) => [node.id, node]));
 

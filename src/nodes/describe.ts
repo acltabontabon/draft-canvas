@@ -401,7 +401,7 @@ export function describeNode(node: DraftNode, ctx: DescribeContext): DisplayList
   const look = ctx.style.shape(node);
   const own = look.plain ? (ctx.shape ? { ...ctx, shape: undefined } : ctx) : { ...ctx, shape: look };
   // This is a display projection only: the full technology (and its version) stays in the file,
-  // inspector and source exports. Unrecognized or mixed stacks use the neutral technology mark.
+  // the inspector and reads. Unrecognized or mixed stacks use the neutral technology mark.
   const shapes = restyle(withArt(node, own, shapesFor(icon ? { ...node, technology: undefined } : node, own)), look);
   const mark = technologyMarkBounds(node, ctx.technologyIcons);
   if (icon && mark) {

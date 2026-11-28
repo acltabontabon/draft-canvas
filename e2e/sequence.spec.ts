@@ -425,18 +425,14 @@ test.describe('Sequence', () => {
     await page.keyboard.type('notify');
     await page.keyboard.press('Enter');
 
+    // All three are there, in the order they were drawn.
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Share', exact: true }).click();
-    await page.getByRole('menuitem', { name: /^Export/ }).click();
-    const dialog = page.getByRole('dialog', { name: 'Export & share' });
-    await dialog.locator('[data-mode="sequence"]').click();
-    const preview = dialog.getByTestId('export-source-preview');
-    await expect(preview).toContainText('API-->>-Client: 200 OK');
-    await expect(preview).toContainText('API->>+Client: notify');
+    await page.locator(SEQUENCE).hover();
+    expect(await said(page)).toEqual(['Client to API: GET /orders', 'API to Client: 200 OK', 'API to Client: notify']);
   });
 
-  test('a Mermaid sequence diagram pasted in becomes a sequence that can be edited, and goes back out as text', async ({ page, browserName }) => {
+  test('a Mermaid sequence diagram pasted in becomes a sequence that can be edited', async ({ page, browserName }) => {
     test.skip(browserName === 'firefox', 'Firefox protects the clipboard data of synthetic paste events');
     await newCanvas(page, 'Pasted');
     const text = ['sequenceDiagram', '  actor Shopper', '  Shopper->>+Store: Place order', '  alt in stock', '    Store-->>-Shopper: Confirmed', '  else sold out', '    Store-->>Shopper: Sorry', '  end'].join('\n');
@@ -458,16 +454,11 @@ test.describe('Sequence', () => {
     await page.keyboard.type('Out of stock');
     await page.keyboard.press('Enter');
 
-    // Exported as source, it is the same diagram with the edit in it.
+    // It is the same diagram with the edit in it: the other messages and the branches as they were.
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Share', exact: true }).click();
-    await page.getByRole('menuitem', { name: /^Export/ }).click();
-    const dialog = page.getByRole('dialog', { name: 'Export & share' });
-    await dialog.locator('[data-mode="sequence"]').click();
-    const preview = dialog.getByTestId('export-source-preview');
-    await expect(preview).toContainText('sequenceDiagram');
-    await expect(preview).toContainText('Store-->>Shopper: Out of stock');
-    await expect(preview).toContainText('alt in stock');
+    await page.locator(SEQUENCE).hover();
+    expect(await said(page)).toEqual(['Shopper to Store: Place order', 'Store to Shopper: Confirmed', 'Store to Shopper: Out of stock']);
+    await expect(page.locator(FRAME)).toHaveCount(1);
   });
 
   test('is still there, and still editable, after a reload', async ({ page }) => {

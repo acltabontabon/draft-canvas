@@ -3,8 +3,8 @@
  *
  * A Flow is an order somebody gave to the connectors of an architecture — so, unlike the connectors
  * alone, it does say who calls whom first, and it can be turned into a sequence without guessing.
- * The reading is the one the Flow's own Mermaid and PlantUML export has always used
- * (`build.ts`); this takes that reading and makes it something that can be edited on the canvas,
+ * The reading is `build.ts`'s, the one a Flow has always been read as a sequence by; this takes
+ * that reading and makes it something that can be edited on the canvas,
  * with each participant still standing for the shape it came from.
  */
 import { createId } from '../document/ids';

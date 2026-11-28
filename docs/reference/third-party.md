@@ -59,7 +59,7 @@ Not bundled in the apps.
 | [React Testing Library](https://github.com/testing-library/react-testing-library), [jest-dom](https://github.com/testing-library/jest-dom) and [user-event](https://github.com/testing-library/user-event) | Component tests |
 | [jsdom](https://github.com/jsdom/jsdom) and [fake-indexeddb](https://github.com/dumbmatter/fakeIndexedDB) | Test environments |
 | [fast-check](https://github.com/dubzzz/fast-check) and [Proptest](https://github.com/proptest-rs/proptest) | Generated test cases |
-| [Mermaid](https://github.com/mermaid-js/mermaid) | Checking Mermaid import and export in tests |
+| [Mermaid](https://github.com/mermaid-js/mermaid) | Checking Mermaid import, and the sequence text agents read, in tests |
 | [DOMPurify](https://github.com/cure53/DOMPurify) | HTML sanitization used by Mermaid in tests |
 | [ELK.js](https://github.com/kieler/elkjs) and [Ajv](https://github.com/ajv-validator/ajv) | Layout comparison harness; agent schema tests |
 | [tempfile](https://github.com/Stebalien/tempfile), [muda](https://github.com/tauri-apps/muda) and [tokio-tungstenite](https://github.com/snapview/tokio-tungstenite) | Rust tests: temp folders, menu shortcut parsing, relay client |

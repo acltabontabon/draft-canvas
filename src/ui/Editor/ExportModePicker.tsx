@@ -1,14 +1,12 @@
 import { Icon, type IconName } from '../common/Icon';
 import type { ExportMode } from '../../export/exportTypes';
 
-// What people come here to do, most common first — then the formats that only mean something to
-// someone who already knows they want one. The keyboard walks them in this order.
-const EVERYDAY: ExportMode[] = ['share', 'document', 'image', 'docs'];
-const ADVANCED: ExportMode[] = ['sequence'];
+// What people come here to do, most common first. The keyboard walks them in this order.
+const MODES: ExportMode[] = ['share', 'document', 'image', 'docs'];
 
 /**
- * Named for the intention, not for the thing the code calls it. "Document", "Docs" and "Source" were
- * three words for distinctions only the implementation makes, and a newcomer had to open each tab
+ * Named for the intention, not for the thing the code calls it. "Document" and "Docs" were
+ * two words for a distinction only the implementation makes, and a newcomer had to open each tab
  * to find out which one saves the file they can reopen. The line under each name says what you end
  * up holding; the mode ids (and `data-mode`) are unchanged.
  */
@@ -17,15 +15,11 @@ const MODE_META: Record<ExportMode, { label: string; hint: string; icon: IconNam
   document: { label: 'Save an editable file', hint: 'Reopen, back up or send', icon: 'file' },
   image: { label: 'Save an image', hint: 'PNG or SVG, or copy it', icon: 'image' },
   docs: { label: 'Use in a README', hint: 'A picture plus its Markdown', icon: 'docs' },
-  sequence: { label: 'Other formats', hint: 'Mermaid, PlantUML, draw.io…', icon: 'code' },
 };
 
 /**
  * What do you want to do — a short list read top to bottom, each choice with the one line that
- * tells it from its neighbours, and the specialised formats set apart underneath. Every choice
- * stays selectable even when its export is currently empty (no Flow yet, for a sequence diagram):
- * hiding it would make the capability undiscoverable, so the unavailable case is explained inside
- * its panel instead (see `ExportSequencePanel`).
+ * tells it from its neighbours.
  */
 export function ExportModePicker({ mode, onChange }: { mode: ExportMode; onChange: (mode: ExportMode) => void }) {
   const choice = (m: ExportMode) => {
@@ -50,9 +44,7 @@ export function ExportModePicker({ mode, onChange }: { mode: ExportMode; onChang
   };
   return (
     <div className="dc-export-modes" role="radiogroup" aria-label="What to export">
-      {EVERYDAY.map(choice)}
-      <span className="dc-export-modes-rule" aria-hidden="true" />
-      {ADVANCED.map(choice)}
+      {MODES.map(choice)}
     </div>
   );
 }

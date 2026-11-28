@@ -39,6 +39,6 @@ A room is one level finer than the canvas outside it unless you set its own.
 ## Present and export
 
 - `⌘↓` and `⌘↑` work while presenting.
-- Inside a room, image and **Other formats** exports offer the room or **The whole canvas**.
+- Inside a room, an image export offers the room or **The whole canvas**.
 - A `.draftcanvas` file holds every room. Copying or deleting a shape takes its room with it, and
   diagram size limits count across all rooms.

@@ -1,13 +1,14 @@
 /**
- * What the two native emitters share: the identifiers participants are written under, and the
- * running account of who is working — which both formats keep strictly top to bottom.
+ * What writing a native sequence as text and reading it back share (`mermaid.ts`,
+ * `agent/sequences.ts`): the identifiers participants are written under, and the running account of
+ * who is working — which Mermaid keeps strictly top to bottom.
  */
 import { categoryOf } from '../../document/connectorSemantics';
 import type { DraftSequence, SeqParticipant } from '../../document/types';
 import { aliasFor } from '../alias';
 import type { ParticipantKind } from '../types';
 
-/** The declaration keyword family a participant is written with: the same coarse four the Flow export uses. */
+/** The declaration keyword family a participant is written with: the same coarse four a Flow's reading uses (`types.ts`). */
 export function participantKindOf(participant: SeqParticipant): ParticipantKind {
   switch (categoryOf(participant)) {
     case 'actor':
@@ -44,14 +45,14 @@ export function aliasesOf(sequence: DraftSequence): Map<string, string> {
 
 /**
  * The participants a `create` message brings into being, by the message that does it: they are
- * declared there, not at the top. Only where the text names them first: both formats refuse to
+ * declared there, not at the top. Only where the text names them first: Mermaid refuses to
  * create a participant already there, and one that takes part above its create message (which
  * `check.ts` flags and allows) made the whole Mermaid text fail to parse. Such a one is declared at
  * the top, and its create message is written as any other.
  */
 export function createdBy(sequence: DraftSequence): Map<string, string> {
   const made = new Map<string, string>();
-  /** Who the text has named so far, top to bottom — what each item writes, as both formats write it. */
+  /** Who the text has named so far, top to bottom — what each item writes. */
   const named = new Set<string>();
   const everyone = sequence.participants.map((participant) => participant.id);
   const visit = (items: DraftSequence['items']) => {
@@ -75,10 +76,10 @@ export function createdBy(sequence: DraftSequence): Map<string, string> {
 }
 
 /**
- * Who is working, counted the way Mermaid and PlantUML count it: straight down the text, with no
+ * Who is working, counted the way Mermaid counts it: straight down the text, with no
  * idea that the branches of an `alt` are alternatives. A sequence may end the same piece of work in
- * each branch — which is right, and which both formats refuse as "ending work that is not running".
- * So an end is only written where their count has something to end; the picture then renders, with
+ * each branch — which is right, and which Mermaid refuses as "ending work that is not running".
+ * So an end is only written where its count has something to end; the picture then renders, with
  * the bar closed at the first place it is ended.
  */
 export class Working {

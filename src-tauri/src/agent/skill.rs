@@ -737,6 +737,10 @@ mod tests {
             "100",
             "ffaf9f8a56c9b6d19e706528ce3f6cd1715ccd81eebe73fe3218879d53af2af0",
         ),
+        (
+            "101",
+            "711108f5f1de68ed2c23d013a49ad805ea27bb59594c6605d8528ae20fac3383",
+        ),
     ];
 
     #[test]

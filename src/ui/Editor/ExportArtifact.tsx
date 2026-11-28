@@ -25,25 +25,17 @@ export type ArtifactVisual =
 /**
  * What you'll get, shown beside how you'll get it: a live thumbnail from the very renderer the
  * export uses (so palette, transparency, and "Selection only" all show up here before a file ever
- * exists), or a file glyph for text formats — never a rendered Mermaid/PlantUML diagram. The
- * filename is the exact one the download will carry.
+ * exists), or a file glyph for a file that is not a picture. The filename is the exact one the
+ * download will carry.
  *
  * The thumbnail is a button: it opens the same image large (`ExportInspector`), where its text can
  * be read at the size it is drawn before a file is made.
  */
-export function ExportArtifact({
-  fileName,
-  visual,
-  empty,
-}: {
-  fileName: string;
-  visual: ArtifactVisual;
-  empty?: boolean;
-}) {
+export function ExportArtifact({ fileName, visual }: { fileName: string; visual: ArtifactVisual }) {
   return (
-    <figure className="dc-export-artifact" data-empty={empty ? 'true' : undefined}>
+    <figure className="dc-export-artifact">
       {visual.type === 'thumbnail' ? (
-        <Thumbnail visual={visual} fileName={fileName} empty={empty} />
+        <Thumbnail visual={visual} fileName={fileName} />
       ) : (
         <>
           <div className="dc-export-stage dc-export-stage-grid">
@@ -63,15 +55,7 @@ export function ExportArtifact({
   );
 }
 
-function Thumbnail({
-  visual,
-  fileName,
-  empty,
-}: {
-  visual: Extract<ArtifactVisual, { type: 'thumbnail' }>;
-  fileName: string;
-  empty?: boolean;
-}) {
+function Thumbnail({ visual, fileName }: { visual: Extract<ArtifactVisual, { type: 'thumbnail' }>; fileName: string }) {
   const { document, theme, options, onlyKey, describe } = visual;
   const transparent = options.transparent === true;
   const technologyRevision = useTechnologyIcons(document.nodes);
@@ -79,14 +63,13 @@ function Thumbnail({
   // Keyed on primitives, not `options` itself — the parent rebuilds that object (and its `only`
   // Set) on every render, which would otherwise re-render the whole diagram on each keystroke.
   const rendered = useMemo(() => {
-    if (empty) return null;
     try {
       return renderDocumentSvg(document, options);
     } catch {
       return null;
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [document, theme, transparent, onlyKey, options.selectedFlowId, options.preset, options.openPoints, empty, technologyRevision]);
+  }, [document, theme, transparent, onlyKey, options.selectedFlowId, options.preset, options.openPoints, technologyRevision]);
 
   const src = useMemo(
     () => (rendered ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(rendered.svg)}` : null),

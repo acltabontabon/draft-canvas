@@ -1,12 +1,10 @@
 /**
- * The Sequence Diagram export's renderer-agnostic intermediate representation.
+ * How a Flow reads as a sequence: a renderer-agnostic intermediate representation.
  *
  * A `SequenceModel` is derived, never persisted: `build.ts`'s `buildSequenceModel` is the only
  * thing that produces one, from the whole live document — every *playable* Flow, aggregated into
- * one coherent diagram (see `docs/reference/architecture.md`). Mermaid (`mermaid.ts`) and PlantUML
- * (`plantuml.ts`) are the only two consumers; both are pure, independent `SequenceModel -> string`
- * functions that must never re-derive semantics of their own. There is no preview renderer in this
- * app — Draft Canvas generates sequence *source*, not a rendered diagram.
+ * one coherent reading (see `docs/reference/architecture.md`). `fromFlow.ts` is its consumer: it
+ * turns one Flow's group into a native sequence and must never re-derive semantics of its own.
  */
 import type { Accent, CodeLanguage, NoteKind } from '../document/types';
 import type { NodeCategory } from '../document/connectorSemantics';
@@ -15,8 +13,9 @@ import type { NodeCategory } from '../document/connectorSemantics';
  *  model has no branching/looping semantics today, so there is nothing to bucket beyond this. */
 export type InteractionKind = 'sync' | 'async' | 'response';
 
-/** Mermaid only distinguishes actor/participant; PlantUML also has database/queue keywords. Both
- *  exporters derive their own declaration keyword from this one shared, coarser vocabulary. */
+/** The coarse family a participant is declared in. Mermaid only distinguishes actor from
+ *  participant (`mermaidKeyword`); the store and queue families are kept apart for whoever reads
+ *  the model. */
 export type ParticipantKind = 'actor' | 'database' | 'queue' | 'participant';
 
 export interface SequenceParticipant {
@@ -28,11 +27,10 @@ export interface SequenceParticipant {
    */
   id: string;
   /**
-   * The identifier actually written into Mermaid/PlantUML source (`participant "Label" as
-   * <alias>`, and every arrow). A readable, collision-safe slug derived from `label` — see
+   * A readable, collision-safe slug derived from `label`, fit to be written as an identifier — see
    * `alias.ts`'s `aliasFor` (e.g. `PaymentService`, `PaymentService2` on a second collision).
    * Falls back to `id` when the label has no usable characters, starts with a digit, or the slug
-   * collides case-insensitively with a Mermaid/PlantUML reserved word.
+   * collides case-insensitively with a reserved word.
    */
   alias: string;
   /** Display label, via `displayNameFor` — disambiguated with a " (2)" suffix when another
@@ -58,8 +56,8 @@ export interface SequenceMessage {
   order: number;
   from: string; // SequenceParticipant.id
   to: string; // SequenceParticipant.id
-  /** Raw, unescaped text — per-format escaping happens in mermaid.ts/plantuml.ts, never here, so
-   *  the model itself stays format-agnostic. Never empty. */
+  /** Raw, unescaped text — escaping belongs to whoever writes it out, never here, so the model
+   *  itself stays format-agnostic. Never empty. */
   label: string;
   interaction: InteractionKind;
   /** True for the synthesized reply leg of an edge with `hasResponse: true`. */
@@ -77,9 +75,8 @@ export interface SequenceMessage {
 
 /**
  * A Note, a Question, a Warning, a Decision, or a Code annotation — never a participant, never a
- * message. One shape for all five: they differ only in an optional portable text prefix (driven by
- * `noteKind`) or an optional source language (`language`, Code only). Mermaid renders it collapsed
- * to one line; PlantUML renders it as a real multi-line block — see `mermaid.ts`/`plantuml.ts`.
+ * message. One shape for all five: they differ only in an optional kind (`noteKind`) or an
+ * optional source language (`language`, Code only).
  */
 export interface SequenceNote {
   kind: 'note';
@@ -88,12 +85,11 @@ export interface SequenceNote {
   participantIds: [string] | [string, string];
   /** Raw, unescaped, multi-line-capable text. */
   text: string;
-  /** Present only when this note came from a `note`-type node/attachment — drives the
-   *  `"Question: "`/`"Warning: "`/`"Decision: "` prefix. Absent for a Code annotation, and absent
-   *  (or `'note'`) for a plain Note (no prefix). */
+  /** Present only when this note came from a `note`-type node/attachment: a Question, a Warning or
+   *  a Decision. Absent for a Code annotation, and absent (or `'note'`) for a plain Note. */
   noteKind?: NoteKind;
-  /** Present only for a Code annotation. Carried through for a possible future fenced-code
-   *  emission; neither renderer uses it for anything beyond "this is code" today. */
+  /** Present only for a Code annotation: `build.ts` always sets the key on one, even when the
+   *  code names no language, so its presence alone says "this is code". */
   language?: CodeLanguage;
   sourceFlowId: string;
   sourceNodeId?: string;
@@ -103,9 +99,8 @@ export interface SequenceNote {
 
 /**
  * One Flow's contribution to the aggregated diagram — V1's only structural wrapper, always
- * emitted, even for a single-flow model, so the output's shape stays stable as more flows are
- * added later. Mermaid has no native `group` keyword; `mermaid.ts` renders this as `rect … end`
- * with a synthesized title Note. PlantUML renders it as a native `group <label> … end`.
+ * emitted, even for a single-flow model, so the model's shape stays stable as more flows are
+ * added later. `fromFlow.ts` finds a Flow's sequence by its group.
  */
 export interface SequenceGroup {
   kind: 'group';
@@ -118,8 +113,7 @@ export interface SequenceGroup {
 export type SequenceElement = SequenceMessage | SequenceNote | SequenceGroup;
 
 export interface SequenceModel {
-  /** The document's own title — header-comment use only (see `mermaid.ts`/`plantuml.ts`), never
-   *  parsed back. An aggregated model has no single "flow" to name itself after. */
+  /** The document's own title. An aggregated model has no single "flow" to name itself after. */
   title: string;
   participants: SequenceParticipant[];
   /** Top level is zero or more `SequenceGroup`s, one per playable flow that produced at least one

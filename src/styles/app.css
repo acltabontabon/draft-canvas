@@ -4750,13 +4750,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   outline-offset: 2px;
 }
 
-/* Everyday intentions above, the formats you have to already want below. */
-.dc-export-modes-rule {
-  height: 1px;
-  margin: 6px 10px;
-  background: var(--dc-border);
-}
-
 /* No room for a column of its own: the same choices as a row of names, the lines under them left
    out. */
 @media (max-width: 760px) {
@@ -4784,8 +4777,7 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   margin-top: 0;
   }
 
-  .dc-export-mode-hint,
-  .dc-export-modes-rule {
+  .dc-export-mode-hint {
   display: none;
   }
 }
@@ -4913,42 +4905,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-/* The Source panel's preview: the generated text itself, read-only, in the editor's own monospace.
-   Capped in height so a long diagram scrolls inside the dialog rather than stretching it; the
-   "… N more lines" note sits below as a caption, not inside the text. */
-.dc-export-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.dc-export-preview pre {
-  margin: 0;
-  max-height: 220px;
-  overflow: auto;
-  padding: 8px 10px;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-sm);
-  background: var(--dc-canvas);
-  color: var(--dc-text);
-  font-family: var(--dc-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 11px;
-  line-height: 1.45;
-  white-space: pre;
-  tab-size: 4;
-}
-
-.dc-export-preview pre:focus-visible {
-  outline: 2px solid var(--dc-selection);
-  outline-offset: 1px;
-}
-
-.dc-export-preview-more {
-  color: var(--dc-text-faint);
-  font-size: 11.5px;
 }
 
 /* ---- the artifact: exactly what the download will be -------------------- */
@@ -5181,11 +5137,6 @@ button.dc-export-stage:focus-visible .dc-export-stage-hint {
   color: var(--dc-text-faint);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-}
-
-.dc-export-artifact[data-empty='true'] .dc-export-stage > *,
-.dc-export-artifact[data-empty='true'] .dc-export-filename {
-  opacity: 0.45;
 }
 
 /* ---- Use in docs ------------------------------------------------------------------------

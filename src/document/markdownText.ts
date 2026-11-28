@@ -1,7 +1,6 @@
 /**
- * A Text element's words without their Markdown: what a screen reader says for it, what search
- * matches and the Outline lists, and what formats without Markdown (draw.io, Mermaid, PlantUML)
- * receive. Line-based and dependency-free, because the file model imports nothing that renders —
+ * A Text element's words without their Markdown: what a screen reader says for it, and what search
+ * matches and the Outline lists. Line-based and dependency-free, because the file model imports nothing that renders —
  * the full parser lives in `render/text/markdown.ts`. Reading, not rendering: it keeps every word
  * and drops only the punctuation that would be formatting.
  */

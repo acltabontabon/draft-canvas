@@ -3,14 +3,12 @@ import { createDocument, createEdge, createNode } from '../src/document/factory'
 import { createFlow } from '../src/document/flow';
 import type { DraftDocument } from '../src/document/types';
 import { buildSequenceModel } from '../src/sequence/build';
-import { toMermaid } from '../src/sequence/mermaid';
-import { toPlantUml } from '../src/sequence/plantuml';
+import { sequenceFromFlow } from '../src/sequence/fromFlow';
 
 /**
  * End-to-end: a realistic Saga-style canvas (two flows sharing participants, a Note, a Question,
- * and a structural `dependsOn` edge) through the whole Canvas -> SequenceModel -> {Mermaid,
- * PlantUML} pipeline — the same shape of diagram the product brief itself uses as its worked
- * example, run for real rather than hand-built.
+ * and a structural `dependsOn` edge) read as a sequence — the same shape of diagram the product
+ * brief itself uses as its worked example, run for real rather than hand-built.
  */
 function buildSagaDocument(): DraftDocument {
   const customer = createNode({ type: 'actor', x: 0, y: 0, text: 'Customer' });
@@ -59,7 +57,7 @@ function buildSagaDocument(): DraftDocument {
   };
 }
 
-describe('Canvas -> SequenceModel -> Mermaid/PlantUML — Saga (Happy Path + Compensation)', () => {
+describe('Canvas -> SequenceModel — Saga (Happy Path + Compensation)', () => {
   it('produces one coherent model with both flows as separate groups, in participant-appearance order', () => {
     const model = buildSequenceModel(buildSagaDocument());
 
@@ -79,35 +77,24 @@ describe('Canvas -> SequenceModel -> Mermaid/PlantUML — Saga (Happy Path + Com
     expect(paymentToDb[0]).toMatchObject({ label: 'Save Transaction' });
   });
 
-  it('renders valid Mermaid with both flows grouped and notes preserved', () => {
-    const out = toMermaid(buildSequenceModel(buildSagaDocument()));
+  it('keeps each flow\'s notes in its own group, with the words they were written in', () => {
+    const model = buildSequenceModel(buildSagaDocument());
+    const notesIn = (label: string) =>
+      model.elements.flatMap((el) => (el.kind === 'group' && el.label === label ? el.children.flatMap((c) => (c.kind === 'note' ? [c] : [])) : []));
 
-    expect(out).toContain('sequenceDiagram');
-    expect(out).toContain('actor Customer as Customer\n');
-    expect(out.match(/rect rgb\(240, 240, 240\)/g)).toHaveLength(2);
-    expect(out).toContain('Place Order');
-    expect(out).toContain('Charge Card');
-    expect(out).toContain('Retries up to 3 times on timeout');
-    expect(out).toContain('Question: Should this retry on failure?');
-    expect(out).toContain('Release Payment');
+    expect(notesIn('Happy Path').map((note) => note.text)).toEqual(['Retries up to 3 times on timeout']);
+    expect(notesIn('Compensation')).toMatchObject([{ text: 'Should this retry on failure?', noteKind: 'question' }]);
   });
 
-  it('renders valid PlantUML with both flows grouped and notes preserved', () => {
-    const out = toPlantUml(buildSequenceModel(buildSagaDocument()));
+  it('draws one flow as a native sequence: its participants, its calls and replies, its note', () => {
+    const document = buildSagaDocument();
+    const drawn = sequenceFromFlow(document, document.flows[0]!.id)!;
 
-    expect(out).toContain('@startuml');
-    expect(out).toContain('@enduml');
-    expect(out).toContain('actor "Customer" as Customer');
-    expect(out).toContain('group Happy Path');
-    expect(out).toContain('group Compensation');
-    expect(out).toContain('Retries up to 3 times on timeout');
-    expect(out).toContain('Question: Should this retry on failure?');
-  });
-
-  it('produces byte-identical output across two builds of the same document', () => {
-    const docA = buildSagaDocument();
-    const docB = buildSagaDocument();
-    expect(toMermaid(buildSequenceModel(docA))).toBe(toMermaid(buildSequenceModel(docB)));
-    expect(toPlantUml(buildSequenceModel(docA))).toBe(toPlantUml(buildSequenceModel(docB)));
+    expect(drawn.title).toBe('Happy Path');
+    expect(drawn.sequence.participants.map((participant) => participant.name)).toEqual(['Customer', 'Order API', 'Payment Service', 'Payment DB']);
+    const messages = drawn.sequence.items.flatMap((item) => (item.t === 'message' ? [item] : []));
+    expect(messages.map((message) => message.label)).toEqual(expect.arrayContaining(['Place Order', 'Order Confirmed', 'Charge Card', 'Approved', 'Save Transaction']));
+    expect(messages.filter((message) => message.kind === 'reply')).toHaveLength(2);
+    expect(drawn.sequence.items.some((item) => item.t === 'note' && item.text === 'Retries up to 3 times on timeout')).toBe(true);
   });
 });

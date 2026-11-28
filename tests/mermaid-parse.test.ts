@@ -1,141 +1,24 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
 import mermaid from 'mermaid';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createNode } from '../src/document/factory';
-import { deserializeDocument } from '../src/export/project';
 import { messagesOf } from '../src/document/sequenceModel';
 import { createMessage, createNote, createReply } from '../src/document/sequenceOps';
 import type { DraftSequence, SeqParticipant } from '../src/document/types';
-import { sequenceSourceFor } from '../src/export/sequence';
 import { parseMermaidSequence } from '../src/import/mermaid/sequence';
-import { aliasFor } from '../src/sequence/alias';
-import { toMermaid } from '../src/sequence/mermaid';
 import { sequenceToMermaid } from '../src/sequence/native/mermaid';
-import { sequenceToPlantUml } from '../src/sequence/native/plantuml';
-import type { SequenceModel } from '../src/sequence/types';
-import { ARCHITECTURE_STARTERS } from './fixtures/starters-v1/catalog';
-import { starterDocument } from './fixtures/starters-v1/document';
 
 /**
- * The Mermaid export is checked against Mermaid itself, not against what we think its grammar is.
- * Every starter's flows have to parse, and so does a corpus of the text that has broken sequence
- * diagrams before: statement terminators and comment markers inside labels, a directive planted in
- * a title, participants named after keywords, and colons — which earlier exports rewrote as dashes
- * rather than trust the grammar. A label reaching the diagram unchanged is the point; a directive
- * reaching the renderer would be an injection.
+ * The Mermaid text a sequence is written as (what an agent reads and edits) is checked against
+ * Mermaid itself, not against what we think its grammar is: so is the reader that takes such text
+ * back. The corpus is the text that has broken sequence diagrams before: statement terminators and
+ * comment markers inside labels, a directive planted in a title, participants named after keywords,
+ * and colons. A label reaching the diagram unchanged is the point; a directive reaching the renderer
+ * would be an injection.
  */
-function model(overrides: Partial<SequenceModel> = {}): SequenceModel {
-  return { title: '', participants: [], elements: [], ...overrides };
-}
-
-const participant = (id: string, label: string, alias = id) => ({
-  id,
-  alias,
-  label,
-  category: 'service' as const,
-  kind: 'participant' as const,
-  sourceNodeId: id,
-});
-
-const message = (from: string, to: string, label: string) => ({
-  kind: 'message' as const,
-  order: 0,
-  from,
-  to,
-  label,
-  interaction: 'sync' as const,
-  sourceFlowId: 'f1',
-  sourceEdgeIds: [],
-  sourceStepIds: [],
-});
-
 async function parses(text: string): Promise<boolean> {
   const result = await mermaid.parse(text, { suppressErrors: true });
   return result !== false;
 }
-
-describe('the Mermaid export parses with Mermaid', () => {
-  beforeAll(() => {
-    mermaid.initialize({ startOnLoad: false });
-  });
-
-  it('is a real check: broken text is refused', async () => {
-    expect(await parses('sequenceDiagram\n    A->>\n')).toBe(false);
-  });
-
-  it.each(ARCHITECTURE_STARTERS.map((starter) => [starter.name, starter] as const))('%s', async (_name, starter) => {
-    const text = sequenceSourceFor(starterDocument(starter), 'mermaid');
-    expect(text).toContain('sequenceDiagram');
-    expect(await parses(text)).toBe(true);
-  });
-
-  it.each([
-    ['a directive in a title', model({ title: 'Checkout %%{init: {"theme": "forest"}}%%', participants: [participant('a', 'A')] })],
-    [
-      'statement breakers and tags in labels',
-      model({
-        participants: [participant('a', 'Map<String, Order>'), participant('b', 'retry(); # then')],
-        elements: [message('a', 'b', 'POST /orders; charge # 100% <b>now</b>')],
-      }),
-    ],
-    [
-      'colons kept in labels and notes',
-      model({
-        participants: [participant('a', 'A'), participant('b', 'B')],
-        elements: [
-          message('a', 'b', 'HTTP 200: OK'),
-          { kind: 'note' as const, order: 1, participantIds: ['a'], text: 'Rule: retry twice: then give up', sourceFlowId: 'f1' },
-        ],
-      }),
-    ],
-    [
-      'participants named after keywords, aliased the way the builder aliases them',
-      model({
-        participants: [
-          participant('P1', 'option', aliasFor('option', 'P1', new Set())),
-          participant('P2', 'sequenceDiagram', aliasFor('sequenceDiagram', 'P2', new Set())),
-          participant('P3', 'links', aliasFor('links', 'P3', new Set())),
-        ],
-        elements: [message('P1', 'P2', 'end'), message('P2', 'P3', 'Note over')],
-      }),
-    ],
-    [
-      'a percent sign that is only a percent sign',
-      model({ participants: [participant('a', 'A'), participant('b', 'B')], elements: [message('a', 'b', '99.9% uptime')] }),
-    ],
-  ])('%s', async (_name, m) => {
-    const text = toMermaid(m);
-    expect(text).not.toMatch(/%%\{/);
-    expect(await parses(text)).toBe(true);
-  });
-});
-
-describe('a source with several diagrams', () => {
-  const root = join(__dirname, 'fixtures', 'starters', 'starters');
-  const files = (dir: string): string[] =>
-    readdirSync(dir).flatMap((name) => (statSync(join(dir, name)).isDirectory() ? files(join(dir, name)) : name.endsWith('.draftcanvas') ? [join(dir, name)] : []));
-  const starters = files(root).map((path) => {
-    const read = deserializeDocument(readFileSync(path, 'utf8'));
-    if (!read.ok) throw new Error(`${path} does not open`);
-    return [relative(root, path).replaceAll('\\', '/'), read.document] as const;
-  });
-  /** What a reader renders: the text itself, or each Mermaid block of a Markdown one. */
-  const diagrams = (text: string): string[] => (text.startsWith('```mermaid\n') ? [...text.matchAll(/^```mermaid\n([\s\S]*?)^```$/gm)].map((block) => block[1]!) : [text]);
-
-  beforeAll(() => {
-    mermaid.initialize({ startOnLoad: false });
-  });
-
-  // Flows in several rooms, or a sequence beside them, made one text with a `sequenceDiagram`
-  // header each, which Mermaid refuses: fifteen of these eighteen exported that way.
-  it.each(starters)('%s parses diagram by diagram', async (_name, document) => {
-    const text = sequenceSourceFor(document, 'mermaid');
-    const each = diagrams(text);
-    expect(each.length).toBe((text.match(/^sequenceDiagram$/gm) ?? []).length);
-    for (const diagram of each) expect(await parses(diagram)).toBe(true);
-  });
-});
 
 /** What Mermaid's own database holds for a text: what a reader of the rendered diagram gets. */
 async function mermaidDb(text: string) {
@@ -157,6 +40,58 @@ describe('a sequence drawn on the canvas, as Mermaid reads it', () => {
     mermaid.initialize({ startOnLoad: false });
   });
 
+  it('is a real check: broken text is refused', async () => {
+    expect(await parses('sequenceDiagram\n    A->>\n')).toBe(false);
+  });
+
+  it.each<[string, string, DraftSequence]>([
+    ['a directive in a title', 'Checkout %%{init: {"theme": "forest"}}%%', { participants: [who('a', 'A')], items: [] }],
+    [
+      'statement breakers and tags in labels',
+      'T',
+      {
+        participants: [who('a', 'Map<String, Order>'), who('b', 'retry(); # then')],
+        items: [createMessage({ id: 'm', from: 'a', to: 'b', label: 'POST /orders; charge # 100% <b>now</b>' })],
+      },
+    ],
+    [
+      'a directive in a name, a message and a note',
+      'T',
+      {
+        participants: [who('a', 'A %%{init: {"theme": "forest"}}%%'), who('b', 'B')],
+        items: [
+          createMessage({ id: 'm', from: 'a', to: 'b', label: '%%{init: {"theme": "forest"}}%%' }),
+          createNote({ id: 'n', over: ['a'], text: '%%{init: {"theme": "forest"}}%%' }),
+        ],
+      },
+    ],
+    [
+      'colons kept in labels and notes',
+      'T',
+      {
+        participants: [who('a', 'A'), who('b', 'B')],
+        items: [createMessage({ id: 'm', from: 'a', to: 'b', label: 'HTTP 200: OK' }), createNote({ id: 'n', over: ['a'], text: 'Rule: retry twice: then give up' })],
+      },
+    ],
+    [
+      'participants named after keywords',
+      'T',
+      {
+        participants: [who('a', 'option'), who('b', 'sequenceDiagram'), who('c', 'links')],
+        items: [createMessage({ id: 'm', from: 'a', to: 'b', label: 'end' }), createMessage({ id: 'm2', from: 'b', to: 'c', label: 'Note over' })],
+      },
+    ],
+    [
+      'a percent sign that is only a percent sign',
+      'T',
+      { participants: [who('a', 'A'), who('b', 'B')], items: [createMessage({ id: 'm', from: 'a', to: 'b', label: '99.9% uptime' })] },
+    ],
+  ])('parses with %s', async (_name, title, sequence) => {
+    const text = sequenceToMermaid({ ...asNode(sequence), text: title });
+    expect(text).not.toMatch(/%%\{/);
+    expect(await parses(text)).toBe(true);
+  });
+
   it('writes a blank label as nothing, and it comes back blank', async () => {
     // Replies, self-messages and notes start blank; they were exported as "Message" and "Note".
     const call = createMessage({ id: 'c', from: 'a', to: 'b', label: 'GET /orders' });
@@ -173,12 +108,6 @@ describe('a sequence drawn on the canvas, as Mermaid reads it', () => {
     if (!back.ok) return;
     expect(messagesOf(back.sequence).map((message) => message.label)).toEqual(['GET /orders', '', '']);
     expect(back.sequence.items.at(-1)).toMatchObject({ t: 'note', text: '' });
-
-    const plantUml = sequenceToPlantUml(asNode(sequence));
-    expect(plantUml).not.toContain('Message');
-    expect(plantUml).toContain('\nAPI --> Web\n');
-    expect(plantUml).toContain('\nAPI -> API\n');
-    expect(plantUml).not.toMatch(/^\s*Note$/m);
   });
 
   it('keeps words that start "wrap:" or "nowrap:", which Mermaid reads as a switch and drops', async () => {
@@ -217,7 +146,6 @@ describe('a sequence drawn on the canvas, as Mermaid reads it', () => {
       expect(text).toContain('\n    participant Job as Job\n');
       expect(text).not.toContain('create participant');
       expect(await parses(text)).toBe(true);
-      expect(sequenceToPlantUml(asNode({ ...early, items }))).not.toContain('create participant');
     }
     // Named first by its create message, it is created there.
     const fresh = sequenceToMermaid(asNode({ ...early, items: [start, ping] }));

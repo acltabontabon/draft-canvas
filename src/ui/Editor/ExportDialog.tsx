@@ -2,33 +2,21 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   collectLevels,
   copyImage,
-  copySource,
   copySvg,
   countPlayableFlows,
-  countSequences,
   exportEveryLevel,
   exportPngFile,
   exportProjectFile,
   exportSecureProjectFile,
-  exportSourceFile,
   exportSvgFile,
   fileNameFor,
   hasRooms,
   LEVELS_EXTENSION,
   SECURE_EXPORT_FILE_EXTENSION,
-  SOURCE_FORMAT_INFO,
-  sourceFileNameFor,
-  sourceTextFor,
   type CopyResult,
-  type SourceFormat,
 } from '../../export';
 import { readPreference, writePreference } from '../../lib/preferences';
-import {
-  readEditableImagePreference,
-  readSourceFormatPreference,
-  writeEditableImagePreference,
-  writeSourceFormatPreference,
-} from '../../export/exportPreferences';
+import { readEditableImagePreference, writeEditableImagePreference } from '../../export/exportPreferences';
 import { fileOf, fileWithLiveViewport, useEditorStore } from '../../store/editorStore';
 import { ownerAt, viewOf } from '../../depth/tree';
 import { displayNameFor } from '../../document/factory';
@@ -52,7 +40,6 @@ import { Modal } from '../common/Modal';
 import { ExportModePicker } from './ExportModePicker';
 import { ExportDocumentPanel } from './ExportDocumentPanel';
 import { ExportImagePanel } from './ExportImagePanel';
-import { ExportSequencePanel } from './ExportSequencePanel';
 import { ExportArtifact, type ArtifactVisual } from './ExportArtifact';
 import { DocsPreview, ExportDocsPanel } from './ExportDocsPanel';
 import { useDocsPublishing } from './useDocsPublishing';
@@ -74,8 +61,9 @@ const EXPORT_PNG_SCALE_PREFERENCE = 'export-png-scale';
 // Document, which was only ever first by accident of list order in the old flat layout.
 function readExportModePreference(): ExportMode {
   const value = readPreference(EXPORT_MODE_PREFERENCE);
-  // 'animated' (the retired GIF export) reads as the default, like any other stale value.
-  return value === 'share' || value === 'document' || value === 'image' || value === 'docs' || value === 'sequence' ? value : 'image';
+  // 'animated' (the retired GIF export) and 'sequence' (the retired Other formats mode) read as
+  // the default, like any other stale value.
+  return value === 'share' || value === 'document' || value === 'image' || value === 'docs' ? value : 'image';
 }
 
 function readDocumentFormatPreference(): DocumentFormat {
@@ -110,8 +98,8 @@ function describeCopy(what: string, result: CopyResult): string {
 /**
  * Export is choose → configure → export: what you want to do down the left, one contextual panel
  * for whatever's selected, one dominant CTA, and — beside it — the artifact you're about to get. The dialog
- * remembers the last mode/format used (`readPreference`/`writePreference`, the same mechanism
- * `sequenceFormat` already used) so reopening lands where the user left off.
+ * remembers the last mode/format used (`readPreference`/`writePreference`) so reopening lands
+ * where the user left off.
  */
 export function ExportDialog() {
   const open = useUiStore((state) => state.exportOpen);
@@ -187,7 +175,6 @@ export function ExportDialog() {
   /* oxlint-enable react/set-state-in-effect */
   useEffect(() => () => { shareAttempt.current += 1; shareAbort.current?.abort(); }, []);
   const [securePromptOpen, setSecurePromptOpen] = useState(false);
-  const [sourceFormat, setSourceFormat] = useState<SourceFormat>(readSourceFormatPreference);
   // Per image format, remembered: a few kilobytes of text inside an SVG is nothing, so it is on by
   // default there; a PNG is usually meant as just a picture, so it is off until asked for.
   const [editableSvg, setEditableSvg] = useState(() => readEditableImagePreference('svg'));
@@ -262,10 +249,6 @@ export function ExportDialog() {
     setPngScaleState(next);
     writePreference(EXPORT_PNG_SCALE_PREFERENCE, next);
   };
-  const setSourceFormatValue = (next: SourceFormat) => {
-    setSourceFormat(next);
-    writeSourceFormatPreference(next);
-  };
   const editable = imageFormat === 'png' ? editablePng : editableSvg;
   const setEditable = (next: boolean) => {
     (imageFormat === 'png' ? setEditablePng : setEditableSvg)(next);
@@ -274,23 +257,6 @@ export function ExportDialog() {
   // The whole file goes inside an editable image, every room, the way a `.draftcanvas` carries it —
   // whatever room the picture itself shows.
   const embedded = () => (editable ? fileWithLiveViewport(useEditorStore.getState()) : undefined);
-
-  // Re-derived every render rather than a `useState` default: a flow created
-  // after this dialog first mounted must still show up without a remount. Only a
-  // flow with something to play is counted — an empty one would just fail to export — and the
-  // count spans every room, since the source does.
-  const playableFlowCount = countPlayableFlows(document);
-  const sourceInfo = SOURCE_FORMAT_INFO[sourceFormat];
-  // Several sequence diagrams go out as Markdown, one Mermaid block each (`sourceFileNameFor`): the
-  // file card says so rather than calling it a Mermaid file.
-  const sourceFileName = sourceFileNameFor(document, sourceFormat);
-  const sourceIsMarkdown = sourceFileName.endsWith('.md');
-  // A sequence drawn on the canvas is sequence source too, with or without a Flow beside it.
-  const sequenceCount = countSequences(document);
-  const sourceEmpty = sourceInfo.family === 'sequence' && playableFlowCount + sequenceCount === 0;
-  // The text itself, generated on every render the Source panel shows — a few milliseconds for a
-  // large canvas, and it is exactly what the file and the clipboard will get.
-  const sourceText = effectiveMode === 'sequence' && !sourceEmpty ? sourceTextFor(document, sourceFormat) : null;
 
   // "Every level" is only a question when there is a level below this one; a flat canvas has one
   // picture. A selection belongs to one room, so the two cannot combine.
@@ -332,7 +298,7 @@ export function ExportDialog() {
     ?? shareChoices.find((choice) => choice.key === (inRoom ? 'current' : 'overview'))!;
   const sharePreview = viewOf(shareFile, chosenShare.start?.path ?? []) ?? shareFile;
 
-  const artifact: { fileName: string; visual: ArtifactVisual; empty?: boolean } =
+  const artifact: { fileName: string; visual: ArtifactVisual } =
     effectiveMode === 'share'
       ? { fileName: shareFile.metadata.title || 'Untitled diagram', visual: {
           type: 'thumbnail', document: sharePreview, theme: name,
@@ -364,33 +330,20 @@ export function ExportDialog() {
               meta: `${count(collectLevels(document).length, 'image')} · ${imageFormat.toUpperCase()}`,
             },
           }
-      : effectiveMode === 'image'
-        ? {
-            fileName: fileNameFor(title, imageFormat === 'png' ? '.png' : '.svg'),
-            visual: {
-              type: 'thumbnail',
-              document,
-              theme: paletteName,
-              options,
-              onlyKey,
-              describe: (width, height) =>
-                `${imageFormat === 'png' ? describePng(width, height, pngScale) : `${width} × ${height} · vector`}${editable ? ' · diagram inside' : ''}`,
-            },
-          }
-        : {
-            fileName: sourceFileName,
-            empty: sourceEmpty,
-            visual: {
-              type: 'file',
-              icon: 'code',
-              badge: sourceIsMarkdown ? 'MD' : sourceInfo.badge,
-              meta: sourceEmpty
-                ? 'Nothing yet'
-                : sourceInfo.family === 'sequence'
-                  ? `${[playableFlowCount > 0 ? count(playableFlowCount, 'Flow') : null, sequenceCount > 0 ? count(sequenceCount, 'sequence') : null].filter(Boolean).join(' · ')} · ${sourceIsMarkdown ? 'Markdown' : 'plain text'}`
-                  : `${count(sourceText?.split('\n').length ?? 0, 'line')} · ${sourceFormat === 'drawio' ? 'XML' : 'plain text'}`,
-            },
-          };
+      : {
+          // Image mode. Use in docs draws its own preview (`DocsPreview`) and only falls back to
+          // this tile while its publishing state is not ready yet.
+          fileName: fileNameFor(title, imageFormat === 'png' ? '.png' : '.svg'),
+          visual: {
+            type: 'thumbnail',
+            document,
+            theme: paletteName,
+            options,
+            onlyKey,
+            describe: (width, height) =>
+              `${imageFormat === 'png' ? describePng(width, height, pngScale) : `${width} × ${height} · vector`}${editable ? ' · diagram inside' : ''}`,
+          },
+        };
 
   const run = async (task: () => void | Promise<void>, what: string) => {
     // `busy` only lands on the next render: a second Enter in the same moment would run it again
@@ -485,23 +438,17 @@ export function ExportDialog() {
                 'Every level export',
               ),
           }
-      : effectiveMode === 'image'
-        ? imageFormat === 'png'
-          ? {
-              label: 'Export PNG',
-              disabled: busy,
-              onClick: () =>
-                void run(() => exportPngFile(document, { ...options, scale: Number(pngScale), editable: embedded() }), 'PNG export'),
-            }
-          : {
-              label: 'Export SVG',
-              disabled: busy,
-              onClick: () => void run(() => exportSvgFile(document, { ...options, editable: embedded() }), 'SVG export'),
-            }
+      : imageFormat === 'png'
+        ? {
+            label: 'Export PNG',
+            disabled: busy,
+            onClick: () =>
+              void run(() => exportPngFile(document, { ...options, scale: Number(pngScale), editable: embedded() }), 'PNG export'),
+          }
         : {
-            label: `Export ${sourceInfo.label}`,
-            disabled: busy || sourceEmpty,
-            onClick: () => void run(() => exportSourceFile(document, sourceFormat), `${sourceInfo.label} export`),
+            label: 'Export SVG',
+            disabled: busy,
+            onClick: () => void run(() => exportSvgFile(document, { ...options, editable: embedded() }), 'SVG export'),
           };
 
   // The same export, pointed at the clipboard. The dialog stays open: a copy is often the first of
@@ -522,9 +469,7 @@ export function ExportDialog() {
               ? copyImage(document, { ...options, scale: Number(pngScale), editable: embedded() })
               : copySvg(document, { ...options, editable: embedded() }),
         }
-      : effectiveMode === 'sequence'
-        ? { what: `${sourceInfo.label} source`, disabled: busy || sourceEmpty, task: () => copySource(document, sourceFormat) }
-        : null;
+      : null;
   const runCopy = async () => {
     if (!copy || running.current) return;
     running.current = true;
@@ -599,7 +544,7 @@ export function ExportDialog() {
 
           {effectiveMode === 'docs' && docs && <ExportDocsPanel docs={docs} />}
 
-          {inRoom && effectiveMode !== 'document' && effectiveMode !== 'share' && effectiveMode !== 'docs' && (
+          {inRoom && effectiveMode === 'image' && (
             <ExportScope whole={wholeCanvas} roomName={roomName} onChange={setWholeCanvas} />
           )}
 
@@ -630,19 +575,10 @@ export function ExportDialog() {
               onEditableChange={setEditable}
             />
           )}
-
-          {effectiveMode === 'sequence' && (
-            <ExportSequencePanel
-              format={sourceFormat}
-              onFormatChange={setSourceFormatValue}
-              playableFlowCount={playableFlowCount + sequenceCount}
-              source={sourceText}
-            />
-          )}
         </div>
         <div className="dc-export-artifact-column">
           {effectiveMode === 'share' && <span className="dc-share-preview-label">Recipient view</span>}
-          {effectiveMode === 'docs' && docs ? <DocsPreview docs={docs} /> : <ExportArtifact fileName={artifact.fileName} visual={artifact.visual} empty={artifact.empty} />}
+          {effectiveMode === 'docs' && docs ? <DocsPreview docs={docs} /> : <ExportArtifact fileName={artifact.fileName} visual={artifact.visual} />}
         </div>
       </div>
       </div>

@@ -16,7 +16,7 @@ const INDENT = '    ';
 
 const oneLine = (text: string): string => escapeMermaidText(text.replace(/\r\n?|\n/g, ' ').trim());
 
-/** Both formats take a note "over" one participant or from one to another: the first and the last. */
+/** A note is "over" one participant or from one to another: the first and the last. */
 const spanOf = (over: readonly string[]): string[] => (over.length > 1 ? [over[0]!, over[over.length - 1]!] : [...over]);
 
 /** What follows a message's or a note's colon. Replies, self-messages and notes often say nothing, and `A-->>B:` says just that. */

@@ -42,7 +42,6 @@ import { pointer, pointerFlow, type UiStore } from '../store/uiStore';
 import { hostKind } from '../host/hostInfo';
 import { setFollowing, useCollabStore } from '../store/collabStore';
 import { leaveSessionKeepingView, stopHosting } from '../store/collabBridge';
-import { SOURCE_FORMAT_INFO, SOURCE_FORMATS } from '../export/source/formats';
 import type { CopyResult } from '../export/clipboard';
 // Type-only: `contextMenu.ts` builds its menus from this module, so a value import would be a cycle.
 import type { ContextMenuEntry } from './contextMenu';
@@ -51,7 +50,7 @@ import { cancelSmartInk, convertStrokes } from '../canvas/inkSession';
 import { ARRANGE_PRESETS, startArrange, startCheckLayout, startTidy } from './arrange';
 import type { PencilTool } from '../store/uiStore';
 
-// The exporters (rasterizer, Structurizr, draw.io, sequence engine) load when a copy command runs, not with the editor.
+// The exporters (the SVG writer and the rasterizer) load when a copy command runs, not with the editor.
 const clipboard = () => import('../export/clipboard');
 
 /**
@@ -694,31 +693,6 @@ function copyExportCommands(): Command[] {
           .catch(fail(inner.ui, 'Copy as SVG'));
       },
     },
-    {
-      id: 'copy-source',
-      title: 'Copy source as…',
-      group: 'canvas',
-      // Not "text": a bare "text" in the palette is the Text shape (`tests/label-text-semantics`).
-      keywords: ['mermaid', 'plantuml', 'c4', 'structurizr', 'drawio', 'draw.io', 'uml', 'sequence diagram', 'flowchart', 'clipboard', 'source code'],
-      hint: 'Mermaid · PlantUML · C4 · Structurizr · draw.io',
-      run: () => ({
-        prompt: 'Copy source as',
-        options: SOURCE_FORMATS.map((format) => {
-          const info = SOURCE_FORMAT_INFO[format];
-          return {
-            id: `copy-source-${format}`,
-            title: info.label,
-            hint: info.family === 'sequence' ? 'Sequence diagram from your Flows' : `Architecture · ${info.extension}`,
-            run: (inner: CommandContext) => {
-              void clipboard()
-                .then(({ copySource }) => copySource(inner.editor.document, format))
-                .then(announce(inner.ui, `${info.label} source`))
-                .catch(fail(inner.ui, 'Copy source'));
-            },
-          };
-        }),
-      }),
-    },
   ];
 }
 
@@ -976,7 +950,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       id: 'export',
       title: 'Export…',
       group: 'canvas',
-      keywords: ['png', 'svg', 'download', 'save', 'share', 'image', 'sequence diagram', 'mermaid', 'plantuml', 'uml'],
+      keywords: ['png', 'svg', 'download', 'save', 'share', 'image'],
       // ⌘⇧E leads because it always reaches the page: browser extensions (Claude's, among others)
       // claim a bare ⌘E before Draft Canvas ever sees it. ⌘E still works wherever it gets through.
       shortcut: `${MOD_SYMBOL} Shift E`,
@@ -2489,7 +2463,6 @@ const READ_SAFE_COMMANDS: ReadonlySet<string> = new Set([
   'export-selection',
   'copy-image',
   'copy-svg',
-  'copy-source',
   'copy-share-link',
   // The app's own panels and dialogs.
   // Collaborate is how a view-only collaborator sees who is here and leaves; following and leaving

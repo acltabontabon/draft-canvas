@@ -257,11 +257,10 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - A Junction's group is `DraftNode.link`, an opaque id on the Junction, and nothing else. Do not add
   a table of groups or key anything on the label: two groups may read "A". The label is each
   member's `text`; only `renameJunctionGroup` writes it on all of them.
-- A link is not a connector. Routing, flows, Arrange, Tidy up, semantics, outage walks, sequence
-  export and image export must not read it. The architecture model (`model/`) is the one
-  exception, and reads it for analysis only: nothing it finds is drawn, routed or stored. The ring
-  a linked Junction wears is canvas chrome in `styles/junctions.css`, never a shape in
-  `nodes/describe.ts`.
+- A link is not a connector. Routing, flows, Arrange, Tidy up, semantics, outage walks and image
+  export must not read it. The architecture model (`model/`) is the one exception, and reads it
+  for analysis only: nothing it finds is drawn, routed or stored. The ring a linked Junction wears
+  is canvas chrome in `styles/junctions.css`, never a shape in `nodes/describe.ts`.
 - `src/junctions/` imports `document/` and `depth/` only. Validation reads `link` on its own, never
   against other Junctions: a shared session checks one node at a time, and a group of one is valid.
 - Every way to travel (the Go key, the peek card, menus, search, a click while presenting) goes

@@ -63,7 +63,6 @@ Open **Share → Export…** (`⌘⇧E`):
 | **Save an editable file** | A `.draftcanvas` file to reopen or send |
 | **Save an image** | PNG or SVG for a slide or chat |
 | **Use in a README** | A picture for a Markdown page, with its editable file beside it |
-| **Other formats** | Mermaid or PlantUML from your flows, or architecture source |
 
 ## Start from a starter
 

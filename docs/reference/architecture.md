@@ -93,8 +93,10 @@ pairing stays free; an unusual one gets guidance, not rejection.
 - A selected flow acts as a lighter lens, except during presentation or focus, or when empty.
 - Playback, emphasis and camera guidance are never saved, undone or exported. A presenter's pan takes
   the camera until guidance is requested again.
-- Sequence export writes every playable flow, and every native sequence, to one PlantUML or Mermaid
-  file. The text is the product.
+- A flow reads as a sequence through one model (`sequence/build.ts`); **Draw the flow as a sequence**
+  turns that reading into a native sequence.
+- Nothing writes a diagram in another tool's format. The native file is the interchange format; PNG
+  and SVG are the pictures.
 - Nothing infers timing, outcomes or execution.
 
 ## Sequences
@@ -110,7 +112,8 @@ operations → checks → layout → display list → interaction overlay.
 - The interactive layer (`canvas/sequence/`) is mounted only while the node is hovered, selected, a
   drop target or presenting. Sub-selection and the open editor are transient.
 - Presenting plays a derived, never-saved flow, one step per message, through the existing playback.
-- Agents send and read the same Mermaid text that export writes and import reads.
+- Agents send and read a sequence as Mermaid `sequenceDiagram` text (`sequence/native/mermaid.ts`),
+  the text import reads. It is the agent protocol, not an export.
 
 ## Command surface
 

@@ -147,8 +147,8 @@ export function hasPassiveReading(semantic: EdgeSemantic): boolean {
 
 /**
  * Whether a connector drawn from `source` to `target` reads in the passive: the arrow starts at the
- * verb's object, and the doer is at the far end. The sequence exporter asks the same question to
- * draw the message from the doer (`sequence/build.ts`), so the two can't disagree.
+ * verb's object, and the doer is at the far end. Reading a flow as a sequence asks the same question
+ * to draw the message from the doer (`sequence/build.ts`), so the two can't disagree.
  */
 export function passiveApplies(semantic: EdgeSemantic, source?: NodeCategory, target?: NodeCategory): boolean {
   const passive = PASSIVE[semantic];
