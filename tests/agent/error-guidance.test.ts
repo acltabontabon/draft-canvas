@@ -11,7 +11,7 @@ import { deserializeDocument } from '../../src/export/project';
 import type { DraftDocument } from '../../src/document/types';
 
 /**
- * Refusals an agent has to act on, from real Codex runs through Nodi whose `submit_proposal` calls
+ * Refusals an agent has to act on, from real Codex runs whose `submit_proposal` calls
  * failed four to seven times before landing: each message must name the field that is wrong and what
  * to send instead, so one retry fixes it. Payloads are the recorded ones, trimmed.
  */

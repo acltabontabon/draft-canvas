@@ -3,7 +3,6 @@ import { ReactFlowProvider } from '@xyflow/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prepareProposal } from '../../src/agent/proposal';
 import type { Proposal, ProposalAction } from '../../src/desktop/api';
-import { companion } from '../../src/desktop/companion';
 import { ProposalPanel } from '../../src/desktop/ui/ProposalPanel';
 import { setDesktopController } from '../../src/desktop/useDesktop';
 import { createDocument, createNode } from '../../src/document/factory';
@@ -79,7 +78,6 @@ async function acceptButton() {
 }
 
 beforeEach(() => {
-  companion.__reset();
   __resetInteraction();
   const doc = file();
   useEditorStore.setState({ document: doc, history: { past: [], future: [] }, selection: { nodes: [], edges: [] }, revision: 0, mode: 'edit', path: [], outer: null });
@@ -169,24 +167,6 @@ describe('ProposalPanel accept', () => {
 });
 
 describe('ProposalPanel review presentation', () => {
-  it('keeps another agent’s pending proposal reachable when the companion switches histories', async () => {
-    const doc = useEditorStore.getState().document;
-    const proposal = { ...proposalFor(doc, 'codex-proposal', [{ op: 'update', id: 'api', set: { label: 'Checkout API' } }]), run: 'codex' };
-    companion.begin(doc.metadata.id, 'codex', 'Rename it', null, 'codex');
-    companion.apply('codex', { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: null, usage: null });
-    companion.setProposal('codex', proposal.proposalId);
-    companion.selectAgent(doc.metadata.id, 'codex');
-    mount(fakeController([proposal]), proposal.proposalId);
-    await acceptButton();
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(screen.queryByRole('button', { name: '1 proposal to review' })).toBeNull();
-    act(() => companion.selectAgent(doc.metadata.id, 'claude-code'));
-    expect(await screen.findByRole('button', { name: '1 proposal to review' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: '1 proposal to review' }));
-    await acceptButton();
-    expect(useUiStore.getState().proposalPanelId).toBe('codex-proposal');
-  });
-
   it('leads with one summary, colour-count labels and named changes grouped before rationale', async () => {
     const doc = useEditorStore.getState().document;
     const withLegacy = { ...doc, nodes: [...doc.nodes, createNode({ id: 'old', type: 'service', x: 300, y: 0, text: 'Legacy worker' })] };

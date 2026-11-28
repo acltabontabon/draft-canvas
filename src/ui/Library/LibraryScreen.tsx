@@ -26,6 +26,7 @@ import { worthBackingUp } from '../../storage/backupStatus';
 import { offersHandoff } from '../../storage/handoff';
 import { ProjectSidebar } from './ProjectSidebar';
 import { headingFor, visibleCanvases, type LibrarySort } from './libraryFilter';
+import { useFocusAfterDelete } from './useFocusAfterDelete';
 
 /**
  * The web Home and Canvas Gallery: local diagrams, optionally grouped into projects.
@@ -114,6 +115,10 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
     () => visibleCanvases(session.library, session.projects, view, searchQuery, sort),
     [session.library, session.projects, view, searchQuery, sort],
   );
+  const focusAfterDelete = useFocusAfterDelete(session.library, (index) => {
+    const rows = listRef.current?.querySelectorAll<HTMLElement>('.dc-library-item') ?? [];
+    return rows[Math.min(index, rows.length - 1)] ?? searchInput.current;
+  });
   const heading = headingFor(view, session.projects, searching);
   // Nothing stored at all: not an empty library but a first run, which gets its own screen.
   const firstRun = session.library.length === 0 && session.projects.length === 0;
@@ -454,17 +459,10 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
           entry={confirmDelete}
           onClose={() => setConfirmDelete(null)}
           onConfirm={() => {
-            const index = canvases.findIndex((entry) => entry.id === confirmDelete.id);
-            setConfirmDelete(null);
             // The dialog hands focus back to the row's trash button, which the delete then
-            // removes — so once the list has re-rendered, land on the row that took its place.
-            void session.deleteDocument(confirmDelete.id).then(() =>
-              requestAnimationFrame(() => {
-                const rows = listRef.current?.querySelectorAll<HTMLElement>('.dc-library-item') ?? [];
-                const next = rows[Math.min(index, rows.length - 1)] ?? searchInput.current;
-                if (next && window.document.activeElement === window.document.body) next.focus();
-              }),
-            );
+            // removes, so land on the row that took its place once the list has re-rendered.
+            focusAfterDelete(confirmDelete.id, canvases.findIndex((entry) => entry.id === confirmDelete.id), session.deleteDocument(confirmDelete.id));
+            setConfirmDelete(null);
           }}
         />
       )}

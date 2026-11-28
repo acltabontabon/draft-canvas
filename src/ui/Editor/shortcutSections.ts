@@ -85,7 +85,6 @@ export const SECTIONS: Section[] = [
       { commandId: 'back-out', label: 'Back out to what contains it' },
       { keys: ['Shift', 'F10'], label: 'Context menu for the selection, or the canvas menu when nothing is selected (or the Menu key)' },
       { commandId: 'outline', label: 'Outline — this view as a list of shapes and their connectors, for the keyboard and screen readers' },
-      { commandId: 'companion', label: 'Nodi — ask your coding agent about this diagram', desktopOnly: true },
       { keys: ['Esc'], label: 'Step back — out of editing, then a popover, then a next-shape suggestion, then presenting, then the selection, then a chosen flow, then out of a shape' },
     ],
   },

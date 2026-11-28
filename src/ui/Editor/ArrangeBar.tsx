@@ -6,7 +6,7 @@ import { boundsOf } from '../../document/geometry';
 import type { DraftDocument } from '../../document/types';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../../lib/isEditableTarget';
 import { motionMs } from '../../lib/motion';
-import { isInteracting, useEditorStore } from '../../store/editorStore';
+import { isInteracting, useEditorStore, type ArrangePreset } from '../../store/editorStore';
 import { useUiStore, type ArrangeDirection, type ArrangePreview, type ArrangeShow } from '../../store/uiStore';
 import { Button } from '../common/Button';
 import { LayoutNotes } from './LayoutBusyBar';
@@ -17,6 +17,14 @@ import { crossingsNote, directionNote, fixesNote, layoutNotes, movesNote, readsA
 const DIRECTIONS: { value: ArrangeDirection; label: string; name: string }[] = [
   { value: 'right', label: 'Across →', name: 'Across, left to right' },
   { value: 'down', label: 'Down ↓', name: 'Down, top to bottom' },
+];
+
+type Spacing = NonNullable<ArrangePreset['spacing']>;
+
+const SPACINGS: { value: Spacing; label: string }[] = [
+  { value: 'compact', label: 'Snug' },
+  { value: 'comfortable', label: 'Standard' },
+  { value: 'spacious', label: 'Roomy' },
 ];
 
 const SHOWS: { value: ArrangeShow; label: string; name: string }[] = [
@@ -41,7 +49,9 @@ const CAMERA_MS = 320;
  * default, which is the picture being judged, and both layouts only for **Moves**.
  *
  * The suggested direction is picked to begin with: the way the room reads now, unless the other way
- * reads clearly better or fits a screen clearly better (`agent/arrange.ts`). Nothing happens to the
+ * reads clearly better or fits a screen clearly better (`agent/arrange.ts`). The whole view can also
+ * be asked for another way from the bar itself: the other direction when only one was worked out, a
+ * flow to follow, and how much room (`rearrange`), each the same preview worked out again. Nothing happens to the
  * diagram until Apply, which is one undo step. Enter applies and Escape cancels from anywhere but a
  * text field or the direction choice itself, and the preview is dropped the moment the room it was
  * worked out from changes — as `TidyBar` does, and always mounted for the same reason.
@@ -87,7 +97,7 @@ export function ArrangeBar() {
       else goBack();
       return applied;
     };
-    // Nodi's layout skills play the rearrangement; the document has changed before any of it plays.
+    // An arrangement asked for with a preset plays the rearrangement; the document has changed before any of it plays.
     if (latest.motion) void withArrangeMotion(async () => run(), latest.direction);
     else run();
   };
@@ -143,7 +153,8 @@ export function ArrangeBar() {
   }, [preview, viewWidth, viewHeight]);
 
   if (!preview || stale) return null;
-  const choices = DIRECTIONS.filter((d) => preview.options[d.value]);
+  // A selection chooses between the directions worked out for it; the whole view can ask for either.
+  const choices = preview.scoped ? DIRECTIONS.filter((d) => preview.options[d.value]) : DIRECTIONS;
   const fixed = fixesNote(preview.fixes?.[preview.direction]);
   const notes = layoutNotes(preview, 'arrange');
   const crossings = crossingsNote(preview);
@@ -170,7 +181,10 @@ export function ArrangeBar() {
               options={choices}
               onChange={(direction) => {
                 const latest = useUiStore.getState().arrangePreview;
-                if (latest) useUiStore.getState().setArrangePreview({ ...latest, direction });
+                if (!latest) return;
+                if (latest.options[direction]) useUiStore.getState().setArrangePreview({ ...latest, direction });
+                // Not worked out the first time (it added nothing, or the budget went on the other): asked for outright.
+                else void rearrange({ direction });
               }}
             />
             <span className="dc-tidy-bar-summary">{directionNote(preview)}</span>
@@ -183,14 +197,23 @@ export function ArrangeBar() {
               aria-label="Flow to lay out in a straight line"
               value={preview.followed ?? ''}
               onChange={(event) => {
-                const flow = event.target.value;
                 // Worked out again from the same room: the preview stays up until the new one replaces it.
-                void startArrange(flow ? { preset: { primaryFlow: flow } } : {});
+                void rearrange({ follow: event.target.value });
               }}
             >
               <option value="">No flow</option>
               {flows.map((flow) => (
                 <option key={flow.id} value={flow.id}>{flow.title}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        {!preview.scoped && (
+          <label className="dc-arrange-bar-follow" title="How much room the arrangement leaves between shapes">
+            <span>Spacing</span>
+            <select aria-label="Spacing between shapes" value={preview.spacing ?? 'comfortable'} onChange={(event) => void rearrange({ spacing: event.target.value as Spacing })}>
+              {SPACINGS.map((spacing) => (
+                <option key={spacing.value} value={spacing.value}>{spacing.label}</option>
               ))}
             </select>
           </label>
@@ -217,6 +240,30 @@ export function ArrangeBar() {
       {notes.length > 0 && <LayoutNotes notes={notes} />}
     </Fragment>
   );
+}
+
+/**
+ * The whole view arranged again with one thing said differently: the other direction, a flow to
+ * follow (none for `''`), or how much room. What was already asked is kept, so Roomy around a flow
+ * stays around that flow; a preview that offers one direction keeps it, and one that offers both
+ * opens on the one the person was looking at when the new arrangement has it.
+ */
+async function rearrange(change: { direction?: ArrangeDirection; follow?: string; spacing?: Spacing }): Promise<void> {
+  const before = useUiStore.getState().arrangePreview;
+  if (!before || before.scoped) return;
+  const only = DIRECTIONS.filter((d) => before.options[d.value]).length === 1;
+  const direction = change.direction ?? (only ? before.direction : undefined);
+  const follow = change.follow ?? before.followed ?? '';
+  const spacing = change.spacing ?? before.spacing ?? 'comfortable';
+  const preset: ArrangePreset = {
+    ...(direction ? { direction } : {}),
+    ...(follow ? { primaryFlow: follow } : {}),
+    ...(spacing !== 'comfortable' ? { spacing } : {}),
+  };
+  const outcome = await startArrange(Object.keys(preset).length > 0 ? { preset } : {});
+  const after = useUiStore.getState().arrangePreview;
+  if (outcome !== 'preview' || !after || after === before || after.direction === before.direction || direction) return;
+  if (after.options[before.direction]) useUiStore.getState().setArrangePreview({ ...after, direction: before.direction });
 }
 
 function unionBounds(a: DraftDocument, b: DraftDocument) {
