@@ -224,6 +224,34 @@ export function tryLine(client: AgentChoice, agent: Pick<AgentSettings, 'enabled
   return { text: `${FRESH_START[client]}, then ask it to list your Draft Canvas diagrams.`, live, command: CHECK_COMMANDS[client] ?? null };
 }
 
+export interface ConnectStart {
+  /** Whether an agent is connected right now: the app's own count, as `tryLine` reads it. */
+  live: { text: string; tone: FactTone };
+  /** The agent to set up with one click: the first the shell can do itself, while none is set up. */
+  setup: AgentClientSetup | null;
+  /** What to do next when there is no button for it. */
+  hint: string | null;
+}
+
+/**
+ * The top of Settings → AI agents: whether an agent is connected and, while none is, the one thing to
+ * do about it. Access comes first, since nothing connects without it; a connected agent needs nothing;
+ * one that is set up needs a fresh start; otherwise the first agent the shell can set up itself is
+ * offered with its one-click setup, and anything else is left to the steps further down.
+ */
+export function connectStart(agent: Pick<AgentSettings, 'enabled' | 'listening' | 'connections' | 'sidecarPath'>, setups: readonly AgentClientSetup[]): ConnectStart {
+  if (!agent.enabled) return { live: { text: 'Agent access is off, so no agent can connect.', tone: 'warn' }, setup: null, hint: 'Turn on agent access below, then set up your agent.' };
+  if (!agent.listening) return { live: { text: 'The connector isn’t ready yet.', tone: 'warn' }, setup: null, hint: null };
+  if (agent.connections > 0) return { live: { text: agent.connections === 1 ? '1 agent is connected.' : `${agent.connections} agents are connected.`, tone: 'on' }, setup: null, hint: null };
+  const live: ConnectStart['live'] = { text: 'No agent is connected yet.', tone: 'off' };
+  // A build without the connector says so in the steps.
+  if (!agent.sidecarPath) return { live, setup: null, hint: null };
+  const ready = setups.find((setup) => setup.state === 'ready');
+  if (ready) return { live, setup: null, hint: `${CLIENT_NAMES[ready.client]} is set up. ${FRESH_START[ready.client]}, then ask it to list your Draft Canvas diagrams.` };
+  const setup = setups.find((candidate) => candidate.automatic) ?? null;
+  return { live, setup, hint: setup ? null : 'Choose your agent under Set up an agent, below.' };
+}
+
 /** What the one-click button does, before it's done. */
 function addText(client: AgentClient, where: string): string {
   switch (client) {

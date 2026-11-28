@@ -47,7 +47,7 @@ import type { CopyResult } from '../export/clipboard';
 import type { ContextMenuEntry } from './contextMenu';
 import { inkOf } from '../document/ink';
 import { cancelSmartInk, convertStrokes } from '../canvas/inkSession';
-import { startArrange, startCheckLayout, startTidy } from './arrange';
+import { ARRANGE_PRESETS, startArrange, startCheckLayout, startTidy } from './arrange';
 import type { PencilTool } from '../store/uiStore';
 
 // The exporters (the SVG writer and the rasterizer) load when a copy command runs, not with the editor.
@@ -846,6 +846,17 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       hint: 'Preview this view laid out again from scratch, and choose which way it reads',
       run: (inner) => void startArrange({}, inner),
     });
+    // Arrange with one thing said: a reading direction kept as asked, or how much room.
+    for (const named of ARRANGE_PRESETS) {
+      commands.push({
+        id: named.id,
+        title: named.title,
+        group: 'canvas',
+        keywords: ['layout', 'auto layout', 'rearrange', ...named.keywords],
+        hint: named.hint,
+        run: (inner) => void startArrange({ preset: named.preset }, inner),
+      });
+    }
     // A flow somebody authored is the path a reader follows: laid out in one straight line, the rest
     // hangs off it. Only flows with a connector to follow — a flow of shapes alone has no line to draw.
     const followable = ctx.editor.document.flows.filter((flow) => flow.steps.some((step) => step.edgeId));
@@ -2532,8 +2543,6 @@ function editCommands(ctx: CommandContext): Command[] {
     ...viewCommands(ctx),
     ...arrangeSelectionCommands(ctx),
     ...canvasCommands(ctx),
-    // The companion runs the person's own coding agent, which only the desktop app can start.
-    ...(__DESKTOP__ && hostKind() === 'desktop' ? [companionCommand(ctx)] : []),
   ];
 }
 
@@ -2605,15 +2614,3 @@ export function pencilCommands(ctx: CommandContext): Command[] {
   return commands;
 }
 
-/** Opens Nodi, the agent companion, or puts it back to rest. Desktop only (see `editCommands`). */
-export function companionCommand(ctx: CommandContext): Command {
-  return {
-    id: 'companion',
-    title: 'Nodi',
-    group: 'canvas',
-    keywords: ['ai', 'agent', 'companion', 'claude', 'codex', 'assistant', 'chat', 'prompt', 'ask'],
-    hint: ctx.ui.companionOpen ? 'Showing' : 'Ask your coding agent',
-    shortcut: `${MOD_SYMBOL} J`,
-    run: (inner) => inner.ui.setCompanionOpen(!inner.ui.companionOpen),
-  };
-}

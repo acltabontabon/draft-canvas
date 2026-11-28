@@ -165,3 +165,52 @@ test('says it is arranging a large diagram, and Cancel stops it with nothing cha
   await page.keyboard.press('Escape');
   await expect(bar).toBeHidden();
 });
+
+test('⌘K opens Arrange already set one way, and the bar asks for the other direction and another spacing', async ({ page }) => {
+  await newCanvas(page, 'Arrange presets');
+  await create(page, 'Service', { x: 200, y: 200 });
+  await create(page, 'Data Store', { x: 500, y: 200 });
+  await create(page, 'Queue', { x: 800, y: 200 });
+  await page.evaluate(async () => {
+    const { useEditorStore } = await import('/src/store/editorStore.ts');
+    type Placed = { x: number; y: number };
+    useEditorStore.getState().apply('Stack', (doc: { nodes: Placed[] }) => ({ ...doc, nodes: doc.nodes.map((node: Placed) => ({ ...node, x: 300, y: 300 })) }));
+  });
+  const stacked = await positions(page);
+  const run = async (command: string) => {
+    await page.keyboard.press('ControlOrMeta+k');
+    await expect(page.getByRole('dialog', { name: 'Commands' })).toBeVisible();
+    await page.keyboard.type(command);
+    await expect(page.getByRole('option', { selected: true })).toContainText(command);
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog', { name: 'Commands' })).toBeHidden();
+  };
+  const bar = page.getByRole('region', { name: 'Arrange preview' });
+  const across = bar.getByRole('radio', { name: 'Across, left to right' });
+  const down = bar.getByRole('radio', { name: 'Down, top to bottom' });
+  const spacing = bar.getByRole('combobox', { name: 'Spacing between shapes' });
+
+  // A direction asked for is the one worked out; the other is still one press away.
+  await run('Arrange top down');
+  await expect(bar).toBeVisible();
+  await expect(down).toBeChecked();
+  await expect(spacing).toHaveValue('comfortable');
+  // The segmented control's radios are visually hidden, and the other direction is worked out
+  // before it shows as chosen: a click, then the wait below, where `check` would expect it at once.
+  await across.click({ force: true });
+  await expect(across).toBeChecked();
+
+  // Another spacing is the same preview worked out again, in the direction on show.
+  await spacing.selectOption('spacious');
+  await expect(spacing).toHaveValue('spacious');
+  await expect(across).toBeChecked();
+  expect(await positions(page)).toEqual(stacked);
+  await bar.getByRole('button', { name: 'Cancel' }).click();
+  await expect(bar).toBeHidden();
+
+  await run('Arrange snug');
+  await expect(spacing).toHaveValue('compact');
+  await bar.getByRole('button', { name: 'Apply' }).click();
+  await expect(bar).toBeHidden();
+  await expect.poll(async () => new Set(Object.values(await positions(page)).map((p) => `${p.x},${p.y}`)).size).toBe(3);
+});

@@ -8,7 +8,6 @@ import { usePersonality } from '../../theme/usePersonality';
 import { deviceStyle } from '../../store/styleStore';
 import { useTheme } from '../../theme/useTheme';
 import { agentActivity, type AgentOp } from '../agentActivity';
-import { companion } from '../companion';
 import { useDesktopController } from '../useDesktop';
 
 /**
@@ -22,8 +21,7 @@ import { useDesktopController } from '../useDesktop';
  */
 export function AgentActivity() {
   const ops = useSyncExternalStore(agentActivity.subscribe, agentActivity.snapshot);
-  // A companion run's work shows in its own card (`Companion.tsx`), not here as well.
-  const shown = ops.filter((op) => op.shown && !(op.run && companion.diagramOf(op.run) !== undefined));
+  const shown = ops.filter((op) => op.shown);
   const watching = ops.find((op) => op.watching && op.target !== 'open');
   if (!shown.length && !watching) return null;
   return (

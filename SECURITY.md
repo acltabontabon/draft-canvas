@@ -60,11 +60,6 @@ It doesn't encrypt the Library copy, the desktop file or recovery copies.
   into the agent's skill folder.
 - **Your agent** may send diagram content to its AI provider. See
   [Optional AI agents](docs/reference/privacy.md#optional-ai-agents).
-- **Nodi runs** are scoped to one diagram and use proposals unless you chose direct changes. Cancelling,
-  or the agent's final answer, closes its tool access before the process exits, and the whole process
-  tree is stopped with the run. Codex runs ignore your own Codex configuration. These boundaries assume
-  the supported agent CLI; they don't sandbox a malicious replacement. How to use Nodi:
-  [Ask Nodi, on the canvas](docs/guides/connect-an-ai-agent.md#ask-nodi-on-the-canvas).
 
 ## Live collaboration
 

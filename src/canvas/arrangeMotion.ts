@@ -17,7 +17,7 @@ const FADE_MS = 140;
 const FLIGHT_MS = 620;
 const WAVE_MS = 280;
 const DRAW_MS = 460;
-/** Samples per flight: straight lines between them read as the curve (see `mascot/flight.ts`). */
+/** Samples per flight: straight lines between them read as the curve. */
 const SAMPLES = 24;
 
 function reduced(): boolean {

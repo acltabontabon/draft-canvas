@@ -16,7 +16,7 @@ const api = createNode({ id: 'api', type: 'service', x: 0, y: 0, text: 'Orders A
 const db = createNode({ id: 'db', type: 'service', x: 300, y: 0, text: 'Orders database' });
 
 function show(nodes: ReturnType<typeof createNode>[]) {
-  useUiStore.setState({ proposalPreview: { proposalId: 'p1', path: [], nodes, edges: [], visible: true, owner: 'companion' } });
+  useUiStore.setState({ proposalPreview: { proposalId: 'p1', path: [], nodes, edges: [], visible: true } });
   return render(
     <ReactFlowProvider>
       <ProposalPreviewLayer />
