@@ -267,3 +267,72 @@ describe('the repository reader', () => {
 it('the fixture diagram is a valid file', () => {
   expect(createNode({ id: 'n', type: 'service', ...at }).type).toBe('service');
 });
+
+describe('reviewing a branch', () => {
+  it('escapes names so a diagram cannot add markup, links or mentions to the report', async () => {
+    const { md } = await import('../../cli/review');
+    expect(md('<img src=x onerror=alert(1)> [click](http://evil) @maintainer `code`\n# Heading')).toBe(
+      '&lt;img src=x onerror=alert\\(1\\)&gt; \\[click\\]\\(http:\u200b//evil\\) @\u200bmaintainer \\`code\\` \\# Heading',
+    );
+    expect(md('x'.repeat(500)).length).toBe(200);
+  });
+
+  it('says what each diagram changes since the base revision, without running git', async () => {
+    const git = (await import('isomorphic-git')).default;
+    const fs = await import('node:fs');
+    const work = join(dir, 'reviewed');
+    mkdirSync(join(work, 'docs'), { recursive: true });
+    const author = { name: 'T', email: 't@example.test', timestamp: 0, timezoneOffset: 0 };
+    await git.init({ fs, dir: work, defaultBranch: 'main' });
+    const write = (name: string, document: DraftDocument) => writeFileSync(join(work, name), serializeDocument(document));
+    write('docs/shop.draftcanvas', shop());
+    write('docs/gone.draftcanvas', shop());
+    write('docs/same.draftcanvas', shop());
+    for (const path of ['docs/shop.draftcanvas', 'docs/gone.draftcanvas', 'docs/same.draftcanvas']) await git.add({ fs, dir: work, filepath: path });
+    await git.commit({ fs, dir: work, message: 'base', author });
+
+    const before = shop();
+    write('docs/shop.draftcanvas', {
+      ...before,
+      nodes: [...before.nodes, service('evil', '<b>@team</b> [x](http://e)', 900)],
+      edges: [...before.edges, createEdge({ id: 'e9', source: 'evil', target: 'db', semantic: 'writes', semanticsOrigin: 'explicit' }), createEdge({ id: 'e8', source: 'api', target: 'db', semantic: 'writes', semanticsOrigin: 'explicit' })],
+    });
+    rmSync(join(work, 'docs/gone.draftcanvas'));
+    write('new.draftcanvas', shop());
+    writeFileSync(join(work, 'broken.draftcanvas'), '{ nope');
+
+    const result = await main(['review', '--repo', work, '--base', 'main']);
+    expect(result).toMatchObject({ code: 0, stderr: '' });
+    const report = result.stdout;
+    expect(report).toContain('## Architecture review');
+    expect(report).toContain('### docs/shop.draftcanvas');
+    expect(report).toContain('Added service "&lt;b&gt;@\u200bteam&lt;/b&gt; \\[x\\]\\(http:\u200b//e\\)".');
+    expect(report).not.toContain('<b>');
+    expect(report).toContain('**New findings**');
+    expect(report).toContain('### docs/gone.draftcanvas\n\nThe diagram was removed.');
+    expect(report).toContain('### new.draftcanvas\n\nA new diagram.');
+    expect(report).toContain('### broken.draftcanvas\n\nCould not be reviewed');
+    expect(report).not.toContain('same.draftcanvas');
+
+    const json = JSON.parse((await main(['review', '--repo', work, '--base', 'main', '--json'])).stdout);
+    expect(json.schema).toBe('draftcanvas.review/1');
+    expect(Object.fromEntries(json.diagrams.map((diagram: { path: string; status: string }) => [diagram.path, diagram.status]))).toEqual({
+      'broken.draftcanvas': 'unreadable',
+      'docs/gone.draftcanvas': 'removed',
+      'docs/same.draftcanvas': 'unchanged',
+      'docs/shop.draftcanvas': 'changed',
+      'new.draftcanvas': 'added',
+    });
+    // The shared store is a warning: it fails the review only when asked to.
+    expect((await main(['review', '--repo', work, '--base', 'main', '--fail-on', 'warning'])).code).toBe(1);
+    expect(result.stdout).toBe((await main(['review', '--repo', work, '--base', 'main'])).stdout);
+  });
+
+  it('refuses a base it cannot read, and a folder that is not a repository', async () => {
+    expect(await main(['review', '--repo', join(dir, 'reviewed'), '--base', 'no-such-branch'])).toMatchObject({ code: 3 });
+    expect(await main(['review', '--repo', join(dir, 'reviewed'), '--base', '--upload-pack=x'])).toMatchObject({ code: 3 });
+    expect(await main(['review', '--repo', repo, '--base', 'main'])).toMatchObject({ code: 3 });
+    expect(await main(['review', '--repo', repo])).toMatchObject({ code: 2 });
+    expect(await main(['review', '--repo', join(dir, 'reviewed'), '--base', 'main', '-o', join(dir, 'x.draftcanvas')])).toMatchObject({ code: 2 });
+  });
+});

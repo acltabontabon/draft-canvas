@@ -11,6 +11,12 @@ The product principle is **your architecture, your agents, your decisions**
 ([Principles](CONTRIBUTING.md#principles)): no account or server that sees diagrams, the person's own
 agent, and every agent change reviewed before it lands. Design new features to keep it.
 
+Two more that bind every change, from the same page: Draft Canvas is free and open source in full
+(no paid tier, licence check or telemetry, and no boundary in the code that exists for one), and
+the native file is the interchange format. Do not add an exporter to another diagram tool's
+format, a converter to one, or a plugin mechanism for them; output is the native file, PNG and
+SVG, and machine-readable access is the file's own schema, the CLI's versioned reports and MCP.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, commands and the repository map;
 [docs/index.md](docs/index.md) for guides and reference material.
 
@@ -217,7 +223,10 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 
 - What a diagram describes is read through `model/` (`modelOf`): parts, boundaries, relations with
   Junctions seen through, every room. It is derived and never stored; do not add a persisted copy,
-  and do not work the same things out again elsewhere. It never follows a Junction's `link`.
+  and do not work the same things out again elsewhere. It is the one reader that follows a
+  Junction's `link`: a connector that ends at a linked Junction carries on from its counterparts,
+  in any room, as one relation marked `linked`. Checks, impact, rules and the architecture diff
+  get that from the model and never read `link` themselves.
 - `document/fieldClasses.ts` is the one table of what each field means, checked against the types:
   a new `DraftNode`, `DraftEdge` or `Attachment` field does not compile until it is classed there.
   A list of "the fields that carry meaning" anywhere else reads `ARCHITECTURE_NODE_FIELDS`.
@@ -243,8 +252,9 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   a table of groups or key anything on the label: two groups may read "A". The label is each
   member's `text`; only `renameJunctionGroup` writes it on all of them.
 - A link is not a connector. Routing, flows, Arrange, Tidy up, semantics, outage walks and image
-  export must not read it. The ring a linked Junction wears is canvas chrome in
-  `styles/junctions.css`, never a shape in `nodes/describe.ts`.
+  export must not read it. The architecture model (`model/`) is the one exception, and reads it
+  for analysis only: nothing it finds is drawn, routed or stored. The ring a linked Junction wears
+  is canvas chrome in `styles/junctions.css`, never a shape in `nodes/describe.ts`.
 - `src/junctions/` imports `document/` and `depth/` only. Validation reads `link` on its own, never
   against other Junctions: a shared session checks one node at a time, and a group of one is valid.
 - Every way to travel (the Go key, the peek card, menus, search, a click while presenting) goes

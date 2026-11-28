@@ -11,16 +11,22 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 #### Added
 
 - **Check a diagram from the command line** — `draftcanvas` reads a diagram with the editor's own
-  code and reports what it finds: `inspect`, `check`, `impact`, `diff` and `render`. It never
+  code and reports what it finds: `inspect`, `check`, `impact`, `diff`, `review` and `render`. It never
   changes a diagram and has no network code. See
   [Checking a diagram](docs/guides/checking-a-diagram.md). <!-- highlight -->
 - **Evidence that is checked** — `draftcanvas check --repo` holds the files and names a diagram
   cites against the repository, and says which are gone, moved or no longer there. A Docker Compose
   file the diagram refers to is compared with it too.
 
+- **Linked Junctions count** — A connector drawn in two halves that meet at a linked Junction is
+  read as one relation by checks, impact, rules and the architecture diff, in one view or across
+  views.
 - **Rules of your own** — Declare what must hold in a `draftcanvas.json` (a client goes through
   the gateway, one writer per data store, nothing outside a boundary reaches its database) and
   `draftcanvas check` reports what breaks them. A waiver needs a reason and can expire.
+- **Architecture review for pull requests** — `draftcanvas review --base main` writes what each
+  diagram changes about the architecture since the base revision, and the findings that came with
+  it, as Markdown for a job summary.
 - **What a change would touch** — `draftcanvas impact` lists what a part reaches and is reached by,
   what it shares and crosses, and what the outage walk says fails if it stops.
 
