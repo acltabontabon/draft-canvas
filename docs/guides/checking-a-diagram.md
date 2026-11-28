@@ -86,6 +86,19 @@ Both are `potential-drift` and never fail a check: a Compose file is one setup, 
 architecture. A Compose file the diagram does not claim is ignored. The file is parsed, never run:
 no variable is expanded and no `include` or `extends` is followed.
 
+## What a change would touch
+
+```bash
+draftcanvas impact orders.draftcanvas "Orders API"
+```
+
+`impact` takes a part's id or its label and lists what its work reaches, what reaches it, the
+boundaries its connectors cross, what it shares with other parts, the flows that run over it, and
+what the [outage walk](outage.md) says fails if it stops.
+
+All of it is read from the drawing: what is drawn as connected, not what was measured. Where the
+drawing says nothing, so does `impact`.
+
 ## What changed
 
 ```bash

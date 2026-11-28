@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { builtinFindings, checkAnchors, checkCompose, checkDiagram, composeServices, finding, fingerprint, linesNaming, memoryReader, normalizeRepoPath, reaches, sortFindings, type FindingInput, type RepoReader } from '../../src/checks';
+import { builtinFindings, checkAnchors, checkCompose, checkDiagram, composeServices, finding, fingerprint, impactOf, linesNaming, memoryReader, normalizeRepoPath, reaches, sortFindings, type FindingInput, type RepoReader } from '../../src/checks';
 import { createDocument, createEdge, createNode } from '../../src/document/factory';
 import type { DraftDocument, DraftEdge, DraftNode, SourceEvidence } from '../../src/document/types';
 import { modelOf } from '../../src/model';
@@ -219,5 +219,54 @@ describe('checking a diagram', () => {
   it('gives the same report for the same input', async () => {
     const make = () => checkDiagram(file([service('a', 'A', [seen('src/gone.ts')]), service('b', 'B'), service('c', 'C')], [calls('ab', 'a', 'b'), calls('bc', 'b', 'c'), calls('ca', 'c', 'a')]), { repo: memoryReader({}) });
     expect(JSON.stringify(await make())).toBe(JSON.stringify(await make()));
+  });
+});
+
+describe('impact', () => {
+  const group = (id: string, text: string) => createNode({ id, type: 'group', text, boundaryPreset: 'system', ...at });
+  const inner = service('ctl', 'Controller');
+  const api: DraftNode = { ...service('api', 'Orders API', undefined, { parentId: 'sys' }), inside: { nodes: [inner], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } } };
+  const nodes = [group('sys', 'Shop'), service('web', 'Web'), api, service('billing', 'Billing', undefined, { parentId: 'sys' }), createNode({ id: 'db', type: 'database', databaseKind: 'sql', text: 'Orders', parentId: 'sys', ...at })];
+  const writes = (id: string, source: string) => createEdge({ id, source, target: 'db', semantic: 'writes', semanticsOrigin: 'explicit' });
+  const edges = [calls('1', 'web', 'api'), writes('2', 'api'), writes('3', 'billing')];
+  const shop: DraftDocument = {
+    ...file(nodes, edges),
+    flows: [{ id: 'f1', title: 'Place an order', steps: [{ id: 's1', edgeId: '1' }, { id: 's2', edgeId: '2' }] }, { id: 'f2', title: 'Bill', steps: [{ id: 's1', edgeId: '3' }] }],
+    openPoints: [{ id: 'op1', kind: 'tentative', targets: [{ kind: 'edge', id: '2' }] }, { id: 'op2', kind: 'tentative', targets: [{ kind: 'node', id: 'billing' }] }],
+  };
+
+  it('says what a part reaches, shares and crosses, and which flows and open points touch it', () => {
+    const impact = impactOf(shop, 'api')!;
+    expect(impact).toMatchObject({
+      id: 'api',
+      kind: 'part',
+      name: 'Orders API',
+      room: [],
+      inside: [],
+      contains: ['ctl'],
+      downstream: { ids: ['db'], total: 1, truncated: false },
+      upstream: { ids: ['web'], total: 1, truncated: false },
+      crossings: [{ relation: '1', other: 'web', boundaries: ['sys'] }],
+      shares: [{ id: 'db', with: ['billing'] }],
+      flows: [{ id: 'f1', title: 'Place an order' }],
+      openPoints: ['op1'],
+    });
+    expect(impact.basis).toContain('not what was measured');
+  });
+
+  it('carries the outage walk\'s reading, by the same rules', () => {
+    const impact = impactOf(shop, 'api')!;
+    expect(impact.outage!.headline).toContain('Orders API');
+    expect(impact.outage!.affected.map((entry) => entry.id)).toContain('api');
+    expect(impact.outage!.flows.find((flow) => flow.id === 'f1')).toMatchObject({ state: 'breaks' });
+    expect(impact.outage!.flows.find((flow) => flow.id === 'f2')).toMatchObject({ state: 'unaffected' });
+  });
+
+  it('reads a part inside another, a boundary, and nothing for an id the file does not have', () => {
+    expect(impactOf(shop, 'ctl')).toMatchObject({ room: ['api'], inside: ['api'], contains: [], downstream: { ids: [] } });
+    expect(impactOf(shop, 'ctl')!.outage).toMatchObject({ affected: [{ id: 'ctl', state: 'down' }], notes: [], flows: [] });
+    expect(impactOf(shop, 'sys')).toMatchObject({ kind: 'boundary', name: 'Shop', contains: ['api', 'billing', 'db'] });
+    expect(impactOf(shop, 'nope')).toBeUndefined();
+    expect(impactOf(shop, '2')).toBeUndefined();
   });
 });

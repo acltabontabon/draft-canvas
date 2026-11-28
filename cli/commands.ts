@@ -14,7 +14,7 @@
 
 import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { checkDiagram, builtinFindings, countBySeverity, reaches, sortFindings, SEVERITIES, type CheckReport, type Finding, type Severity } from '../src/checks';
+import { checkDiagram, builtinFindings, countBySeverity, impactOf, reaches, sortFindings, SEVERITIES, type CheckReport, type Finding, type Severity } from '../src/checks';
 import { viewOf } from '../src/depth/tree';
 import { LIMITS } from '../src/document/limits';
 import { CURRENT_VERSION, type DraftDocument } from '../src/document/types';
@@ -54,10 +54,12 @@ export async function run(command: string, args: Args, version: string): Promise
         return await check(args, version);
       case 'diff':
         return diff(args, version);
+      case 'impact':
+        return impact(args, version);
       case 'render':
         return render(args);
       default:
-        throw new UsageError(`Unknown command "${command}". Try: inspect, check, diff, render.`);
+        throw new UsageError(`Unknown command "${command}". Try: inspect, check, impact, diff, render.`);
     }
   } catch (error) {
     if (error instanceof UsageError) return { code: EXIT.usage, stdout: '', stderr: `${error.message}\n` };
@@ -246,6 +248,52 @@ function diff(args: Args, version: string): Outcome {
   const lines = isEmptyDiff(changes) ? ['No changes.'] : [description.summary, ...description.body.map((line) => `  ${line}`)];
   if (introduced.length) lines.push('', 'New findings', ...introduced.map((entry) => `  ${entry.severity.padEnd(7)} ${entry.message}`));
   if (resolved.length) lines.push('', 'No longer found', ...resolved.map((entry) => `  ${entry.message}`));
+  return out(lines.join('\n'));
+}
+
+// --- impact ----------------------------------------------------------------------------------
+
+/** The part `wanted` names: by id, or by its label when exactly one part carries it. */
+function partFor(model: ArchModel, wanted: string | undefined): string {
+  if (!wanted) throw new UsageError('Name the part: its id, or its label in quotes.');
+  if (model.entities.has(wanted) || model.boundaries.has(wanted)) return wanted;
+  const all = [...model.entities.values(), ...model.boundaries.values()];
+  const plain = (name: string) => name.trim().toLowerCase();
+  const named = all.filter((part) => part.name && plain(part.name) === plain(wanted));
+  if (named.length === 1) return named[0]!.id;
+  if (named.length > 1) throw new UsageError(`${named.length} parts are called "${wanted}". Use an id: ${named.map((part) => part.id).join(', ')}.`);
+  throw new UsageError(`No part has the id or the label "${wanted}". See inspect for what the diagram holds.`);
+}
+
+function impact(args: Args, version: string): Outcome {
+  only(args, ['json']);
+  const { path, document } = load(args.positional[0]);
+  const model = modelOf(document);
+  const report = impactOf(document, partFor(model, args.positional[1]), model)!;
+  if (args.flags.json) {
+    return out(JSON.stringify({ schema: 'draftcanvas.impact/1', tool: { name: 'draftcanvas', version }, diagram: { path, title: document.metadata.title, format: CURRENT_VERSION }, ...report }, null, 2));
+  }
+  const name = (id: string) => {
+    const part = model.entities.get(id) ?? model.boundaries.get(id);
+    return part ? labelOf(part) : id;
+  };
+  const listed = (ids: readonly string[], total = ids.length) => (ids.length ? `${ids.slice(0, 12).map(name).join(', ')}${total > 12 ? ` and ${total - 12} more` : ''}` : 'nothing');
+  const lines = [`${report.name} — ${report.kind === 'boundary' ? 'boundary' : 'part'} in ${document.metadata.title}`, report.basis, ''];
+  if (report.inside.length) lines.push(`Inside:      ${listed(report.inside)}`);
+  if (report.contains.length) lines.push(`Contains:    ${listed(report.contains)}`);
+  lines.push(`Reaches:     ${listed(report.downstream.ids, report.downstream.total)}${report.downstream.truncated ? ' (and possibly more)' : ''}`);
+  lines.push(`Reached by:  ${listed(report.upstream.ids, report.upstream.total)}${report.upstream.truncated ? ' (and possibly more)' : ''}`);
+  for (const crossing of report.crossings) lines.push(`Crosses:     ${listed(crossing.boundaries)} to ${name(crossing.other)}`);
+  for (const shared of report.shares) lines.push(`Shares:      ${name(shared.id)} with ${listed(shared.with)}`);
+  if (report.flows.length) lines.push(`Flows:       ${report.flows.map((flow) => flow.title || 'Untitled flow').join(', ')}`);
+  if (report.openPoints.length) lines.push(`Open points: ${report.openPoints.length}`);
+  if (report.outage) {
+    lines.push('', 'If it stops', `  ${report.outage.headline}`);
+    for (const note of report.outage.notes.slice(0, 12)) lines.push(`  ${note.tone === 'question' ? '?' : note.tone === 'shield' ? '+' : '-'} ${note.text}`);
+    for (const flow of report.outage.flows) if (flow.state !== 'unaffected') lines.push(`  ${flow.title || 'Untitled flow'}: ${flow.note}`);
+  } else {
+    lines.push('', 'The drawing says nothing about what happens if it stops.');
+  }
   return out(lines.join('\n'));
 }
 

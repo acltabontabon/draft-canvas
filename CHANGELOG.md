@@ -11,7 +11,7 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 #### Added
 
 - **Check a diagram from the command line** — `draftcanvas` reads a diagram with the editor's own
-  code and reports what it finds: `inspect`, `check`, `diff` and `render`. It never
+  code and reports what it finds: `inspect`, `check`, `impact`, `diff` and `render`. It never
   changes a diagram and has no network code. See
   [Checking a diagram](docs/guides/checking-a-diagram.md). <!-- highlight -->
 - **Evidence that is checked** — `draftcanvas check --repo` holds the files and names a diagram

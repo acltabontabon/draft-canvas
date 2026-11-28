@@ -120,6 +120,20 @@ describe('draftcanvas', () => {
     expect((await main(['diff', plain])).code).toBe(2);
   });
 
+  it('says what a change to one part touches, by id or by label', async () => {
+    const text = await main(['impact', plain, 'Orders API']);
+    expect(text.code).toBe(0);
+    expect(text.stdout).toContain('Reaches:     Orders');
+    expect(text.stdout).toContain('Reached by:  Web');
+    expect(text.stdout).toContain('not what was measured');
+    const json = JSON.parse((await main(['impact', plain, 'api', '--json'])).stdout);
+    expect(json).toMatchObject({ schema: 'draftcanvas.impact/1', id: 'api', downstream: { ids: ['db'] }, upstream: { ids: ['web'] } });
+    expect(await main(['impact', plain, 'No Such Part'])).toMatchObject({ code: 2 });
+    expect(await main(['impact', plain])).toMatchObject({ code: 2 });
+    const twins = diagram('twins.draftcanvas', { ...shop(), nodes: [service('a', 'Twin', 0), service('b', 'twin', 300)], edges: [] });
+    expect((await main(['impact', twins, 'Twin'])).stderr).toBe('2 parts are called "Twin". Use an id: a, b.\n');
+  });
+
   it('renders SVG to a file or to the terminal', async () => {
     const svg = await main(['render', plain, '--theme', 'dark']);
     expect(svg.code).toBe(0);

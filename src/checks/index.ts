@@ -15,6 +15,7 @@ import { countBySeverity, finding, sortFindings, type Finding, type Severity } f
 import { builtinFindings } from './rules';
 
 export { builtinFindings } from './rules';
+export { impactOf, IMPACT_LIMIT, type Impact, type ImpactOutage, type ImpactReach } from './impact';
 export { checkAnchors, linesNaming, type AnchorReport } from './evidence/anchors';
 export { checkCompose, composeServices } from './evidence/compose';
 export { memoryReader, normalizeRepoPath, REPO_LIMITS, type ReadResult, type RepoLimits, type RepoListing, type RepoReader } from './evidence/reader';

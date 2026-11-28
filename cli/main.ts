@@ -16,6 +16,9 @@ Usage
   draftcanvas check <diagram> [--repo <folder>] [--fail-on error|warning|info|never] [--json]
       What the diagram itself says is unfinished, and, with --repo, whether the evidence it
       cites is still where it says. Reads only; exits 1 when findings reach --fail-on (error).
+  draftcanvas impact <diagram> <part> [--json]
+      What a change to one part touches: what it reaches and is reached by, what it shares and
+      crosses, which flows run over it, and what the drawing says fails if it stops.
   draftcanvas diff <before> <after> [--json]
       What changed between two versions, in the diagram's own terms.
   draftcanvas render <diagram> [--output <file.svg>] [--theme light|dark] [--view <ids>] [--transparent]
