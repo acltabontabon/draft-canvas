@@ -609,7 +609,7 @@ export interface EditorStore {
    * scratch (or, with `selection`, the selected shapes), reading each way the person may choose
    * between, for `ArrangeBar` to show. The engine is the AI agent's `{op:"arrange"}`, loaded on
    * demand and run on a worker thread (`agent/offThread.ts`) so the page stays free; `signal` cancels
-   * it. A `preset` (Nodi's layout skills) names what the default leaves to the engine: a reading
+   * it. A `preset` (`commands/arrange.ts`'s `ARRANGE_PRESETS`) names what the default leaves to the engine: a reading
    * direction kept as asked, the spacing, or a flow to lay out straight. Resolves the preview,
    * `'unchanged'` when arranging moves nothing, `'no-room'` when a selection can't be put back without
    * running into its surroundings, or `null` when the room changed while it was worked out, the work

@@ -6249,27 +6249,6 @@
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--dc-selection) 90%, transparent));
 }
 
-/* What the point of Nodi's reply under the pointer is about: the jump's ring, held steady for as long
-   as the person looks at the point, so reading the reply and finding its parts are one gesture. */
-.dc-node[data-pointed='true']::after {
-  content: '';
-  position: absolute;
-  inset: -5px;
-  border: 2px solid var(--dc-selection);
-  border-radius: calc(var(--dc-radius) + 4px);
-  box-shadow: 0 0 0 7px color-mix(in srgb, var(--dc-selection) 22%, transparent);
-  pointer-events: none;
-}
-
-.dc-node[data-type='ellipse'][data-pointed='true']::after {
-  border-radius: 50%;
-}
-
-.dc-edge[data-pointed='true'] .dc-edge-line {
-  stroke: var(--dc-selection);
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--dc-selection) 90%, transparent));
-}
-
 @media (prefers-reduced-motion: no-preference) {
   .dc-node[data-jump-flash='true']::after {
   animation: dc-jump-flash 900ms ease-out 1;

@@ -172,7 +172,7 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - Arrange's proportion rules (wider boxes for long names, gaps sized to their captions, a reading
   direction weighed by how it fits a screen) belong to Arrange and new layouts, never Tidy up. Its
   preview lives in `uiStore.arrangePreview`; only `editorStore.commitArrange` applies it.
-- Every way into Arrange or Tidy up (palette, menus, the desktop menu, Nodi's skills) goes through
+- Every way into Arrange or Tidy up (palette, menus, the desktop menu, the Arrange bar's own choices) goes through
   `commands/arrange.ts`, which shows a preview first. The work runs on the agent worker
   (`agent/layoutPlan.ts` through `offThread.ts`, Cancel included) and is bounded by a deterministic
   work budget (`route.ts`'s `withBudget`), never a wall-clock deadline: the same diagram gives the

@@ -9,7 +9,7 @@ import { pathKey, viewOf } from '../../depth/tree';
 import { boundsOf } from '../../document/geometry';
 import type { DraftDocument } from '../../document/types';
 import { fileOf, isInteracting, useEditorStore } from '../../store/editorStore';
-import { useUiStore, type ProposalPreview } from '../../store/uiStore';
+import { useUiStore } from '../../store/uiStore';
 import type { Proposal } from '../api';
 import { useDesktopController } from '../useDesktop';
 
@@ -21,10 +21,6 @@ const DRY_RUN_SETTLE_MS = 300;
  *  back to a full background refresh when no such record is available (an error path, or a refusal
  *  whose real cause needs a fresh read to explain). */
 export type ProposalChanged = (patch?: Proposal) => void;
-
-/** Which surface reviews a proposal: the review panel, or the companion's card. Each draws and clears
- *  only its own canvas preview, so one closing never removes the other's. */
-export type ReviewOwner = NonNullable<ProposalPreview['owner']>;
 
 /** A proposal checked against the diagram: what applying it would change, and whether it can be. */
 interface DryRun {
@@ -73,17 +69,12 @@ export function countsLabel(counts: Proposal['counts']): string {
   return parts.length ? parts.join(' · ') : 'No changes';
 }
 
-/** Whether `preview` is `owner`'s preview of `proposalId`. */
-function owns(preview: ProposalPreview | null, proposalId: string, owner: ReviewOwner): boolean {
-  return preview?.proposalId === proposalId && (preview.owner ?? 'panel') === owner;
-}
-
 /**
- * Everything it takes to review one proposal, for the review panel and the companion's card alike:
+ * Everything it takes to review one proposal in the review panel:
  * a dry run against the live diagram, its canvas ghost, and Accept, Reject, Dismiss and Mark as
  * applied. Accept is the one `applyToFile` that commits a proposal, wherever it is clicked.
  */
-export function useProposalReview(proposal: Proposal, onChanged: ProposalChanged, owner: ReviewOwner) {
+export function useProposalReview(proposal: Proposal, onChanged: ProposalChanged) {
   const controller = useDesktopController();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -171,13 +162,13 @@ export function useProposalReview(proposal: Proposal, onChanged: ProposalChanged
   // second dry run. Cleared (not merely hidden) the moment this proposal stops being reviewable here —
   // resolved, gone stale past recovery, or deselected/closed (the cleanup runs on every dependency
   // change, including unmount) — so a stale ghost can never outlive its proposal. Only ever touches
-  // this surface's own preview of this proposal: the other surface, or a sibling review of another
-  // proposal (after switching), sets its own and this cleanup leaves it alone.
+  // the preview of this proposal: a sibling review of another proposal (after switching) sets its
+  // own and this cleanup leaves it alone.
   // Whether the person was looking at the change or at the diagram as it is: kept across the clear
   // and rebuild a re-check does (after an edit lands), or "Now" quietly turned back into "Proposed".
   const shownAs = useRef<{ proposalId: string; visible: boolean } | null>(null);
   useEffect(() => {
-    const ownsCurrent = () => owns(useUiStore.getState().proposalPreview, proposal.proposalId, owner);
+    const ownsCurrent = () => useUiStore.getState().proposalPreview?.proposalId === proposal.proposalId;
     if (resultFile && !dryRunProblem) {
       const view = viewOf(resultFile, path);
       const previous = useUiStore.getState().proposalPreview;
@@ -189,7 +180,6 @@ export function useProposalReview(proposal: Proposal, onChanged: ProposalChanged
         nodes: view?.nodes ?? [],
         edges: view?.edges ?? [],
         visible,
-        owner,
       });
     } else if (ownsCurrent()) {
       useUiStore.getState().setProposalPreview(null);
@@ -200,7 +190,7 @@ export function useProposalReview(proposal: Proposal, onChanged: ProposalChanged
       useUiStore.getState().setProposalPreview(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `path`'s content is `pathKeyStr`, and `resultFile` is now the memoized `dryRun.resultFile` (stable across renders that don't change its answer) — keying on the array/object references themselves would re-fire (and re-render every ghost consumer) on every unrelated re-render this component gets
-  }, [proposal.proposalId, dryRunProblem, resultFile, pathKeyStr, owner]);
+  }, [proposal.proposalId, dryRunProblem, resultFile, pathKeyStr]);
 
   const act = async (run: () => Promise<Proposal | undefined>) => {
     setBusy(true);

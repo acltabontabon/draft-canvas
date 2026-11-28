@@ -6,6 +6,7 @@ import {
   clientLine,
   codexConfigToml,
   connectionSummary,
+  connectStart,
   connectTitle,
   firstAgent,
   folderRows,
@@ -234,6 +235,44 @@ describe('tryLine', () => {
     expect(tryLine('opencode', on).command).toBe('opencode mcp list');
     expect(tryLine('claude-code', on).command).toBe('claude mcp list');
     for (const none of ['codex', 'cursor', 'gemini', 'junie', 'other'] as const) expect(tryLine(none, on).command).toBeNull();
+  });
+});
+
+describe('connectStart', () => {
+  const sidecarPath = '/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp';
+  const on = { enabled: true, listening: true, connections: 0, sidecarPath };
+  const found = (client: AgentClientSetup['client'], over: Partial<AgentClientSetup> = {}): AgentClientSetup => ({ client, state: 'not-set-up', automatic: true, location: null, configuredCommand: null, ...over });
+
+  it('asks for access first, and offers nothing until it is on', () => {
+    expect(connectStart({ ...on, enabled: false, listening: false }, [found('codex')])).toEqual({
+      live: { text: 'Agent access is off, so no agent can connect.', tone: 'warn' },
+      setup: null,
+      hint: 'Turn on agent access below, then set up your agent.',
+    });
+    expect(connectStart({ ...on, listening: false }, [found('codex')])).toEqual({ live: { text: 'The connector isn’t ready yet.', tone: 'warn' }, setup: null, hint: null });
+  });
+
+  it('has nothing left to do once an agent is connected', () => {
+    expect(connectStart({ ...on, connections: 1 }, [found('codex')])).toEqual({ live: { text: '1 agent is connected.', tone: 'on' }, setup: null, hint: null });
+    expect(connectStart({ ...on, connections: 2 }, []).live.text).toBe('2 agents are connected.');
+  });
+
+  it('offers the one-click setup of the first agent the shell can set up itself', () => {
+    const codex = found('codex');
+    const start = connectStart(on, [found('claude-code', { automatic: false }), codex, found('gemini')]);
+    expect(start).toEqual({ live: { text: 'No agent is connected yet.', tone: 'off' }, setup: codex, hint: null });
+  });
+
+  it('says how an agent that is already set up gets through, rather than offering another', () => {
+    const start = connectStart(on, [found('codex'), found('opencode', { state: 'ready' })]);
+    expect(start.setup).toBeNull();
+    expect(start.hint).toBe('OpenCode is set up. Restart OpenCode, then ask it to list your Draft Canvas diagrams.');
+  });
+
+  it('points at the steps when no agent can be set up from here, and says nothing in a build without the connector', () => {
+    expect(connectStart(on, [found('claude-code', { automatic: false })]).hint).toBe('Choose your agent under Set up an agent, below.');
+    expect(connectStart(on, []).hint).toBe('Choose your agent under Set up an agent, below.');
+    expect(connectStart({ ...on, sidecarPath: null }, [found('codex')])).toEqual({ live: { text: 'No agent is connected yet.', tone: 'off' }, setup: null, hint: null });
   });
 });
 

@@ -80,7 +80,9 @@ async function main() {
         await page.screenshot({ path, animations: 'disabled' });
         process.stdout.write(`Captured ${path}\n`);
       };
-      const connect = settings.getByRole('heading', { name: 'Connect an agent' });
+      const connect = settings.getByRole('heading', { name: 'Set up an agent' });
+      // Ticking a folder scrolled the page: back to its start, where Connect your agent is.
+      await settings.getByRole('heading', { name: 'AI agents' }).evaluate((el) => el.scrollIntoView({ block: 'start' }));
       await shot('page-top');
       await connect.scrollIntoViewIfNeeded();
       for (const agent of ['Claude Code', 'Codex', 'Cursor', 'Gemini CLI', 'Junie', 'OpenCode', 'Other MCP clients']) {
@@ -89,7 +91,8 @@ async function main() {
         await connect.evaluate((el) => el.scrollIntoView({ block: 'start' }));
         await shot(`connect-${slug}`);
         if (GUIDE && scheme === 'light' && agent === 'Codex') await shot('guide', join(ROOT, 'docs/media/guides/agent-setup-codex.png'));
-        const add = settings.getByRole('button', { name: `Add to ${agent}` });
+        // In the steps: the block at the top of the page offers the first of these too.
+        const add = settings.getByRole('listitem').getByRole('button', { name: `Add to ${agent}` });
         if (await add.count()) {
           await add.click();
           await expect(add).toHaveCount(0);
@@ -112,7 +115,7 @@ async function main() {
     const context = await browser.newContext({ viewport: { width: 420, height: 860 }, deviceScaleFactor: 2, colorScheme: 'light', reducedMotion: 'reduce' });
     const page = await context.newPage();
     const settings = await open(page);
-    await settings.getByRole('heading', { name: 'Connect an agent' }).evaluate((el) => el.scrollIntoView({ block: 'start' }));
+    await settings.getByRole('heading', { name: 'Set up an agent' }).evaluate((el) => el.scrollIntoView({ block: 'start' }));
     await settings.getByRole('radio', { name: 'OpenCode' }).check({ force: true });
     await page.waitForTimeout(250);
     await page.screenshot({ path: join(OUT, 'connect-opencode-compact.png'), animations: 'disabled' });

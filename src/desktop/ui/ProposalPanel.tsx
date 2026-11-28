@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReactFlow, useReactFlowStoreApi, useViewportStore as useReactFlowStore } from '@xyflow/react';
 import { focusBoundsInView } from '../../commands/search';
 import { ownerAt, pathKey, type DepthPath } from '../../depth/tree';
@@ -9,10 +9,8 @@ import { proposalStale } from '../../host/agentBridge';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../../ui/common/Button';
 import type { Proposal } from '../api';
-import { companion } from '../companion';
-import { useNodiShown } from '../nodiShown';
 import { useDesktopController } from '../useDesktop';
-import { revealViewport } from './chipPlace';
+import { revealViewport } from './revealViewport';
 import { ProposalHistory } from './ProposalHistory';
 import { reviewRows } from './reviewRows';
 import { useProposalReview, type ProposalChanged } from './useProposalReview';
@@ -130,21 +128,13 @@ export function ProposalPanel() {
   }, [diagramId, open]);
 
   const pending = proposals.filter((p) => p.status === 'pending' || p.status === 'accepting');
-  // The proposal the companion's chip is showing is reviewed there; the badge counts the rest. Only
-  // a conversation's latest turn has a chip: an earlier turn's proposal, left unanswered when the
-  // person asked again, would otherwise have had no way in at all. Nor has any, with Nodi switched
-  // off. One whose conversation is gone (a reload, a new conversation) is the badge's again.
-  const conversations = useSyncExternalStore(companion.subscribe, companion.snapshot);
-  const nodi = useNodiShown();
-  const inCompanion = useMemo(() => new Set(nodi && diagramId ? [companion.selected(diagramId)?.turns.at(-1)?.proposalId] : []), [conversations, nodi, diagramId]);
-  const unreviewed = pending.filter((p) => !inCompanion.has(p.proposalId));
   if (!diagramId) return null;
 
   if (!open) {
-    if (unreviewed.length === 0) return null;
+    if (pending.length === 0) return null;
     return (
-      <button type="button" className="dc-proposal-badge" onClick={() => setOpen(true, unreviewed[0]?.proposalId ?? null)}>
-        {unreviewed.length === 1 ? '1 proposal to review' : `${unreviewed.length} proposals to review`}
+      <button type="button" className="dc-proposal-badge" onClick={() => setOpen(true, pending[0]?.proposalId ?? null)}>
+        {pending.length === 1 ? '1 proposal to review' : `${pending.length} proposals to review`}
       </button>
     );
   }
@@ -245,7 +235,7 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
   const previewVisible = useUiStore((state) => (state.proposalPreview?.proposalId === proposal.proposalId ? state.proposalPreview.visible : true));
   const setProposalPreviewVisible = useUiStore((state) => state.setProposalPreviewVisible);
   const { live, path, targetsCurrentView, bounds: diffBounds, busy, error, checking, diff, conflicts, dryRunProblem, informational, alreadyApplied, recoveringAccept, accept, reject, dismiss, markApplied } =
-    useProposalReview(proposal, onChanged, 'panel');
+    useProposalReview(proposal, onChanged);
   // Accepted, rejected or dismissed: there is nothing left to review, so it reads as a record of what
   // was decided, with no canvas toggles and no actions (they stayed after an accept, still offering
   // Accept and Reject on a proposal already in the diagram).
