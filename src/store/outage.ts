@@ -1,3 +1,4 @@
+import { sameArchitecture } from '../document/fieldClasses';
 import type { DraftEdge, DraftFlow, DraftNode } from '../document/types';
 import { analyzeTraffic, carriesWork, mayHaveTraffic, outageOf, outageReview, type Outage, type OutageEdgeState, type OutageReview, type OutageState, type TrafficAnalysis } from '../traffic';
 import type { EditorStore } from './editorStore';
@@ -29,23 +30,9 @@ interface Memo {
 
 let memo: Memo | null = null;
 
-/** What an outage reads from a shape. Position, size and styling are deliberately absent. */
+/** What an outage reads from a shape: what it is, never where it sits or how it is drawn. */
 function sameForOutage(a: DraftNode, b: DraftNode): boolean {
-  return (
-    a === b ||
-    (a.id === b.id &&
-      a.type === b.type &&
-      a.text === b.text &&
-      a.parentId === b.parentId &&
-      a.serviceKind === b.serviceKind &&
-      a.databaseKind === b.databaseKind &&
-      a.queueKind === b.queueKind &&
-      a.deliveryRole === b.deliveryRole &&
-      a.componentKind === b.componentKind &&
-      a.actorKind === b.actorKind &&
-      a.technology === b.technology &&
-      a.replicas === b.replicas)
-  );
+  return a === b || (a.id === b.id && sameArchitecture(a, b));
 }
 
 function sameNodes(a: readonly DraftNode[], b: readonly DraftNode[]): boolean {

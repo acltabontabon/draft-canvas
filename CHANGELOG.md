@@ -10,9 +10,21 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Added
 
+- **Check a diagram from the command line** — `draftcanvas` reads a diagram with the editor's own
+  code and reports what it finds: `inspect`, `check`, `diff` and `render`. It never
+  changes a diagram and has no network code. See
+  [Checking a diagram](docs/guides/checking-a-diagram.md). <!-- highlight -->
+- **Evidence that is checked** — `draftcanvas check --repo` holds the files and names a diagram
+  cites against the repository, and says which are gone, moved or no longer there. A Docker Compose
+  file the diagram refers to is compared with it too.
 - **Arrange your way** — The Arrange preview has **Spacing** (Snug, Standard or Roomy) and always
   offers both reading directions. `⌘K` has **Arrange left to right**, **Arrange top down**,
   **Arrange with more room** and **Arrange snug**.
+
+#### Changed
+
+- **Comparing versions** — Changing what kind of boundary a group is now counts as a change of
+  meaning, not of style.
 
 ### Desktop
 

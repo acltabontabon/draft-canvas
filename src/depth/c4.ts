@@ -39,6 +39,20 @@ export interface C4Context {
   systemBoundary?: DraftNode;
 }
 
+/**
+ * The `system` boundary a shape sits in, however many other boundaries lie between: the nearest
+ * one up its `parentId` chain. The one lookup every reader of C4 scope shares.
+ */
+export function systemBoundaryOf(node: DraftNode, byId: ReadonlyMap<string, DraftNode>): DraftNode | undefined {
+  const seen = new Set<string>();
+  for (let at = node.parentId; at && !seen.has(at); at = byId.get(at)?.parentId) {
+    seen.add(at);
+    const group = byId.get(at);
+    if (group?.type === 'group' && group.boundaryPreset === 'system') return group;
+  }
+  return undefined;
+}
+
 /** Architecture elements only — boundaries, notes, text, code and junctions aren't C4 elements. */
 export function isC4Element(node: DraftNode): boolean {
   return node.type === 'service' || node.type === 'database' || node.type === 'queue' || node.type === 'actor' || node.type === 'component';

@@ -8,7 +8,7 @@
  * `<U+XXXX>` codes.
  */
 
-import { classify, type C4Role } from '../../depth/c4';
+import { classify, systemBoundaryOf, type C4Role } from '../../depth/c4';
 import { effectiveLevel } from '../../depth/level';
 import type { DraftDocument, DraftEdge, DraftNode } from '../../document/types';
 import {
@@ -119,12 +119,7 @@ function renderRoom(
         lines.push(`${INDENT.repeat(at)}}`);
         continue;
       }
-      const systemBoundary = node.parentId ? byId.get(node.parentId) : undefined;
-      const c4 = classify(node, {
-        level,
-        insideOwner: owner,
-        systemBoundary: systemBoundary?.type === 'group' && systemBoundary.boundaryPreset === 'system' ? systemBoundary : undefined,
-      });
+      const c4 = classify(node, { level, insideOwner: owner, systemBoundary: systemBoundaryOf(node, byId) });
       const macro = macroFor(node, c4?.role ?? 'unspecified', c4?.scope === 'external');
       if (macro.startsWith('Component')) usesComponents.value = true;
       lines.push(elementLine(node, alias, macro, at));

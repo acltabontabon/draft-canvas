@@ -37,7 +37,7 @@
     "e2e:offline": "playwright test --config=playwright.dist.config.ts",
     "e2e:web": "playwright test --config=playwright.web.config.ts",
     "e2e:install": "playwright install --with-deps chromium firefox webkit",
-    "typecheck:tooling": "tsc -p e2e && tsc -p benchmark",
+    "typecheck:tooling": "tsc -p e2e && tsc -p benchmark && tsc -p cli",
     "check": "npm run lint && npm run typecheck:tooling && npm run build && npm test",
     "check:full": "npm run check && npm run e2e && npm run e2e:offline && npm run e2e:web",
     "test:coverage": "vitest run --coverage",
@@ -70,7 +70,9 @@
     "audit:rust": "tsx scripts/dependency-audit.ts cargo",
     "perf:check": "npm run build && npm run perf:interaction -- --skip-build --sizes medium --scenarios pan-drag,drag-single,select-clicks --iterations 3 && npm run perf:lifecycle -- --skip-build --sizes medium --only load,export && tsx benchmark/gate-cli.ts",
     "desktop:bindings": "node scripts/desktop-bindings.mjs",
-    "adoption:compare": "tsx benchmark/adoption/compare.ts"
+    "adoption:compare": "tsx benchmark/adoption/compare.ts",
+    "cli": "tsx cli/bin.ts",
+    "cli:build": "node scripts/build-cli.mjs"
   },
   "dependencies": {
     "@xyflow/react": "^13.0.3",
@@ -85,6 +87,7 @@
     "react-dom": "^19.3.1",
     "refractor": "^5.0.0",
     "simple-icons": "16.38.0",
+    "yaml": "^2.9.1",
     "zustand": "^5.1.0"
   },
   "devDependencies": {

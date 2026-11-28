@@ -1,6 +1,8 @@
 node_modules
 dist
 dist-desktop
+# The headless CLI bundle (`npm run cli:build`).
+dist-cli
 # The assembled web deploy: the marketing site with the editor nested under editor/.
 dist-web
 .preview-web

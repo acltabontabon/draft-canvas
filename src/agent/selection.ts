@@ -9,7 +9,7 @@
  */
 
 import type { Selection } from '../history/HistoryStack';
-import { classify } from '../depth/c4';
+import { classify, systemBoundaryOf as sharedSystemBoundaryOf } from '../depth/c4';
 import { effectiveLevel } from '../depth/level';
 import { ownerAt, viewOf, type DepthPath } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
@@ -37,14 +37,7 @@ export function readSelectionContext(file: DraftDocument, path: DepthPath, selec
   const level = effectiveLevel(file, path);
   // Classified as read_diagram classifies it: inside its owner, within any system boundary.
   const owner = path.length ? ownerAt(file, path) : undefined;
-  const systemBoundaryOf = (id: string) => {
-    const seen = new Set<string>();
-    for (let at = byId.get(id)?.parentId; at && !seen.has(at); at = byId.get(at)?.parentId) {
-      seen.add(at);
-      if (byId.get(at)?.boundaryPreset === 'system') return byId.get(at);
-    }
-    return undefined;
-  };
+  const systemBoundaryOf = (id: string) => (byId.has(id) ? sharedSystemBoundaryOf(byId.get(id)!, byId) : undefined);
 
   // Context: edges touching a selected node, and the node at their other end — bounded, and always
   // distinguishable from the selection itself.

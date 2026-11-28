@@ -73,6 +73,37 @@ const EVAL_APIS: [string, RegExp][] = [
   ['setTimeout with a string', /setTimeout\s*\(\s*['"`]/],
 ];
 
+/**
+ * The headless CLI is held to the same promise, and to one more: it reads a repository it does not
+ * trust, so it must have no way to run a program or talk to a server, whatever a file in that
+ * repository says.
+ */
+describe('the headless CLI reads files and nothing else', () => {
+  const files = sourceFiles(join(ROOT, 'cli'));
+  const BANNED: [string, RegExp][] = [
+    ...NETWORK_APIS,
+    ...PEER_APIS,
+    ...EVAL_APIS,
+    ['a child process', /child_process|\bspawn(Sync)?\b|\bexec(File)?(Sync)?\s*\(/],
+    ['a network module', /['"](node:)?(http|https|http2|net|tls|dgram|dns|worker_threads|vm)['"]/],
+    ['an environment read', /process\.env\b/],
+  ];
+
+  it('finds the CLI', () => {
+    expect(files.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(BANNED)('uses no %s in cli/', (_name, pattern) => {
+    expect(files.filter((file) => pattern.test(code(file))).map((file) => relative(ROOT, file))).toEqual([]);
+  });
+
+  it('writes only the output file it is given', () => {
+    const writers = files.filter((file) => /\b(writeFileSync|writeFile|appendFile\w*|rm(Sync)?|unlink\w*|rename\w*|mkdir\w*|copyFile\w*)\s*\(/.test(code(file)));
+    expect(writers.map((file) => relative(ROOT, file))).toEqual(['cli/commands.ts']);
+    expect(code(join(ROOT, 'cli', 'commands.ts')).match(/\bwriteFileSync\s*\(/g)).toHaveLength(1);
+  });
+});
+
 describe('nothing on the canvas can reach a network', () => {
   const files = sourceFiles(SRC);
 
@@ -173,10 +204,13 @@ describe('nothing on the canvas can reach a network', () => {
         'isomorphic-git',
         // The `Buffer` isomorphic-git expects, installed as a global in the history worker only.
         'buffer',
+        // Reads Docker Compose files when a diagram's evidence is checked (`checks/evidence/compose.ts`).
+        // Parsing only, with aliases capped; nothing in a file is run or followed.
+        'yaml',
       ]),
     );
     // A short, auditable dependency list is part of the promise.
-    expect(deps).toHaveLength(13);
+    expect(deps).toHaveLength(14);
     for (const name of deps) {
       expect(name).not.toMatch(/analytics|telemetry|sentry|tracking|posthog|mixpanel|segment/i);
     }

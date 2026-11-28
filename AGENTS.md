@@ -213,6 +213,26 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - Draw ink with `render/ink.ts` in both canvas and export. A stroke in progress is written to the DOM
   directly (`canvas/liveInk.ts`), never through React state, and kept as one stroke at pen-up.
 
+### Architecture model, checks and the CLI
+
+- What a diagram describes is read through `model/` (`modelOf`): parts, boundaries, relations with
+  Junctions seen through, every room. It is derived and never stored; do not add a persisted copy,
+  and do not work the same things out again elsewhere. It never follows a Junction's `link`.
+- `document/fieldClasses.ts` is the one table of what each field means, checked against the types:
+  a new `DraftNode`, `DraftEdge` or `Attachment` field does not compile until it is classed there.
+  A list of "the fields that carry meaning" anywhere else reads `ARCHITECTURE_NODE_FIELDS`.
+- A finding (`checks/finding.ts`) is never written into a diagram, history or a collaboration
+  session. Its class says how much is known: an incomplete read is `tool-error`, never `drift`;
+  "declared but not drawn" is `potential-drift` and never fails a check by default.
+- Checks reach a repository only through a `RepoReader` (`checks/evidence/reader.ts`) someone
+  handed them. `src/checks/` touches no file system. Findings carry paths, names and line numbers,
+  never file contents. A name found in a file means "anchor intact", never "relationship verified".
+- `cli/` is the Node side: no network, no child process, no environment read
+  (`tests/privacy.test.ts`), and the only write is the `--output` file. Exit codes and the `schema`
+  of each `--json` report are a public interface: add fields, never repurpose them.
+- `agent/review.ts` re-exports `checks/review.ts`. What `read_diagram` returns must not change
+  when a check is added: new checks go in `checks/rules.ts`.
+
 ### Linked junctions
 
 - A Junction's group is `DraftNode.link`, an opaque id on the Junction, and nothing else. Do not add
@@ -274,7 +294,7 @@ and the presence hooks in `ui/collab/`. The theme and personality hooks live in 
 labels and presets in `lib/`.
 Library and editor are states of `src/App.tsx`, with no router. Keep the editor's Vite `base: './'`.
 
-`depth/`, `gallery/` and `traffic/` import only `document/`; `layout/` also imports `edges/bundles`. `junctions/` imports `document/` and `depth/`. `collab/`
+`depth/` and `gallery/` import only `document/`; `traffic/` also imports `model/`'s loop finder; `layout/` also imports `edges/bundles`. `model/` imports `document/` and `depth/`; `checks/` imports those, `model/` and `traffic/`. `junctions/` imports `document/` and `depth/`. `collab/`
 imports `document/`, `depth/` and `lib/`. `history/` imports `document/` and `depth/`, plus `collab/selective`'s
 `changeKeys`, which records what an edit touched while a session is live. `continuation/` also imports
 `render/text` and `edges/` routing helpers; `openPoints/` also imports `depth/` and `render/` types. None of these import UI, canvas or
